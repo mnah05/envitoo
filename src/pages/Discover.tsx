@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/domain/Layout";
 import { EventCard } from "@/components/domain/EventCard";
+import { EventCardSkeleton } from "@/components/domain/EventCardSkeleton";
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { usePublicEvents } from "@/hooks/use-events";
 import { CATEGORIES, CATEGORY_LABELS } from "@/lib/api";
@@ -192,19 +193,5 @@ function CategoryButton({
     >
       {children}
     </button>
-  );
-}
-
-function EventCardSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-2xl border bg-card">
-      <div className="aspect-[16/9] w-full animate-pulse bg-muted" />
-      <div className="space-y-3 p-4">
-        <div className="h-3 w-20 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-full animate-pulse rounded bg-muted" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-        <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
-      </div>
-    </div>
   );
 }

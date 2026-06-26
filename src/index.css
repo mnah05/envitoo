@@ -28,6 +28,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-skeleton: var(--skeleton);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -37,6 +38,31 @@
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
+
+  /* Fluid type scale — Luma-calm proportions, clamp() fluid from mobile up.
+     Maps to Tailwind text-* utilities; existing classes pick this up automatically. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.1;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: clamp(1.05rem, 1vw + 0.7rem, 1.125rem);
+  --text-lg--line-height: 1.45;
+  --text-xl: clamp(1.15rem, 1vw + 0.8rem, 1.25rem);
+  --text-xl--line-height: 1.4;
+  --text-2xl: clamp(1.35rem, 1.2vw + 0.9rem, 1.5rem);
+  --text-2xl--line-height: 1.35;
+  --text-3xl: clamp(1.6rem, 1.5vw + 1rem, 1.875rem);
+  --text-3xl--line-height: 1.25;
+  --text-4xl: clamp(1.9rem, 2vw + 1.1rem, 2.25rem);
+  --text-4xl--line-height: 1.2;
+  --text-5xl: clamp(2.3rem, 2.5vw + 1.2rem, 3rem);
+  --text-5xl--line-height: 1.1;
+  --text-6xl: clamp(2.8rem, 3vw + 1.4rem, 3.75rem);
+  --text-6xl--line-height: 1.05;
+  --text-7xl: clamp(3.2rem, 3.5vw + 1.5rem, 4.5rem);
+  --text-7xl--line-height: 1;
 }
 
 :root {
@@ -70,6 +96,9 @@
   --border: #dddddd;
   --input: #dddddd;
   --ring: #ff385c;
+
+  /* Skeleton — visible against #fff card and #f7f7f7 muted surfaces */
+  --skeleton: #e8e8e8;
 }
 
 .dark {
@@ -108,7 +137,7 @@
     background-color: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }

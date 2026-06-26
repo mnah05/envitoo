@@ -4,9 +4,9 @@ import { ArrowRight, CalendarCheck, MapPinned, Sparkles, Ticket } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/domain/Layout";
 import { EventCard } from "@/components/domain/EventCard";
+import { EventCardSkeleton } from "@/components/domain/EventCardSkeleton";
 import { usePublicEvents } from "@/hooks/use-events";
 import { CATEGORIES, CATEGORY_LABELS } from "@/lib/api";
-import { Loading } from "@/components/domain/Layout";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -48,7 +48,7 @@ export function Landing() {
             variants={fadeUp}
             initial="hidden"
             animate="show"
-            className="mt-6 max-w-4xl text-balance text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl"
+            className="mt-6 max-w-4xl text-balance text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl"
           >
             Delightful events
             <br />
@@ -105,7 +105,11 @@ export function Landing() {
           </div>
 
           {isLoading ? (
-            <Loading />
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <EventCardSkeleton key={i} />
+              ))}
+            </div>
           ) : isError ? (
             <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-dashed p-10 text-center">
               <p className="text-muted-foreground">Couldn't load upcoming events.</p>
@@ -181,7 +185,7 @@ export function Landing() {
         <PageContainer>
           <div className="relative overflow-hidden rounded-3xl bg-foreground px-8 py-16 text-center text-background sm:py-20">
             <div className="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full bg-primary/30 blur-3xl" />
-            <h2 className="relative text-3xl font-extrabold tracking-tight sm:text-4xl">
+            <h2 className="relative text-3xl font-bold tracking-tight sm:text-4xl">
               Ready to host?
             </h2>
             <p className="relative mx-auto mt-3 max-w-md text-background/80">

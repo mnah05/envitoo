@@ -4,7 +4,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Globe, MapPin, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PageContainer, Loading } from "@/components/domain/Layout";
+import { PageContainer } from "@/components/domain/Layout";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EventStatusBadge, RegStatusBadge } from "@/components/domain/StatusBadge";
 import { useEvent } from "@/hooks/use-events";
 import { useGuestRegistration, useCancelGuestRegistration } from "@/hooks/use-registrations";
@@ -39,8 +40,43 @@ export function GuestTicket() {
 
   if (isLoading) {
     return (
-      <div className="pt-16">
-        <Loading label="Loading your ticket" />
+      <div className="pt-20">
+        <PageContainer width="narrow" className="py-10">
+          <div className="mx-auto overflow-hidden rounded-3xl border bg-card shadow-sm">
+            <div className="bg-foreground p-6">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <Skeleton className="mt-4 h-7 w-2/3" />
+              <Skeleton className="mt-2 h-4 w-1/3" />
+            </div>
+            <div className="grid gap-6 p-6 sm:grid-cols-[1fr_auto] sm:items-center">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-11 rounded-full" />
+                  <div className="flex flex-col gap-2">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <Skeleton className="size-40 rounded-2xl" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+            <Separator />
+            <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-9 w-40" />
+            </div>
+          </div>
+        </PageContainer>
       </div>
     );
   }

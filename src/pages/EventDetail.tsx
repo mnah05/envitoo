@@ -3,7 +3,8 @@ import { useEffect } from "react";
 import { ArrowLeft, CalendarDays, Clock, Globe, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PageContainer, Loading } from "@/components/domain/Layout";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageContainer } from "@/components/domain/Layout";
 import { EventCover } from "@/components/domain/EventCard";
 import { CategoryPill } from "@/components/domain/CategoryPill";
 import { EventStatusBadge } from "@/components/domain/StatusBadge";
@@ -20,11 +21,7 @@ export function EventDetail() {
   }, [event]);
 
   if (isLoading) {
-    return (
-      <div className="pt-16">
-        <Loading label="Loading event" />
-      </div>
-    );
+    return <EventDetailSkeleton />;
   }
 
   if (error || !event) {
@@ -171,6 +168,56 @@ function InfoRow({
         </p>
         <p className="mt-0.5 font-medium">{children}</p>
       </div>
+    </div>
+  );
+}
+
+function EventDetailSkeleton() {
+  return (
+    <div className="pt-16">
+      <Skeleton className="h-[40vh] min-h-[20rem] w-full rounded-none" />
+      <PageContainer className="py-10">
+        <Skeleton className="mb-6 h-8 w-24" />
+        <div className="grid gap-10 lg:grid-cols-[1fr_22rem]">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-9 w-2/3" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-xl border bg-card p-4">
+                  <Skeleton className="size-5 rounded" />
+                  <div className="flex flex-col gap-2">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-px w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          </div>
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <div className="rounded-2xl border bg-card p-6 shadow-sm">
+              <div className="mb-4 flex items-baseline justify-between">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+              </div>
+              <div className="flex flex-col gap-4">
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </div>
+          </aside>
+        </div>
+      </PageContainer>
     </div>
   );
 }

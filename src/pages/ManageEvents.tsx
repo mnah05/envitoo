@@ -9,7 +9,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { PageContainer, Loading } from "@/components/domain/Layout";
+import { PageContainer } from "@/components/domain/Layout";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EventCover } from "@/components/domain/EventCard";
 import { EventStatusBadge } from "@/components/domain/StatusBadge";
 import { useMyEvents, useCancelEvent } from "@/hooks/use-events";
@@ -67,7 +68,29 @@ export function ManageEvents() {
 
         <div className="mt-8 flex flex-col gap-4">
           {isLoading ? (
-            <Loading />
+            Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
+              >
+                <Skeleton className="size-20 shrink-0 rounded-xl sm:size-24" />
+                <div className="flex flex-1 flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-3 w-10" />
+                  </div>
+                  <Skeleton className="h-5 w-2/3" />
+                  <div className="flex gap-4">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 sm:flex-col sm:items-stretch">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24" />
+                </div>
+              </div>
+            ))
           ) : events.length === 0 ? (
             <Empty className="min-h-[40vh] border">
               <EmptyMedia variant="icon">

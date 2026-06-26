@@ -44,7 +44,7 @@ export function Header() {
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link
             to="/"
-            className="flex items-center gap-2 font-extrabold tracking-tight text-foreground"
+            className="flex items-center gap-2 font-bold tracking-tight text-foreground"
           >
             <span className="grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground">
               <Activity className="size-4" strokeWidth={2.5} />
