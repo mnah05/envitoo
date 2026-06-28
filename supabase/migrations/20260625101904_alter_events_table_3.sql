@@ -1,0 +1,3 @@
+ALTER TABLE events ADD COLUMN slug TEXT UNIQUE NOT NULL DEFAULT '';
+
+CREATE UNIQUE INDEX idx_events_slug ON events (slug);
