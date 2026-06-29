@@ -8,7 +8,7 @@ export function Footer() {
           <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
             P
           </span>
-          <span className="font-bold tracking-tight">Pulse</span>
+          <span className="font-bold tracking-tight">EnviToo</span>
         </div>
         <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <Link to="/discover" className="hover:text-foreground">
@@ -18,7 +18,7 @@ export function Footer() {
             Create event
           </Link>
           <a
-            href="https://github.com/mnah05/pulse"
+            href="https://github.com/mnah05/envitoo"
             target="_blank"
             rel="noreferrer"
             className="hover:text-foreground"
@@ -27,7 +27,7 @@ export function Footer() {
           </a>
         </nav>
         <p className="text-sm text-muted-foreground">
-          © {new Date().getFullYear()} Pulse
+          © {new Date().getFullYear()} EnviToo
         </p>
       </div>
     </footer>

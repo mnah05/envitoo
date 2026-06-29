@@ -87,7 +87,7 @@ export function Calendar({ selected, onSelect }: CalendarProps) {
               className={cn(
                 "flex h-9 w-full items-center justify-center rounded-md text-sm transition-colors",
                 !sameMonth && "text-muted-foreground/40",
-                sameMonth && !picked && "hover:bg-accent hover:text-accent-foreground",
+                sameMonth && !picked && "hover:bg-muted hover:text-foreground",
                 picked && "bg-primary text-primary-foreground hover:bg-primary/90",
                 todayDay && !picked && "border border-primary/50",
               )}

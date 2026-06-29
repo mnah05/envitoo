@@ -47,3 +47,27 @@ export function EventStatusBadge({
     </Badge>
   );
 }
+
+const VOLUNTEER_APP_STATUS_STYLES: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700 ring-amber-200",
+  approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  rejected: "bg-rose-50 text-rose-700 ring-rose-200",
+  cancelled: "bg-muted text-muted-foreground ring-border",
+};
+
+export function VolunteerAppStatusBadge({
+  status,
+  className,
+}: {
+  status: string;
+  className?: string;
+}) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn("capitalize ring-1", VOLUNTEER_APP_STATUS_STYLES[status], className)}
+    >
+      {status}
+    </Badge>
+  );
+}

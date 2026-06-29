@@ -1,20 +1,36 @@
+import { z } from "zod";
 import {
   EventListSchema,
   EventSchema,
   RegistrationListSchema,
   RegistrationSchema,
   UserSchema,
+  VolunteerSettingsSchema,
+  VolunteerRoleSchema,
+  VolunteerApplicationSchema,
+  VolunteerApplicationListSchema,
+  VolunteerListSchema,
+  EventStaffListSchema,
   type CreateEventValues,
   type CreateGuestRegistrationValues,
   type CreateRegistrationValues,
   type UpdateEventValues,
   type UpdateRegistrationStatusValues,
   type CheckInValues,
+  type UpsertVolunteerSettingsValues,
+  type CreateVolunteerRoleValues,
+  type CreateVolunteerApplicationValues,
   type Event,
   type EventList,
   type Registration,
   type RegistrationList,
   type User,
+  type VolunteerSettings,
+  type VolunteerRole,
+  type VolunteerApplication,
+  type VolunteerApplicationList,
+  type VolunteerList,
+  type EventStaffList,
 } from "./schemas";
 import type { Api } from "./client";
 
@@ -202,4 +218,141 @@ export function checkInAttendee(api: Api, id: string, values: CheckInValues): Pr
   return api
     .post<unknown>(`/api/registrations/${id}/check-in`, values)
     .then((d) => parseOrThrow(RegistrationSchema, d));
+}
+
+// --- Volunteer — public -----------------------------------------------------
+
+export function getVolunteerSettings(api: Api, eventId: string): Promise<VolunteerSettings> {
+  return api
+    .get<unknown>(`/api/events/${eventId}/volunteer/settings`)
+    .then((d) => parseOrThrow(VolunteerSettingsSchema, d));
+}
+
+export function listVolunteerRoles(api: Api, eventId: string): Promise<VolunteerRole[]> {
+  return api
+    .get<unknown>(`/api/events/${eventId}/volunteer/roles`)
+    .then((d) => parseOrThrow(z.array(VolunteerRoleSchema), d));
+}
+
+// --- Volunteer — user applications ------------------------------------------
+
+export function applyVolunteer(
+  api: Api,
+  eventId: string,
+  values: CreateVolunteerApplicationValues,
+): Promise<VolunteerApplication> {
+  return api
+    .post<unknown>(`/api/events/${eventId}/volunteer/apply`, values)
+    .then((d) => parseOrThrow(VolunteerApplicationSchema, d));
+}
+
+export function listMyVolunteerApplications(
+  api: Api,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<VolunteerApplicationList> {
+  return api
+    .get<unknown>("/api/me/volunteer-applications", { limit: opts.limit, offset: opts.offset })
+    .then((d) => parseOrThrow(VolunteerApplicationListSchema, d));
+}
+
+export function listMyEventStaff(
+  api: Api,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<EventStaffList> {
+  return api
+    .get<unknown>("/api/me/event-staff", { limit: opts.limit, offset: opts.offset })
+    .then((d) => parseOrThrow(EventStaffListSchema, d));
+}
+
+export function getMyVolunteerApplication(api: Api, appId: string): Promise<VolunteerApplication> {
+  return api
+    .get<unknown>(`/api/volunteer-applications/${appId}`)
+    .then((d) => parseOrThrow(VolunteerApplicationSchema, d));
+}
+
+export function cancelVolunteerApplication(api: Api, appId: string): Promise<VolunteerApplication> {
+  return api
+    .del<unknown>(`/api/volunteer-applications/${appId}`)
+    .then((d) => parseOrThrow(VolunteerApplicationSchema, d));
+}
+
+// --- Volunteer — organizer management ---------------------------------------
+
+export function upsertVolunteerSettings(
+  api: Api,
+  eventId: string,
+  values: UpsertVolunteerSettingsValues,
+): Promise<VolunteerSettings> {
+  return api
+    .put<unknown>(`/api/events/${eventId}/volunteer/settings`, values)
+    .then((d) => parseOrThrow(VolunteerSettingsSchema, d));
+}
+
+export function createVolunteerRole(
+  api: Api,
+  eventId: string,
+  values: CreateVolunteerRoleValues,
+): Promise<VolunteerRole> {
+  return api
+    .post<unknown>(`/api/events/${eventId}/volunteer/roles`, values)
+    .then((d) => parseOrThrow(VolunteerRoleSchema, d));
+}
+
+export function deleteVolunteerRole(
+  api: Api,
+  eventId: string,
+  roleId: string,
+): Promise<VolunteerRole> {
+  return api
+    .del<unknown>(`/api/events/${eventId}/volunteer/roles/${roleId}`)
+    .then((d) => parseOrThrow(VolunteerRoleSchema, d));
+}
+
+// --- Volunteer — staff management -------------------------------------------
+
+export function listEventVolunteerApplications(
+  api: Api,
+  eventId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<VolunteerApplicationList> {
+  return api
+    .get<unknown>(`/api/events/${eventId}/volunteer/applications`, {
+      limit: opts.limit,
+      offset: opts.offset,
+    })
+    .then((d) => parseOrThrow(VolunteerApplicationListSchema, d));
+}
+
+export function listEventVolunteers(
+  api: Api,
+  eventId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<VolunteerList> {
+  return api
+    .get<unknown>(`/api/events/${eventId}/volunteers`, {
+      limit: opts.limit,
+      offset: opts.offset,
+    })
+    .then((d) => parseOrThrow(VolunteerListSchema, d));
+}
+
+export function getVolunteerApplicationAsAdmin(
+  api: Api,
+  appId: string,
+): Promise<VolunteerApplication> {
+  return api
+    .get<unknown>(`/api/volunteer-applications/${appId}/admin`)
+    .then((d) => parseOrThrow(VolunteerApplicationSchema, d));
+}
+
+export function approveVolunteerApplication(api: Api, appId: string): Promise<VolunteerApplication> {
+  return api
+    .post<unknown>(`/api/volunteer-applications/${appId}/approve`)
+    .then((d) => parseOrThrow(VolunteerApplicationSchema, d));
+}
+
+export function rejectVolunteerApplication(api: Api, appId: string): Promise<VolunteerApplication> {
+  return api
+    .post<unknown>(`/api/volunteer-applications/${appId}/reject`)
+    .then((d) => parseOrThrow(VolunteerApplicationSchema, d));
 }

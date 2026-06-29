@@ -16,6 +16,7 @@ INSERT INTO
         is_virtual,
         meeting_url,
         venue_name,
+        location_address,
         lat,
         lng,
         slug,
@@ -40,7 +41,8 @@ VALUES (
         $16,
         $17,
         $18,
-        $19
+        $19,
+        $20
     ) ON CONFLICT (slug) DO NOTHING
 RETURNING *;
 
@@ -115,13 +117,14 @@ SET
     is_virtual = $11,
     meeting_url = $12,
     venue_name = $13,
-    lat = $14,
-    lng = $15,
-    category = $16,
+    location_address = $14,
+    lat = $15,
+    lng = $16,
+    category = $17,
     updated_at = now()
 WHERE
     id = $1
-    AND organizer_id = $17
+    AND organizer_id = $18
 RETURNING *;
 
 -- name: CancelEvent :one

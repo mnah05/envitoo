@@ -49,7 +49,7 @@ export function Header() {
             <span className="grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground">
               <Activity className="size-4" strokeWidth={2.5} />
             </span>
-            <span className="text-lg">Pulse</span>
+            <span className="text-lg">EnviToo</span>
           </Link>
 
           <nav className="hidden items-center gap-1 sm:flex">
@@ -105,7 +105,7 @@ function HeaderLink({ to, children }: { to: string; children: React.ReactNode })
       to={to}
       className={({ isActive }) =>
         cn(
-          "rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+          "rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
           isActive && "text-foreground",
         )
       }

@@ -19,13 +19,14 @@ SET
     cover_image_url = $3,
     meeting_url = $4,
     venue_name = $5,
-    lat = $6,
-    lng = $7,
+    location_address = $6,
+    lat = $7,
+    lng = $8,
     updated_at = now()
 WHERE
     e.id = $1
     AND (
-        e.organizer_id = $8
+        e.organizer_id = $9
         OR EXISTS (
             SELECT 1
             FROM
@@ -37,18 +38,19 @@ WHERE
                 AND va.status = 'approved'
                 AND vr.is_admin = true
         )
-    ) RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category
+    ) RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
 `
 
 type UpdateEventStaffFieldsParams struct {
-	ID            uuid.UUID
-	Description   *string
-	CoverImageUrl *string
-	MeetingUrl    *string
-	VenueName     *string
-	Lat           pgtype.Numeric
-	Lng           pgtype.Numeric
-	OrganizerID   uuid.UUID
+	ID              uuid.UUID
+	Description     *string
+	CoverImageUrl   *string
+	MeetingUrl      *string
+	VenueName       *string
+	LocationAddress *string
+	Lat             pgtype.Numeric
+	Lng             pgtype.Numeric
+	OrganizerID     uuid.UUID
 }
 
 func (q *Queries) UpdateEventStaffFields(ctx context.Context, arg UpdateEventStaffFieldsParams) (Event, error) {
@@ -58,6 +60,7 @@ func (q *Queries) UpdateEventStaffFields(ctx context.Context, arg UpdateEventSta
 		arg.CoverImageUrl,
 		arg.MeetingUrl,
 		arg.VenueName,
+		arg.LocationAddress,
 		arg.Lat,
 		arg.Lng,
 		arg.OrganizerID,
@@ -86,6 +89,7 @@ func (q *Queries) UpdateEventStaffFields(ctx context.Context, arg UpdateEventSta
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }

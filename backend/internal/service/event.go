@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/mnah05/pulse/internal/db"
-	"github.com/mnah05/pulse/internal/dto"
-	"github.com/mnah05/pulse/internal/helper"
+	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/helper"
 )
 
 // EventService provides business logic for event operations.
@@ -72,6 +72,7 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		IsVirtual:        req.IsVirtual,
 		MeetingUrl:       req.MeetingURL,
 		VenueName:        req.VenueName,
+		LocationAddress:  req.LocationAddress,
 	}
 
 	if req.CalendarID != nil {
@@ -94,6 +95,7 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 
 	if req.IsVirtual {
 		event.VenueName = nil
+		event.LocationAddress = nil
 		event.Lat = pgtype.Numeric{Valid: false}
 		event.Lng = pgtype.Numeric{Valid: false}
 	} else {
@@ -229,7 +231,7 @@ func (s *EventService) ListByOrganizer(ctx context.Context, organizerID uuid.UUI
 // ListPublic returns a paginated list of published events for public
 // discovery, ordered by starts_at ascending. The second return value is the
 // total count matching the filters.
-func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) ([]db.Event, int32, error) {
+func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) ([]dto.EventResponse, int32, error) {
 	limit := params.Limit
 	if limit <= 0 {
 		limit = 20
@@ -278,7 +280,62 @@ func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) 
 		return nil, 0, fmt.Errorf("count public events: %w", err)
 	}
 
-	return events, total, nil
+	// Fetch registration counts for all returned events
+	counts, err := s.fetchRegistrationCounts(ctx, events)
+	if err != nil {
+		s.log.WarnContext(ctx, "failed to fetch registration counts", "error", err)
+	}
+
+	items := make([]dto.EventResponse, 0, len(events))
+	for _, e := range events {
+		resp := dto.NewEventResponse(e)
+		resp.RegistrationCount = counts[e.ID]
+		items = append(items, resp)
+	}
+
+	return items, total, nil
+}
+
+// fetchRegistrationCounts returns a map of event_id -> active registration count
+// for the given events, using a single batched query.
+func (s *EventService) fetchRegistrationCounts(ctx context.Context, events []db.Event) (map[uuid.UUID]int32, error) {
+	if len(events) == 0 {
+		return nil, nil
+	}
+
+	ids := make([]uuid.UUID, len(events))
+	for i, e := range events {
+		ids[i] = e.ID
+	}
+
+	type countRow struct {
+		EventID uuid.UUID
+		Count   int32
+	}
+
+	rows, _ := s.pool.Query(ctx, `
+		SELECT event_id, COUNT(*)::int4
+		FROM registrations
+		WHERE event_id = ANY($1::uuid[])
+		  AND status NOT IN ('cancelled', 'rejected')
+		GROUP BY event_id
+	`, ids)
+	defer rows.Close()
+
+	counts := make(map[uuid.UUID]int32, len(events))
+	for _, id := range ids {
+		counts[id] = 0
+	}
+
+	for rows.Next() {
+		var r countRow
+		if err := rows.Scan(&r.EventID, &r.Count); err != nil {
+			return nil, fmt.Errorf("scan registration count: %w", err)
+		}
+		counts[r.EventID] = r.Count
+	}
+
+	return counts, rows.Err()
 }
 
 // Update applies a partial patch to an existing event. Ownership is
@@ -326,6 +383,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		IsVirtual:        current.IsVirtual,
 		MeetingUrl:       current.MeetingUrl,
 		VenueName:        current.VenueName,
+		LocationAddress:  current.LocationAddress,
 		Lat:              current.Lat,
 		Lng:              current.Lng,
 		Category:         current.Category,
@@ -365,6 +423,9 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 	if req.VenueName != nil {
 		params.VenueName = req.VenueName
 	}
+	if req.LocationAddress != nil {
+		params.LocationAddress = req.LocationAddress
+	}
 	if req.Category != nil {
 		params.Category = req.Category
 	}
@@ -392,6 +453,9 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		if params.VenueName == nil || *params.VenueName == "" {
 			return db.Event{}, fmt.Errorf("%w: venue_name is required for physical events", ErrInvalidEvent)
 		}
+		if params.LocationAddress == nil || *params.LocationAddress == "" {
+			return db.Event{}, fmt.Errorf("%w: location_address is required for physical events", ErrInvalidEvent)
+		}
 		if !params.Lat.Valid {
 			return db.Event{}, fmt.Errorf("%w: lat is required for physical events", ErrInvalidEvent)
 		}
@@ -406,6 +470,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 	// Normalize virtual/physical fields.
 	if params.IsVirtual {
 		params.VenueName = nil
+		params.LocationAddress = nil
 		params.Lat = pgtype.Numeric{Valid: false}
 		params.Lng = pgtype.Numeric{Valid: false}
 	} else {
@@ -435,6 +500,7 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 	coverImage := current.CoverImageUrl
 	meetingURL := current.MeetingUrl
 	venueName := current.VenueName
+	locationAddress := current.LocationAddress
 	lat := current.Lat
 	lng := current.Lng
 
@@ -449,6 +515,9 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 	}
 	if req.VenueName != nil {
 		venueName = req.VenueName
+	}
+	if req.LocationAddress != nil {
+		locationAddress = req.LocationAddress
 	}
 	if req.Lat != nil {
 		lat, err = helper.Float64ToNumeric(*req.Lat)
@@ -471,6 +540,9 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 		if venueName == nil || *venueName == "" {
 			return db.Event{}, fmt.Errorf("%w: venue_name is required for physical events", ErrInvalidEvent)
 		}
+		if locationAddress == nil || *locationAddress == "" {
+			return db.Event{}, fmt.Errorf("%w: location_address is required for physical events", ErrInvalidEvent)
+		}
 		if !lat.Valid {
 			return db.Event{}, fmt.Errorf("%w: lat is required for physical events", ErrInvalidEvent)
 		}
@@ -480,14 +552,15 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 	}
 
 	event, err := s.queries.UpdateEventStaffFields(ctx, db.UpdateEventStaffFieldsParams{
-		ID:            id,
-		Description:   description,
-		CoverImageUrl: coverImage,
-		MeetingUrl:    meetingURL,
-		VenueName:     venueName,
-		Lat:           lat,
-		Lng:           lng,
-		OrganizerID:   actorID,
+		ID:              id,
+		Description:     description,
+		CoverImageUrl:   coverImage,
+		MeetingUrl:      meetingURL,
+		VenueName:       venueName,
+		LocationAddress: locationAddress,
+		Lat:             lat,
+		Lng:             lng,
+		OrganizerID:     actorID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {

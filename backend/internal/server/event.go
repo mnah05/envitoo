@@ -147,7 +147,7 @@ func (s *Server) ListMyEvents(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewEventListResponse(events, limit, offset, total))
+	return c.JSON(http.StatusOK, dto.NewEventListResponse(dto.ToEventResponses(events), limit, offset, total))
 }
 
 // UpdateEvent handles PATCH /api/events/:id.

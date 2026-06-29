@@ -36,6 +36,9 @@ const ManageEvents = lazy(() =>
 const EventDashboard = lazy(() =>
   import("@/pages/EventDashboard").then((m) => ({ default: m.EventDashboard })),
 );
+const EditEvent = lazy(() =>
+  import("@/pages/EditEvent").then((m) => ({ default: m.EditEvent })),
+);
 const NotFound = lazy(() =>
   import("@/pages/NotFound").then((m) => ({ default: m.NotFound })),
 );
@@ -74,6 +77,7 @@ export function App() {
             <Route path="/create" element={<CreateEvent />} />
             <Route path="/manage" element={<ManageEvents />} />
             <Route path="/manage/:id" element={<EventDashboard />} />
+            <Route path="/manage/:id/edit" element={<EditEvent />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

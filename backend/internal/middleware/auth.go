@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
-	"github.com/mnah05/pulse/internal/db"
+	"github.com/mnah05/envitoo/internal/db"
 )
 
 const userContextKey = "user"

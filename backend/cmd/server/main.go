@@ -13,10 +13,10 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 
-	"github.com/mnah05/pulse/internal/config"
-	"github.com/mnah05/pulse/internal/database"
-	"github.com/mnah05/pulse/internal/db"
-	"github.com/mnah05/pulse/internal/server"
+	"github.com/mnah05/envitoo/internal/config"
+	"github.com/mnah05/envitoo/internal/database"
+	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/server"
 )
 
 func main() {

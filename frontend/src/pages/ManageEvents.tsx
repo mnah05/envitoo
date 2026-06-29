@@ -36,7 +36,7 @@ export function ManageEvents() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "My events — Pulse";
+    document.title = "My events — EnviToo";
   }, []);
 
   return (

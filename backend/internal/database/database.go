@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/mnah05/pulse/internal/config"
+	"github.com/mnah05/envitoo/internal/config"
 )
 
 // Database wraps a pgx connection pool.
@@ -28,7 +28,7 @@ func Open(ctx context.Context, cfg config.Config) (*Database, error) {
 	poolCfg.MaxConnLifetime = cfg.DBMaxConnLifetime
 	poolCfg.MaxConnIdleTime = cfg.DBMaxConnIdleTime
 	poolCfg.HealthCheckPeriod = cfg.DBHealthCheckPeriod
-	poolCfg.ConnConfig.RuntimeParams["application_name"] = "pulse-backend"
+	poolCfg.ConnConfig.RuntimeParams["application_name"] = "envitoo-backend"
 
 	if cfg.DisablePreparedStmts {
 		poolCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec

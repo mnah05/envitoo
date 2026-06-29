@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/mnah05/pulse/internal/db"
-	"github.com/mnah05/pulse/internal/dto"
+	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/dto"
 )
 
 // EventStaffRole describes how a user may act on an event.

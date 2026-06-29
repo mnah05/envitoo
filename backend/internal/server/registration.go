@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/mnah05/pulse/internal/dto"
-	"github.com/mnah05/pulse/internal/middleware"
-	"github.com/mnah05/pulse/internal/service"
+	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/middleware"
+	"github.com/mnah05/envitoo/internal/service"
 )
 
 // ---------------------------------------------------------------------------

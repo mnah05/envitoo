@@ -46,6 +46,7 @@ type Event struct {
 	Lng              pgtype.Numeric
 	Slug             string
 	Category         *string
+	LocationAddress  *string
 }
 
 type KanbanColumn struct {

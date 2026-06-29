@@ -1,4 +1,4 @@
-module github.com/mnah05/pulse
+module github.com/mnah05/envitoo
 
 go 1.26.4
 

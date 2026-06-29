@@ -41,6 +41,7 @@ export function errorBodyMessage(body: unknown, fallback: string): string {
 interface ApiMethods {
   get: <T>(path: string, query?: Query) => Promise<T>;
   post: <T>(path: string, body?: unknown) => Promise<T>;
+  put: <T>(path: string, body?: unknown) => Promise<T>;
   patch: <T>(path: string, body?: unknown) => Promise<T>;
   del: <T>(path: string, query?: Query) => Promise<T>;
 }
@@ -90,6 +91,7 @@ export function useApi(): ApiMethods {
     return {
       get: (path, query) => request("GET", path, { query }),
       post: (path, body) => request("POST", path, { body: body != null ? JSON.stringify(body) : undefined }),
+      put: (path, body) => request("PUT", path, { body: body != null ? JSON.stringify(body) : undefined }),
       patch: (path, body) => request("PATCH", path, { body: body != null ? JSON.stringify(body) : undefined }),
       del: (path, query) => request("DELETE", path, { query }),
     };

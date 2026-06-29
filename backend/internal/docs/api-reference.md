@@ -1,6 +1,6 @@
-# Pulse API Reference
+# EnviToo API Reference
 
-Complete documentation of every HTTP endpoint in the Pulse backend.
+Complete documentation of every HTTP endpoint in the EnviToo backend.
 
 ## Conventions
 

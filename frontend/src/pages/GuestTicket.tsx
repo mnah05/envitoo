@@ -20,7 +20,7 @@ export function GuestTicket() {
   const cancelMut = useCancelGuestRegistration();
 
   useEffect(() => {
-    document.title = "Your ticket — Pulse";
+    document.title = "Your ticket — EnviToo";
   }, []);
 
   if (!token) {
@@ -112,7 +112,7 @@ export function GuestTicket() {
             <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-primary/30 blur-2xl" />
             <div className="relative flex items-center justify-between">
               <span className="inline-flex items-center gap-2 text-sm font-medium">
-                <Ticket className="size-4" /> Pulse Ticket
+                <Ticket className="size-4" /> EnviToo Ticket
               </span>
               <RegStatusBadge status={reg.status} />
             </div>

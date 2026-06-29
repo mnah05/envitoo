@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/mnah05/pulse/internal/db"
-	"github.com/mnah05/pulse/internal/dto"
-	"github.com/mnah05/pulse/internal/helper"
+	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/helper"
 )
 
 // VolunteerService provides business logic for volunteer workflow operations.

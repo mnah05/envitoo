@@ -6,7 +6,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
-	"github.com/mnah05/pulse/internal/db"
+	"github.com/mnah05/envitoo/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,7 @@ type CreateEventRequest struct {
 	IsVirtual        bool       `json:"is_virtual"`
 	MeetingURL       *string    `json:"meeting_url" validate:"omitempty,url"`
 	VenueName        *string    `json:"venue_name" validate:"omitempty,max=200"`
+	LocationAddress  *string    `json:"location_address" validate:"omitempty,max=500"`
 	Lat              *float64   `json:"lat" validate:"omitempty,latitude"`
 	Lng              *float64   `json:"lng" validate:"omitempty,longitude"`
 	Category         *string    `json:"category" validate:"omitempty,oneof=technical cultural sports workshop seminar hackathon other"`
@@ -49,6 +50,7 @@ type UpdateEventRequest struct {
 	IsVirtual        *bool      `json:"is_virtual"`
 	MeetingURL       *string    `json:"meeting_url" validate:"omitempty,url"`
 	VenueName        *string    `json:"venue_name" validate:"omitempty,max=200"`
+	LocationAddress  *string    `json:"location_address" validate:"omitempty,max=500"`
 	Lat              *float64   `json:"lat" validate:"omitempty,latitude"`
 	Lng              *float64   `json:"lng" validate:"omitempty,longitude"`
 	Category         *string    `json:"category" validate:"omitempty,oneof=technical cultural sports workshop seminar hackathon other"`
@@ -59,28 +61,30 @@ type UpdateEventRequest struct {
 // ---------------------------------------------------------------------------
 
 type EventResponse struct {
-	ID               uuid.UUID  `json:"id"`
-	OrganizerID      uuid.UUID  `json:"organizer_id"`
-	Title            string     `json:"title"`
-	Description      *string    `json:"description,omitempty"`
-	StartsAt         time.Time  `json:"starts_at"`
-	EndsAt           time.Time  `json:"ends_at"`
-	Capacity         int32      `json:"capacity"`
-	PriceInPaise     int64      `json:"price_in_paise"`
-	Currency         string     `json:"currency"`
-	Status           string     `json:"status"`
-	Slug             string     `json:"slug"`
-	Category         *string    `json:"category,omitempty"`
-	RequiresApproval bool       `json:"requires_approval"`
-	CoverImageURL    *string    `json:"cover_image_url,omitempty"`
-	CalendarID       *uuid.UUID `json:"calendar_id,omitempty"`
-	IsVirtual        bool       `json:"is_virtual"`
-	MeetingURL       *string    `json:"meeting_url,omitempty"`
-	VenueName        *string    `json:"venue_name,omitempty"`
-	Lat              *float64   `json:"lat,omitempty"`
-	Lng              *float64   `json:"lng,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                uuid.UUID  `json:"id"`
+	OrganizerID       uuid.UUID  `json:"organizer_id"`
+	Title             string     `json:"title"`
+	Description       *string    `json:"description,omitempty"`
+	StartsAt          time.Time  `json:"starts_at"`
+	EndsAt            time.Time  `json:"ends_at"`
+	Capacity          int32      `json:"capacity"`
+	RegistrationCount int32      `json:"registration_count"`
+	PriceInPaise      int64      `json:"price_in_paise"`
+	Currency          string     `json:"currency"`
+	Status            string     `json:"status"`
+	Slug              string     `json:"slug"`
+	Category          *string    `json:"category,omitempty"`
+	RequiresApproval  bool       `json:"requires_approval"`
+	CoverImageURL     *string    `json:"cover_image_url,omitempty"`
+	CalendarID        *uuid.UUID `json:"calendar_id,omitempty"`
+	IsVirtual         bool       `json:"is_virtual"`
+	MeetingURL        *string    `json:"meeting_url,omitempty"`
+	VenueName         *string    `json:"venue_name,omitempty"`
+	LocationAddress   *string    `json:"location_address,omitempty"`
+	Lat               *float64   `json:"lat,omitempty"`
+	Lng               *float64   `json:"lng,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 // EventListResponse wraps a paginated list of events with pagination
@@ -112,6 +116,7 @@ func NewEventResponse(e db.Event) EventResponse {
 		IsVirtual:        e.IsVirtual,
 		MeetingURL:       e.MeetingUrl,
 		VenueName:        e.VenueName,
+		LocationAddress:  e.LocationAddress,
 		CreatedAt:        e.CreatedAt,
 		UpdatedAt:        e.UpdatedAt,
 	}
@@ -138,14 +143,19 @@ func NewEventResponse(e db.Event) EventResponse {
 	return resp
 }
 
-// NewEventListResponse converts a slice of db.Event rows into a
+// NewEventListResponse converts a slice of EventResponse rows into a
 // paginated EventListResponse.
-func NewEventListResponse(events []db.Event, limit, offset, total int32) EventListResponse {
+func NewEventListResponse(events []EventResponse, limit, offset, total int32) EventListResponse {
+	return EventListResponse{Events: events, Limit: limit, Offset: offset, Total: total}
+}
+
+// ToEventResponses converts a slice of db.Event to a slice of EventResponse.
+func ToEventResponses(events []db.Event) []EventResponse {
 	items := make([]EventResponse, 0, len(events))
 	for _, e := range events {
 		items = append(items, NewEventResponse(e))
 	}
-	return EventListResponse{Events: items, Limit: limit, Offset: offset, Total: total}
+	return items
 }
 
 // ---------------------------------------------------------------------------
@@ -163,17 +173,18 @@ func registerEventValidations(v *validator.Validate) {
 
 func validateCreateEventRequest(sl validator.StructLevel) {
 	r := sl.Current().Interface().(CreateEventRequest)
-	validateEventVenueConstraint(sl, r.IsVirtual, r.MeetingURL, r.VenueName, r.Lat, r.Lng)
+	validateEventVenueConstraint(sl, r.IsVirtual, r.MeetingURL, r.VenueName, r.LocationAddress, r.Lat, r.Lng)
 }
 
 // validateEventVenueConstraint enforces:
 //   - is_virtual=true  ⇒ meeting_url is required
-//   - is_virtual=false ⇒ venue_name, lat, lng are required
+//   - is_virtual=false ⇒ venue_name, location_address, lat, lng are required
 func validateEventVenueConstraint(
 	sl validator.StructLevel,
 	isVirtual bool,
 	meetingURL *string,
 	venueName *string,
+	locationAddress *string,
 	lat *float64,
 	lng *float64,
 ) {
@@ -185,6 +196,9 @@ func validateEventVenueConstraint(
 	}
 	if venueName == nil || *venueName == "" {
 		sl.ReportError(venueName, "venue_name", "venue_name", "required_when_physical", "")
+	}
+	if locationAddress == nil || *locationAddress == "" {
+		sl.ReportError(locationAddress, "location_address", "location_address", "required_when_physical", "")
 	}
 	if lat == nil {
 		sl.ReportError(lat, "lat", "lat", "required_when_physical", "")

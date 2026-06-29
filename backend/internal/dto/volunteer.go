@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mnah05/pulse/internal/db"
+	"github.com/mnah05/envitoo/internal/db"
 )
 
 // ---------------------------------------------------------------------------

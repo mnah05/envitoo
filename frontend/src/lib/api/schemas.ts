@@ -30,6 +30,7 @@ export const EventSchema = z.object({
   starts_at: iso,
   ends_at: iso,
   capacity: z.number().int(),
+  registration_count: z.number().int(),
   price_in_paise: z.number().int(),
   currency: z.string().length(3),
   status: eventStatus,
@@ -41,6 +42,7 @@ export const EventSchema = z.object({
   is_virtual: z.boolean(),
   meeting_url: z.string().url().nullable().optional(),
   venue_name: z.string().nullable().optional(),
+  location_address: z.string().nullable().optional(),
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
   created_at: iso,
@@ -108,13 +110,20 @@ export const CreateEventInput = z
     is_virtual: z.boolean(),
     meeting_url: z.string().url().optional(),
     venue_name: z.string().max(200).optional(),
+    location_address: z.string().max(500).optional(),
     lat: z.number().optional(),
     lng: z.number().optional(),
     category: category.optional(),
   })
   .refine(
-    (d) => (d.is_virtual ? !!d.meeting_url : !!d.venue_name && d.lat != null && d.lng != null),
-    { message: "virtual events need meeting_url; physical events need venue_name, lat, lng" },
+    (d) =>
+      d.is_virtual
+        ? !!d.meeting_url
+        : !!d.venue_name && !!d.location_address && d.lat != null && d.lng != null,
+    {
+      message:
+        "virtual events need meeting_url; physical events need venue_name, location_address, lat, lng",
+    },
   );
 export type CreateEventValues = z.infer<typeof CreateEventInput>;
 
@@ -130,6 +139,7 @@ export const UpdateEventInput = z.object({
   is_virtual: z.boolean().optional(),
   meeting_url: z.string().url().optional(),
   venue_name: z.string().max(200).optional(),
+  location_address: z.string().max(500).optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
   category: category.optional(),
@@ -157,6 +167,121 @@ export const CheckInInput = z.object({
   access_token: uuid,
 });
 export type CheckInValues = z.infer<typeof CheckInInput>;
+
+// --- Volunteer schemas ------------------------------------------------------
+
+export const volunteerAppStatus = z.enum(["pending", "approved", "rejected", "cancelled"]);
+
+export const VolunteerSettingsSchema = z.object({
+  event_id: uuid,
+  enabled: z.boolean(),
+  description: z.string().nullable().optional(),
+  max_applications: z.number().int().nullable().optional(),
+  created_at: iso,
+  updated_at: iso,
+});
+export type VolunteerSettings = z.infer<typeof VolunteerSettingsSchema>;
+
+export const VolunteerRoleSchema = z.object({
+  id: uuid,
+  event_id: uuid,
+  name: z.string(),
+  is_admin: z.boolean(),
+  created_at: iso,
+});
+export type VolunteerRole = z.infer<typeof VolunteerRoleSchema>;
+
+export const VolunteerApplicationSchema = z.object({
+  id: uuid,
+  event_id: uuid,
+  user_id: uuid,
+  role_id: uuid,
+  role_name: z.string(),
+  is_admin: z.boolean(),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string().nullable().optional(),
+  description: z.string(),
+  status: volunteerAppStatus,
+  created_at: iso,
+  updated_at: iso,
+});
+export type VolunteerApplication = z.infer<typeof VolunteerApplicationSchema>;
+
+export const VolunteerApplicationListSchema = z.object({
+  applications: z.array(VolunteerApplicationSchema),
+  limit: z.number().int(),
+  offset: z.number().int(),
+  total: z.number().int(),
+});
+export type VolunteerApplicationList = z.infer<typeof VolunteerApplicationListSchema>;
+
+export const VolunteerSchema = z.object({
+  id: uuid,
+  event_id: uuid,
+  user_id: uuid,
+  role: z.string(),
+  email: z.string(),
+  username: z.string().nullable().optional(),
+  avatar_url: z.string().nullable().optional(),
+  created_at: iso,
+});
+export type Volunteer = z.infer<typeof VolunteerSchema>;
+
+export const VolunteerListSchema = z.object({
+  volunteers: z.array(VolunteerSchema),
+  limit: z.number().int(),
+  offset: z.number().int(),
+  total: z.number().int(),
+});
+export type VolunteerList = z.infer<typeof VolunteerListSchema>;
+
+export const EventStaffItemSchema = z.object({
+  event_id: uuid,
+  title: z.string(),
+  slug: z.string(),
+  starts_at: iso,
+  ends_at: iso,
+  event_status: eventStatus,
+  application_id: uuid,
+  role_id: uuid,
+  role_name: z.string(),
+  is_admin: z.boolean(),
+  approved_at: iso,
+});
+export type EventStaffItem = z.infer<typeof EventStaffItemSchema>;
+
+export const EventStaffListSchema = z.object({
+  events: z.array(EventStaffItemSchema),
+  limit: z.number().int(),
+  offset: z.number().int(),
+  total: z.number().int(),
+});
+export type EventStaffList = z.infer<typeof EventStaffListSchema>;
+
+// --- Volunteer request schemas ----------------------------------------------
+
+export const UpsertVolunteerSettingsInput = z.object({
+  enabled: z.boolean(),
+  description: z.string().max(2000).optional(),
+  max_applications: z.number().int().min(1).nullable().optional(),
+});
+export type UpsertVolunteerSettingsValues = z.infer<typeof UpsertVolunteerSettingsInput>;
+
+export const CreateVolunteerRoleInput = z.object({
+  name: z.string().min(1).max(100),
+  is_admin: z.boolean(),
+});
+export type CreateVolunteerRoleValues = z.infer<typeof CreateVolunteerRoleInput>;
+
+export const CreateVolunteerApplicationInput = z.object({
+  role_id: uuid,
+  name: z.string().min(1).max(200).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().max(20).optional(),
+  description: z.string().min(1).max(5000),
+});
+export type CreateVolunteerApplicationValues = z.infer<typeof CreateVolunteerApplicationInput>;
 
 export const CATEGORY_LABELS: Record<string, string> = {
   technical: "Tech",

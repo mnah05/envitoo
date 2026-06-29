@@ -159,7 +159,7 @@ export function RegisterForm({ event }: { event: Event }) {
         {event.requires_approval ? "Request to register" : "Get tickets"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
-        {isSignedIn ? "You'll register with your Pulse account." : "No account needed — register as a guest."}
+        {isSignedIn ? "You'll register with your EnviToo account." : "No account needed — register as a guest."}
       </p>
     </form>
   );

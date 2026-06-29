@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mnah05/pulse/internal/dto"
+	"github.com/mnah05/envitoo/internal/dto"
 )
 
 func TestHasDisallowedStaffUpdateFields(t *testing.T) {

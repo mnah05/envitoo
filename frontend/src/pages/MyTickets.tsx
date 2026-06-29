@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
-import { useEffect } from "react";
-import { CalendarDays, Globe, MapPin, Ticket } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { CalendarDays, ClipboardList, Globe, MapPin, ShieldCheck, Ticket } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Empty,
   EmptyDescription,
@@ -12,6 +14,8 @@ import {
 import { PageContainer } from "@/components/domain/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EventStatusBadge, RegStatusBadge } from "@/components/domain/StatusBadge";
+import { MyVolunteerApplications } from "@/components/domain/MyVolunteerApplications";
+import { MyEventStaffList } from "@/components/domain/MyEventStaffList";
 import { useMyRegistrations, useCancelRegistration } from "@/hooks/use-registrations";
 import { useEvent } from "@/hooks/use-events";
 import { formatEventDate } from "@/lib/format";
@@ -28,104 +32,160 @@ export function MyTickets() {
   return (
     <div className="pt-16">
       <PageContainer className="py-10">
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">My tickets</h1>
-        <p className="mt-2 text-muted-foreground">Events you've registered for.</p>
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">My dashboard</h1>
+        <p className="mt-2 text-muted-foreground">
+          Your tickets, volunteer applications, and events you help manage.
+        </p>
 
-        <div className="mt-8 flex flex-col gap-4">
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex flex-col gap-4 rounded-2xl border bg-card p-5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex flex-1 flex-col gap-2">
-                  <Skeleton className="h-5 w-2/3" />
-                  <div className="flex gap-4">
-                    <Skeleton className="h-4 w-28" />
-                    <Skeleton className="h-4 w-24" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 sm:flex-col sm:items-end">
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                  <Skeleton className="h-8 w-20" />
-                </div>
+        <div className="mt-8">
+          <Tabs defaultValue="tickets">
+            <TabsList>
+              <TabsTrigger value="tickets">
+                <Ticket data-icon="inline-start" />
+                My tickets
+              </TabsTrigger>
+              <TabsTrigger value="applications">
+                <ClipboardList data-icon="inline-start" />
+                Applications
+              </TabsTrigger>
+              <TabsTrigger value="staff">
+                <ShieldCheck data-icon="inline-start" />
+                Events I help manage
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="tickets">
+              <div className="mt-6 flex flex-col gap-6">
+                {isLoading ? (
+                  Array.from({ length: 2 }).map((_, i) => (
+                    <Skeleton key={i} className="h-64 w-full rounded-2xl" />
+                  ))
+                ) : regs.length === 0 ? (
+                  <Empty className="min-h-[40vh] border">
+                    <EmptyMedia variant="icon">
+                      <Ticket className="size-6" />
+                    </EmptyMedia>
+                    <EmptyTitle>No tickets yet</EmptyTitle>
+                    <EmptyDescription>
+                      Find an event you love and grab a seat.
+                    </EmptyDescription>
+                    <Button asChild>
+                      <Link to="/discover">Discover events</Link>
+                    </Button>
+                  </Empty>
+                ) : (
+                  regs.map((reg) => <TicketCard key={reg.id} reg={reg} />)
+                )}
               </div>
-            ))
-          ) : regs.length === 0 ? (
-            <Empty className="min-h-[40vh] border">
-              <EmptyMedia variant="icon">
-                <Ticket className="size-6" />
-              </EmptyMedia>
-              <EmptyTitle>No tickets yet</EmptyTitle>
-              <EmptyDescription>
-                Find an event you love and grab a seat.
-              </EmptyDescription>
-              <Button asChild>
-                <Link to="/discover">Discover events</Link>
-              </Button>
-            </Empty>
-          ) : (
-            regs.map((reg) => <TicketRow key={reg.id} reg={reg} />)
-          )}
+            </TabsContent>
+
+            <TabsContent value="applications">
+              <div className="mt-6">
+                <MyVolunteerApplications />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="staff">
+              <div className="mt-6">
+                <MyEventStaffList />
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </PageContainer>
     </div>
   );
 }
 
-function TicketRow({ reg }: { reg: Registration }) {
+function TicketCard({ reg }: { reg: Registration }) {
   const { data: event, isLoading } = useEvent(reg.event_id);
   const cancelMut = useCancelRegistration();
   const eventCancelled = event?.status === "cancelled";
   const canCancel =
     !eventCancelled && (reg.status === "approved" || reg.status === "pending");
 
+  const ticketUrl = reg.access_token
+    ? `${window.location.origin}/ticket?token=${reg.access_token}`
+    : null;
+
+  if (isLoading) {
+    return <Skeleton className="h-64 w-full rounded-2xl" />;
+  }
+
+  if (!event) {
+    return null;
+  }
+
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Spinner className="size-4" /> Loading event…
-          </div>
-        ) : event ? (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                to={`/e/${event.slug}`}
-                className="truncate text-lg font-semibold hover:text-primary"
-              >
+    <div className="relative overflow-hidden rounded-2xl border bg-card shadow-lg">
+      {/* Top: hero area */}
+      <div className="relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/40 via-primary/10 to-card" />
+        <div className="relative z-10 flex flex-col gap-3 p-5 pb-8">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-xl font-bold tracking-tight text-white drop-shadow-sm">
                 {event.title}
-              </Link>
-              {eventCancelled && <EventStatusBadge status="cancelled" />}
+              </h3>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/80">
+                <span className="flex items-center gap-1.5">
+                  <CalendarDays className="size-4" />
+                  {formatEventDate(event.starts_at, event.ends_at)}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  {event.is_virtual ? <Globe className="size-4" /> : <MapPin className="size-4" />}
+                  {event.is_virtual ? "Virtual" : event.venue_name || "Location"}
+                </span>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <CalendarDays className="size-4" />
-                {formatEventDate(event.starts_at, event.ends_at)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                {event.is_virtual ? <Globe className="size-4" /> : <MapPin className="size-4" />}
-                {event.is_virtual ? "Virtual" : event.venue_name || "Location"}
-              </span>
-            </div>
-          </>
-        ) : (
-          <span className="text-sm text-muted-foreground">Event details unavailable</span>
-        )}
+            <RegStatusBadge status={reg.status} />
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3 sm:flex-col sm:items-end">
-        <RegStatusBadge status={reg.status} />
-        {canCancel && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={cancelMut.isPending}
-            onClick={() => cancelMut.mutate(reg.id)}
-          >
-            {cancelMut.isPending ? "Cancelling…" : "Cancel"}
-          </Button>
-        )}
+      {/* Perforation line with circle cutouts */}
+      <div className="relative flex items-center px-5">
+        <div className="absolute left-0 top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background" />
+        <div className="h-px flex-1 border-t border-dashed border-border" />
+        <div className="absolute right-0 top-1/2 size-5 translate-x-1/2 -translate-y-1/2 rounded-full bg-background" />
+      </div>
+
+      {/* Bottom: QR + details */}
+      <div className="flex items-center gap-5 p-5 pt-6">
+        <div className="flex-shrink-0 rounded-xl bg-white p-2 shadow-sm">
+          {ticketUrl ? (
+            <QRCodeSVG value={ticketUrl} size={100} level="M" />
+          ) : (
+            <div className="flex size-[100px] items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">
+              No QR
+            </div>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="text-xs text-muted-foreground">
+            Ticket #{reg.id.slice(0, 8)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {eventCancelled && <EventStatusBadge status="cancelled" />}
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            {canCancel && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={cancelMut.isPending}
+                onClick={() => cancelMut.mutate(reg.id)}
+              >
+                {cancelMut.isPending ? "Cancelling…" : "Cancel"}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" asChild>
+              <Link to={`/e/${event.slug}`}>
+                View event
+              </Link>
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

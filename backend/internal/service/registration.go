@@ -12,9 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/mnah05/pulse/internal/db"
-	"github.com/mnah05/pulse/internal/dto"
-	"github.com/mnah05/pulse/internal/helper"
+	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/helper"
 )
 
 // RegistrationService provides business logic for registration operations.

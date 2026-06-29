@@ -9,15 +9,18 @@ import { EventCover } from "@/components/domain/EventCard";
 import { CategoryPill } from "@/components/domain/CategoryPill";
 import { EventStatusBadge } from "@/components/domain/StatusBadge";
 import { RegisterForm } from "@/components/domain/RegisterForm";
+import { VolunteerApplyForm } from "@/components/domain/VolunteerApplyForm";
 import { useEventBySlug } from "@/hooks/use-events";
+import { useVolunteerSettings } from "@/hooks/use-volunteers";
 import { formatEventDate, formatFullDate, formatPrice } from "@/lib/format";
 
 export function EventDetail() {
   const { slug = "" } = useParams();
   const { data: event, isLoading, error } = useEventBySlug(slug);
+  const { data: volunteerSettings } = useVolunteerSettings(event?.id ?? "", !!event);
 
   useEffect(() => {
-    document.title = event ? `${event.title} — Pulse` : "Event — Pulse";
+    document.title = event ? `${event.title} — EnviToo` : "Event — EnviToo";
   }, [event]);
 
   if (isLoading) {
@@ -94,8 +97,17 @@ export function EventDetail() {
                   >
                     {event.meeting_url ? "Join online" : "Virtual event"}
                   </a>
+                ) : event.venue_name || event.location_address ? (
+                  <span>
+                    {event.venue_name && (
+                      <span className="block font-medium">{event.venue_name}</span>
+                    )}
+                    {event.location_address && (
+                      <span className="text-muted-foreground">{event.location_address}</span>
+                    )}
+                  </span>
                 ) : (
-                  event.venue_name || "Location to be announced"
+                  "Location to be announced"
                 )}
               </InfoRow>
               <InfoRow icon={<Users className="size-5" />} label="Capacity">
@@ -117,8 +129,8 @@ export function EventDetail() {
             )}
           </div>
 
-          {/* Register card */}
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+          {/* Register + volunteer card */}
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-2xl border bg-card p-6 shadow-sm">
               {cancelled ? (
                 <div className="rounded-xl bg-muted p-6 text-center">
@@ -143,6 +155,10 @@ export function EventDetail() {
                 </>
               )}
             </div>
+
+            {volunteerSettings?.enabled && !cancelled && (
+              <VolunteerApplyForm event={event} settings={volunteerSettings} />
+            )}
           </aside>
         </div>
       </PageContainer>
@@ -203,7 +219,7 @@ function EventDetailSkeleton() {
               <Skeleton className="h-4 w-2/3" />
             </div>
           </div>
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-2xl border bg-card p-6 shadow-sm">
               <div className="mb-4 flex items-baseline justify-between">
                 <Skeleton className="h-8 w-24" />

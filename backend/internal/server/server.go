@@ -10,10 +10,10 @@ import (
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 
-	"github.com/mnah05/pulse/internal/db"
-	"github.com/mnah05/pulse/internal/dto"
-	"github.com/mnah05/pulse/internal/middleware"
-	"github.com/mnah05/pulse/internal/service"
+	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/middleware"
+	"github.com/mnah05/envitoo/internal/service"
 )
 
 // Server holds the HTTP handlers and their dependencies.

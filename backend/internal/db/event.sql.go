@@ -20,7 +20,7 @@ SET
     updated_at = now()
 WHERE
     id = $1
-    AND organizer_id = $2 RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category
+    AND organizer_id = $2 RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
 `
 
 type CancelEventParams struct {
@@ -54,6 +54,7 @@ func (q *Queries) CancelEvent(ctx context.Context, arg CancelEventParams) (Event
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
@@ -129,6 +130,7 @@ INSERT INTO
         is_virtual,
         meeting_url,
         venue_name,
+        location_address,
         lat,
         lng,
         slug,
@@ -153,9 +155,10 @@ VALUES (
         $16,
         $17,
         $18,
-        $19
+        $19,
+        $20
     ) ON CONFLICT (slug) DO NOTHING
-RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category
+RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
 `
 
 type CreateEventParams struct {
@@ -174,6 +177,7 @@ type CreateEventParams struct {
 	IsVirtual        bool
 	MeetingUrl       *string
 	VenueName        *string
+	LocationAddress  *string
 	Lat              pgtype.Numeric
 	Lng              pgtype.Numeric
 	Slug             string
@@ -197,6 +201,7 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 		arg.IsVirtual,
 		arg.MeetingUrl,
 		arg.VenueName,
+		arg.LocationAddress,
 		arg.Lat,
 		arg.Lng,
 		arg.Slug,
@@ -226,12 +231,13 @@ func (q *Queries) CreateEvent(ctx context.Context, arg CreateEventParams) (Event
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
 
 const getEventByID = `-- name: GetEventByID :one
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category FROM events WHERE id = $1
+SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address FROM events WHERE id = $1
 `
 
 func (q *Queries) GetEventByID(ctx context.Context, id uuid.UUID) (Event, error) {
@@ -260,12 +266,13 @@ func (q *Queries) GetEventByID(ctx context.Context, id uuid.UUID) (Event, error)
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
 
 const getEventByIDForUpdate = `-- name: GetEventByIDForUpdate :one
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category FROM events WHERE id = $1 FOR UPDATE
+SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address FROM events WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetEventByIDForUpdate(ctx context.Context, id uuid.UUID) (Event, error) {
@@ -294,12 +301,13 @@ func (q *Queries) GetEventByIDForUpdate(ctx context.Context, id uuid.UUID) (Even
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
 
 const getEventBySlug = `-- name: GetEventBySlug :one
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category FROM events WHERE slug = $1
+SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address FROM events WHERE slug = $1
 `
 
 func (q *Queries) GetEventBySlug(ctx context.Context, slug string) (Event, error) {
@@ -328,12 +336,13 @@ func (q *Queries) GetEventBySlug(ctx context.Context, slug string) (Event, error
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
 
 const getPublishedEventByID = `-- name: GetPublishedEventByID :one
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category FROM events WHERE id = $1 AND status = 'published'
+SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address FROM events WHERE id = $1 AND status = 'published'
 `
 
 func (q *Queries) GetPublishedEventByID(ctx context.Context, id uuid.UUID) (Event, error) {
@@ -362,12 +371,13 @@ func (q *Queries) GetPublishedEventByID(ctx context.Context, id uuid.UUID) (Even
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
 
 const getPublishedEventBySlug = `-- name: GetPublishedEventBySlug :one
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category FROM events WHERE slug = $1 AND status = 'published'
+SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address FROM events WHERE slug = $1 AND status = 'published'
 `
 
 func (q *Queries) GetPublishedEventBySlug(ctx context.Context, slug string) (Event, error) {
@@ -396,12 +406,13 @@ func (q *Queries) GetPublishedEventBySlug(ctx context.Context, slug string) (Eve
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
 
 const listEventsByOrganizer = `-- name: ListEventsByOrganizer :many
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category
+SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
 FROM events
 WHERE
     organizer_id = $1
@@ -455,6 +466,7 @@ func (q *Queries) ListEventsByOrganizer(ctx context.Context, arg ListEventsByOrg
 			&i.Lng,
 			&i.Slug,
 			&i.Category,
+			&i.LocationAddress,
 		); err != nil {
 			return nil, err
 		}
@@ -467,7 +479,7 @@ func (q *Queries) ListEventsByOrganizer(ctx context.Context, arg ListEventsByOrg
 }
 
 const listPublicEvents = `-- name: ListPublicEvents :many
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category
+SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
 FROM events
 WHERE
     status = 'published'
@@ -530,6 +542,7 @@ func (q *Queries) ListPublicEvents(ctx context.Context, arg ListPublicEventsPara
 			&i.Lng,
 			&i.Slug,
 			&i.Category,
+			&i.LocationAddress,
 		); err != nil {
 			return nil, err
 		}
@@ -556,14 +569,15 @@ SET
     is_virtual = $11,
     meeting_url = $12,
     venue_name = $13,
-    lat = $14,
-    lng = $15,
-    category = $16,
+    location_address = $14,
+    lat = $15,
+    lng = $16,
+    category = $17,
     updated_at = now()
 WHERE
     id = $1
-    AND organizer_id = $17
-RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category
+    AND organizer_id = $18
+RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
 `
 
 type UpdateEventParams struct {
@@ -580,6 +594,7 @@ type UpdateEventParams struct {
 	IsVirtual        bool
 	MeetingUrl       *string
 	VenueName        *string
+	LocationAddress  *string
 	Lat              pgtype.Numeric
 	Lng              pgtype.Numeric
 	Category         *string
@@ -601,6 +616,7 @@ func (q *Queries) UpdateEvent(ctx context.Context, arg UpdateEventParams) (Event
 		arg.IsVirtual,
 		arg.MeetingUrl,
 		arg.VenueName,
+		arg.LocationAddress,
 		arg.Lat,
 		arg.Lng,
 		arg.Category,
@@ -630,6 +646,7 @@ func (q *Queries) UpdateEvent(ctx context.Context, arg UpdateEventParams) (Event
 		&i.Lng,
 		&i.Slug,
 		&i.Category,
+		&i.LocationAddress,
 	)
 	return i, err
 }
