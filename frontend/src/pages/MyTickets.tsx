@@ -26,7 +26,7 @@ export function MyTickets() {
   const regs = data?.registrations ?? [];
 
   useEffect(() => {
-    document.title = "My tickets — Pulse";
+    document.title = "My tickets — EnviToo";
   }, []);
 
   return (

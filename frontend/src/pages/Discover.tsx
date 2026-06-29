@@ -36,7 +36,7 @@ export function Discover() {
   const activeCategories = CATEGORIES.filter((c) => (grouped.get(c)?.length ?? 0) > 0);
 
   useEffect(() => {
-    document.title = "Discover — Pulse";
+    document.title = "Discover — EnviToo";
   }, []);
 
   return (
