@@ -27,8 +27,9 @@ export function Landing() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-to-b from-rose-50/60 via-background to-background" />
-          <div className="absolute -top-24 left-1/2 size-[40rem] -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
+          <div className="absolute inset-0 bg-gradient-to-b from-yellow-950/30 via-background to-background" />
+          <div className="absolute -top-24 left-1/2 size-[40rem] -translate-x-1/2 rounded-full bg-yellow-500/10 blur-3xl" />
+          <div className="absolute -bottom-24 right-1/4 size-[30rem] -translate-x-1/2 rounded-full bg-pink-500/5 blur-3xl" />
         </div>
 
         <PageContainer className="flex min-h-[88vh] flex-col items-center justify-center py-24 text-center">
@@ -52,7 +53,7 @@ export function Landing() {
           >
             Delightful events
             <br />
-            <span className="bg-gradient-to-r from-primary to-rose-500 bg-clip-text text-transparent">
+            <span className="text-gradient">
               start here.
             </span>
           </motion.h1>

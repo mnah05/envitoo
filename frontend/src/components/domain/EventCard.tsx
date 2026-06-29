@@ -81,12 +81,12 @@ export function EventCover({
 }
 
 const GRADIENTS = [
-  "bg-gradient-to-br from-rose-400 via-primary to-amber-300",
-  "bg-gradient-to-br from-indigo-400 via-violet-400 to-sky-300",
-  "bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-300",
-  "bg-gradient-to-br from-amber-400 via-orange-400 to-rose-300",
-  "bg-gradient-to-br from-violet-400 via-fuchsia-400 to-pink-300",
-  "bg-gradient-to-br from-sky-400 via-blue-400 to-indigo-300",
+  "bg-gradient-to-br from-yellow-500 via-amber-600 to-orange-700",
+  "bg-gradient-to-br from-pink-500 via-rose-600 to-purple-700",
+  "bg-gradient-to-br from-yellow-400 via-yellow-600 to-amber-800",
+  "bg-gradient-to-br from-pink-500 via-fuchsia-600 to-violet-700",
+  "bg-gradient-to-br from-amber-500 via-yellow-600 to-yellow-800",
+  "bg-gradient-to-br from-purple-500 via-pink-600 to-rose-700",
 ];
 
 function gradientFor(id: string): string {

@@ -1,33 +1,32 @@
 import type { Appearance } from "@clerk/shared/types";
 
-/** Shared Clerk theme aligned with Pulse design tokens (index.css). */
 export const clerkAppearance: Appearance = {
   variables: {
-    colorPrimary: "#ff385c",
-    colorText: "#222222",
-    colorTextSecondary: "#717171",
-    colorBackground: "#ffffff",
-    colorInputBackground: "#ffffff",
-    colorInputText: "#222222",
-    colorDanger: "#c1351f",
-    borderRadius: "14px",
+    colorPrimary: "#f5c518",
+    colorText: "#e4e4f0",
+    colorTextSecondary: "#6e6e8a",
+    colorBackground: "#0f0f1e",
+    colorInputBackground: "#1a1a35",
+    colorInputText: "#e4e4f0",
+    colorDanger: "#ff2255",
+    borderRadius: "10px",
     fontFamily: '"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
   elements: {
     rootBox: "mx-auto w-full",
-    card: "rounded-2xl border border-border bg-card shadow-sm",
-    headerTitle: "text-2xl font-bold tracking-tight text-foreground",
-    headerSubtitle: "text-muted-foreground",
+    card: "rounded-2xl border border-[#252545] bg-[#0f0f1e] shadow-lg shadow-yellow-500/5",
+    headerTitle: "text-2xl font-bold tracking-tight text-[#e4e4f0]",
+    headerSubtitle: "text-[#6e6e8a]",
     socialButtonsBlockButton:
-      "border border-border bg-background text-foreground shadow-xs hover:bg-accent",
+      "border border-[#252545] bg-[#07070d] text-[#e4e4f0] shadow-xs hover:bg-[#1a1a30]",
     formButtonPrimary:
-      "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring)_50%,transparent)]",
+      "bg-[#f5c518] text-[#07070d] shadow-sm shadow-yellow-500/20 hover:bg-[#f5c518]/90 focus:shadow-[0_0_0_3px_rgba(245,197,24,0.3)]",
     formFieldInput:
-      "border-input bg-background text-foreground shadow-xs focus:border-ring focus:ring-[3px] focus:ring-ring/50",
-    footerActionLink: "text-primary hover:text-primary/90",
-    identityPreviewEditButton: "text-primary hover:text-primary/90",
-    formFieldAction: "text-primary hover:text-primary/90",
-    dividerLine: "bg-border",
-    dividerText: "text-muted-foreground",
+      "border-[#252545] bg-[#1a1a35] text-[#e4e4f0] shadow-xs focus:border-[#f5c518] focus:ring-[3px] focus:ring-[#f5c518]/30",
+    footerActionLink: "text-[#f5c518] hover:text-[#f5c518]/80",
+    identityPreviewEditButton: "text-[#f5c518] hover:text-[#f5c518]/80",
+    formFieldAction: "text-[#f5c518] hover:text-[#f5c518]/80",
+    dividerLine: "bg-[#252545]",
+    dividerText: "text-[#6e6e8a]",
   },
 };
