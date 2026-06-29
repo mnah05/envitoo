@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -18,7 +19,22 @@ UPDATE registrations r
   FROM events e
  WHERE r.id = $1
    AND e.id = r.event_id
-   AND e.organizer_id = $2
+   AND (
+     e.organizer_id = $2
+     OR (
+       e.requires_approval = true
+       AND EXISTS (
+         SELECT 1
+         FROM volunteer_applications va
+         JOIN volunteer_roles vr ON vr.id = va.role_id
+         WHERE va.event_id = e.id
+           AND va.user_id = $2
+           AND va.status = 'approved'
+           AND vr.is_admin = true
+       )
+     )
+   )
+   AND r.status IN ('pending', 'rejected', 'cancelled')
 RETURNING r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
 `
 
@@ -140,7 +156,18 @@ UPDATE registrations r
   FROM events e
  WHERE r.id = $1
    AND e.id = r.event_id
-   AND e.organizer_id = $2
+   AND (
+     e.organizer_id = $2
+     OR EXISTS (
+       SELECT 1
+       FROM volunteer_applications va
+       JOIN volunteer_roles vr ON vr.id = va.role_id
+       WHERE va.event_id = e.id
+         AND va.user_id = $2
+         AND va.status = 'approved'
+         AND vr.is_admin = true
+     )
+   )
    AND e.status = 'published'
    AND r.access_token = $3
    AND r.checked_in_at IS NULL
@@ -182,39 +209,6 @@ WHERE event_id = $1
 
 func (q *Queries) CountActiveRegistrationsByEvent(ctx context.Context, eventID uuid.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, countActiveRegistrationsByEvent, eventID)
-	var column_1 int32
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
-const countEventRegistrations = `-- name: CountEventRegistrations :one
-SELECT COUNT(*)::int4
-FROM registrations r
-JOIN events e ON e.id = r.event_id
-WHERE r.event_id = $1
-  AND e.organizer_id = $2
-`
-
-type CountEventRegistrationsParams struct {
-	EventID     uuid.UUID
-	OrganizerID uuid.UUID
-}
-
-func (q *Queries) CountEventRegistrations(ctx context.Context, arg CountEventRegistrationsParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countEventRegistrations, arg.EventID, arg.OrganizerID)
-	var column_1 int32
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
-const countMyRegistrations = `-- name: CountMyRegistrations :one
-SELECT COUNT(*)::int4
-FROM registrations r
-WHERE r.user_id = $1
-`
-
-func (q *Queries) CountMyRegistrations(ctx context.Context, userID pgtype.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, countMyRegistrations, userID)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -376,7 +370,18 @@ SELECT r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.u
 FROM registrations r
 JOIN events e ON e.id = r.event_id
 WHERE r.id = $1
-  AND e.organizer_id = $2
+  AND (
+    e.organizer_id = $2
+    OR EXISTS (
+      SELECT 1
+      FROM volunteer_applications va
+      JOIN volunteer_roles vr ON vr.id = va.role_id
+      WHERE va.event_id = e.id
+        AND va.user_id = $2
+        AND va.status = 'approved'
+        AND vr.is_admin = true
+    )
+  )
 `
 
 type GetRegistrationByIDAdminParams struct {
@@ -430,11 +435,22 @@ func (q *Queries) LinkGuestRegistrations(ctx context.Context, arg LinkGuestRegis
 }
 
 const listEventRegistrations = `-- name: ListEventRegistrations :many
-SELECT r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
+SELECT r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at, COUNT(*) OVER()::int4 AS total_count
 FROM registrations r
 JOIN events e ON e.id = r.event_id
 WHERE r.event_id = $1
-  AND e.organizer_id = $2
+  AND (
+    e.organizer_id = $2
+    OR EXISTS (
+      SELECT 1
+      FROM volunteer_applications va
+      JOIN volunteer_roles vr ON vr.id = va.role_id
+      WHERE va.event_id = e.id
+        AND va.user_id = $2
+        AND va.status = 'approved'
+        AND vr.is_admin = true
+    )
+  )
 ORDER BY r.created_at DESC
 LIMIT $3
 OFFSET $4
@@ -447,8 +463,23 @@ type ListEventRegistrationsParams struct {
 	Offset      int32
 }
 
+type ListEventRegistrationsRow struct {
+	ID             uuid.UUID
+	EventID        uuid.UUID
+	UserID         pgtype.UUID
+	Name           string
+	Email          string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	AccessToken    uuid.UUID
+	TokenExpiresAt pgtype.Timestamptz
+	CheckedInAt    pgtype.Timestamptz
+	TotalCount     int32
+}
+
 // Route 8: GET /api/events/:id/registrations
-func (q *Queries) ListEventRegistrations(ctx context.Context, arg ListEventRegistrationsParams) ([]Registration, error) {
+func (q *Queries) ListEventRegistrations(ctx context.Context, arg ListEventRegistrationsParams) ([]ListEventRegistrationsRow, error) {
 	rows, err := q.db.Query(ctx, listEventRegistrations,
 		arg.EventID,
 		arg.OrganizerID,
@@ -459,9 +490,9 @@ func (q *Queries) ListEventRegistrations(ctx context.Context, arg ListEventRegis
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Registration
+	var items []ListEventRegistrationsRow
 	for rows.Next() {
-		var i Registration
+		var i ListEventRegistrationsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EventID,
@@ -474,6 +505,7 @@ func (q *Queries) ListEventRegistrations(ctx context.Context, arg ListEventRegis
 			&i.AccessToken,
 			&i.TokenExpiresAt,
 			&i.CheckedInAt,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -486,7 +518,7 @@ func (q *Queries) ListEventRegistrations(ctx context.Context, arg ListEventRegis
 }
 
 const listMyRegistrations = `-- name: ListMyRegistrations :many
-SELECT r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
+SELECT r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at, COUNT(*) OVER()::int4 AS total_count
 FROM registrations r
 WHERE r.user_id = $1
 ORDER BY r.created_at DESC
@@ -500,16 +532,31 @@ type ListMyRegistrationsParams struct {
 	Offset int32
 }
 
+type ListMyRegistrationsRow struct {
+	ID             uuid.UUID
+	EventID        uuid.UUID
+	UserID         pgtype.UUID
+	Name           string
+	Email          string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	AccessToken    uuid.UUID
+	TokenExpiresAt pgtype.Timestamptz
+	CheckedInAt    pgtype.Timestamptz
+	TotalCount     int32
+}
+
 // Route 7: GET /api/me/registrations
-func (q *Queries) ListMyRegistrations(ctx context.Context, arg ListMyRegistrationsParams) ([]Registration, error) {
+func (q *Queries) ListMyRegistrations(ctx context.Context, arg ListMyRegistrationsParams) ([]ListMyRegistrationsRow, error) {
 	rows, err := q.db.Query(ctx, listMyRegistrations, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Registration
+	var items []ListMyRegistrationsRow
 	for rows.Next() {
-		var i Registration
+		var i ListMyRegistrationsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EventID,
@@ -522,6 +569,7 @@ func (q *Queries) ListMyRegistrations(ctx context.Context, arg ListMyRegistratio
 			&i.AccessToken,
 			&i.TokenExpiresAt,
 			&i.CheckedInAt,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -539,7 +587,22 @@ UPDATE registrations r
   FROM events e
  WHERE r.id = $1
    AND e.id = r.event_id
-   AND e.organizer_id = $2
+   AND (
+     e.organizer_id = $2
+     OR (
+       e.requires_approval = true
+       AND EXISTS (
+         SELECT 1
+         FROM volunteer_applications va
+         JOIN volunteer_roles vr ON vr.id = va.role_id
+         WHERE va.event_id = e.id
+           AND va.user_id = $2
+           AND va.status = 'approved'
+           AND vr.is_admin = true
+       )
+     )
+   )
+   AND r.status = 'pending'
 RETURNING r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
 `
 

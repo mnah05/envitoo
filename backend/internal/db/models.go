@@ -115,3 +115,35 @@ type Volunteer struct {
 	Role      string
 	CreatedAt time.Time
 }
+
+type VolunteerApplication struct {
+	ID          uuid.UUID
+	EventID     uuid.UUID
+	UserID      uuid.UUID
+	RoleID      uuid.UUID
+	Name        string
+	Email       string
+	Phone       *string
+	Description string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type VolunteerRole struct {
+	ID        uuid.UUID
+	EventID   uuid.UUID
+	Name      string
+	IsAdmin   bool
+	CreatedAt time.Time
+}
+
+type VolunteerSetting struct {
+	ID              uuid.UUID
+	EventID         uuid.UUID
+	Enabled         bool
+	Description     *string
+	MaxApplications *int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}

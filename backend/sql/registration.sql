@@ -77,35 +77,34 @@ RETURNING *;
 
 -- Route 7: GET /api/me/registrations
 -- name: ListMyRegistrations :many
-SELECT r.*
+SELECT r.*, COUNT(*) OVER()::int4 AS total_count
 FROM registrations r
 WHERE r.user_id = $1
 ORDER BY r.created_at DESC
 LIMIT $2
 OFFSET $3;
 
--- name: CountMyRegistrations :one
-SELECT COUNT(*)::int4
-FROM registrations r
-WHERE r.user_id = $1;
-
 -- Route 8: GET /api/events/:id/registrations
 -- name: ListEventRegistrations :many
-SELECT r.*
+SELECT r.*, COUNT(*) OVER()::int4 AS total_count
 FROM registrations r
 JOIN events e ON e.id = r.event_id
 WHERE r.event_id = $1
-  AND e.organizer_id = $2
+  AND (
+    e.organizer_id = $2
+    OR EXISTS (
+      SELECT 1
+      FROM volunteer_applications va
+      JOIN volunteer_roles vr ON vr.id = va.role_id
+      WHERE va.event_id = e.id
+        AND va.user_id = $2
+        AND va.status = 'approved'
+        AND vr.is_admin = true
+    )
+  )
 ORDER BY r.created_at DESC
 LIMIT $3
 OFFSET $4;
-
--- name: CountEventRegistrations :one
-SELECT COUNT(*)::int4
-FROM registrations r
-JOIN events e ON e.id = r.event_id
-WHERE r.event_id = $1
-  AND e.organizer_id = $2;
 
 -- Route 9: GET /api/registrations/:id/admin
 -- name: GetRegistrationByIDAdmin :one
@@ -113,7 +112,18 @@ SELECT r.*
 FROM registrations r
 JOIN events e ON e.id = r.event_id
 WHERE r.id = $1
-  AND e.organizer_id = $2;
+  AND (
+    e.organizer_id = $2
+    OR EXISTS (
+      SELECT 1
+      FROM volunteer_applications va
+      JOIN volunteer_roles vr ON vr.id = va.role_id
+      WHERE va.event_id = e.id
+        AND va.user_id = $2
+        AND va.status = 'approved'
+        AND vr.is_admin = true
+    )
+  );
 
 -- Route 10: POST /api/registrations/:id/approve
 -- name: ApproveRegistration :one
@@ -122,7 +132,22 @@ UPDATE registrations r
   FROM events e
  WHERE r.id = $1
    AND e.id = r.event_id
-   AND e.organizer_id = $2
+   AND (
+     e.organizer_id = $2
+     OR (
+       e.requires_approval = true
+       AND EXISTS (
+         SELECT 1
+         FROM volunteer_applications va
+         JOIN volunteer_roles vr ON vr.id = va.role_id
+         WHERE va.event_id = e.id
+           AND va.user_id = $2
+           AND va.status = 'approved'
+           AND vr.is_admin = true
+       )
+     )
+   )
+   AND r.status IN ('pending', 'rejected', 'cancelled')
 RETURNING r.*;
 
 -- Route 11: POST /api/registrations/:id/reject
@@ -132,7 +157,22 @@ UPDATE registrations r
   FROM events e
  WHERE r.id = $1
    AND e.id = r.event_id
-   AND e.organizer_id = $2
+   AND (
+     e.organizer_id = $2
+     OR (
+       e.requires_approval = true
+       AND EXISTS (
+         SELECT 1
+         FROM volunteer_applications va
+         JOIN volunteer_roles vr ON vr.id = va.role_id
+         WHERE va.event_id = e.id
+           AND va.user_id = $2
+           AND va.status = 'approved'
+           AND vr.is_admin = true
+       )
+     )
+   )
+   AND r.status = 'pending'
 RETURNING r.*;
 
 -- Route 12: PATCH /api/registrations/:id/status
@@ -152,7 +192,18 @@ UPDATE registrations r
   FROM events e
  WHERE r.id = $1
    AND e.id = r.event_id
-   AND e.organizer_id = $2
+   AND (
+     e.organizer_id = $2
+     OR EXISTS (
+       SELECT 1
+       FROM volunteer_applications va
+       JOIN volunteer_roles vr ON vr.id = va.role_id
+       WHERE va.event_id = e.id
+         AND va.user_id = $2
+         AND va.status = 'approved'
+         AND vr.is_admin = true
+     )
+   )
    AND e.status = 'published'
    AND r.access_token = $3
    AND r.checked_in_at IS NULL

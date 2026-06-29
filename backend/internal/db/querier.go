@@ -8,25 +8,27 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	// Route 10: POST /api/registrations/:id/approve
 	ApproveRegistration(ctx context.Context, arg ApproveRegistrationParams) (Registration, error)
+	// Volunteer admins may only approve applications for non-admin roles;
+	// admin-role approvals are reserved for the event organizer.
+	ApproveVolunteerApplication(ctx context.Context, arg ApproveVolunteerApplicationParams) (VolunteerApplication, error)
 	CancelEvent(ctx context.Context, arg CancelEventParams) (Event, error)
 	// Route 3: DELETE /api/guest-registrations?token=
 	CancelGuestRegistration(ctx context.Context, accessToken uuid.UUID) (Registration, error)
 	// Route 6: DELETE /api/registrations/:id
 	CancelRegistration(ctx context.Context, arg CancelRegistrationParams) (Registration, error)
 	CancelSupersededGuestRegistrations(ctx context.Context, arg CancelSupersededGuestRegistrationsParams) (int64, error)
+	CancelVolunteerApplication(ctx context.Context, arg CancelVolunteerApplicationParams) (VolunteerApplication, error)
 	// Route 13: POST /api/registrations/:id/check-in
 	CheckInRegistration(ctx context.Context, arg CheckInRegistrationParams) (Registration, error)
 	CountActiveRegistrationsByEvent(ctx context.Context, eventID uuid.UUID) (int32, error)
-	CountEventRegistrations(ctx context.Context, arg CountEventRegistrationsParams) (int32, error)
 	CountEventsByOrganizer(ctx context.Context, arg CountEventsByOrganizerParams) (int32, error)
-	CountMyRegistrations(ctx context.Context, userID pgtype.UUID) (int32, error)
 	CountPublicEvents(ctx context.Context, arg CountPublicEventsParams) (int32, error)
+	CountVolunteerApplicationsByEvent(ctx context.Context, eventID uuid.UUID) (int32, error)
 	CreateCalendar(ctx context.Context, arg CreateCalendarParams) (Calendar, error)
 	CreateEvent(ctx context.Context, arg CreateEventParams) (Event, error)
 	// Route 1: POST /api/events/:id/register/guest
@@ -39,6 +41,9 @@ type Querier interface {
 	// no row is returned (pgx.ErrNoRows); callers must re-fetch with
 	// GetUserByAuthUserID to pick up the winning row.
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateVolunteerApplication(ctx context.Context, arg CreateVolunteerApplicationParams) (VolunteerApplication, error)
+	CreateVolunteerRole(ctx context.Context, arg CreateVolunteerRoleParams) (VolunteerRole, error)
+	DeleteVolunteerRole(ctx context.Context, arg DeleteVolunteerRoleParams) (VolunteerRole, error)
 	GetCalendarByUserID(ctx context.Context, userID uuid.UUID) (Calendar, error)
 	GetEventByID(ctx context.Context, id uuid.UUID) (Event, error)
 	GetEventByIDForUpdate(ctx context.Context, id uuid.UUID) (Event, error)
@@ -52,19 +57,43 @@ type Querier interface {
 	// Route 9: GET /api/registrations/:id/admin
 	GetRegistrationByIDAdmin(ctx context.Context, arg GetRegistrationByIDAdminParams) (Registration, error)
 	GetUserByAuthUserID(ctx context.Context, authUserID string) (User, error)
+	GetVolunteerApplicationByID(ctx context.Context, arg GetVolunteerApplicationByIDParams) (GetVolunteerApplicationByIDRow, error)
+	GetVolunteerApplicationByIDAdmin(ctx context.Context, arg GetVolunteerApplicationByIDAdminParams) (GetVolunteerApplicationByIDAdminRow, error)
+	GetVolunteerApplicationWithRole(ctx context.Context, id uuid.UUID) (GetVolunteerApplicationWithRoleRow, error)
+	GetVolunteerRoleByID(ctx context.Context, id uuid.UUID) (VolunteerRole, error)
+	GetVolunteerSettingsByEvent(ctx context.Context, eventID uuid.UUID) (VolunteerSetting, error)
+	// Records a confirmed volunteer in the volunteers roster table.
+	// ON CONFLICT DO NOTHING makes this idempotent — if the volunteer
+	// row already exists (e.g. re-approval), no row is returned and the
+	// caller treats pgx.ErrNoRows as success.
+	InsertVolunteer(ctx context.Context, arg InsertVolunteerParams) (Volunteer, error)
+	IsEventOrganizer(ctx context.Context, arg IsEventOrganizerParams) (bool, error)
+	IsVolunteerEventAdmin(ctx context.Context, arg IsVolunteerEventAdminParams) (bool, error)
 	LinkGuestRegistrations(ctx context.Context, arg LinkGuestRegistrationsParams) (int64, error)
 	// Route 8: GET /api/events/:id/registrations
-	ListEventRegistrations(ctx context.Context, arg ListEventRegistrationsParams) ([]Registration, error)
+	ListEventRegistrations(ctx context.Context, arg ListEventRegistrationsParams) ([]ListEventRegistrationsRow, error)
+	ListEventVolunteerApplications(ctx context.Context, arg ListEventVolunteerApplicationsParams) ([]ListEventVolunteerApplicationsRow, error)
+	// Returns confirmed volunteers for an event. Authorization is enforced
+	// in SQL: the organizer or an approved volunteer admin may read.
+	ListEventVolunteers(ctx context.Context, arg ListEventVolunteersParams) ([]ListEventVolunteersRow, error)
 	ListEventsByOrganizer(ctx context.Context, arg ListEventsByOrganizerParams) ([]Event, error)
 	// Route 7: GET /api/me/registrations
-	ListMyRegistrations(ctx context.Context, arg ListMyRegistrationsParams) ([]Registration, error)
+	ListMyRegistrations(ctx context.Context, arg ListMyRegistrationsParams) ([]ListMyRegistrationsRow, error)
+	ListMyVolunteerApplications(ctx context.Context, arg ListMyVolunteerApplicationsParams) ([]ListMyVolunteerApplicationsRow, error)
+	ListMyVolunteerStaffEvents(ctx context.Context, arg ListMyVolunteerStaffEventsParams) ([]ListMyVolunteerStaffEventsRow, error)
 	ListPublicEvents(ctx context.Context, arg ListPublicEventsParams) ([]Event, error)
+	ListVolunteerRolesByEvent(ctx context.Context, eventID uuid.UUID) ([]VolunteerRole, error)
 	// Route 11: POST /api/registrations/:id/reject
 	RejectRegistration(ctx context.Context, arg RejectRegistrationParams) (Registration, error)
+	// Volunteer admins may only reject applications for non-admin roles;
+	// admin-role rejections are reserved for the event organizer.
+	RejectVolunteerApplication(ctx context.Context, arg RejectVolunteerApplicationParams) (VolunteerApplication, error)
 	Test(ctx context.Context) (int32, error)
 	UpdateEvent(ctx context.Context, arg UpdateEventParams) (Event, error)
+	UpdateEventStaffFields(ctx context.Context, arg UpdateEventStaffFieldsParams) (Event, error)
 	// Route 12: PATCH /api/registrations/:id/status
 	UpdateRegistrationStatus(ctx context.Context, arg UpdateRegistrationStatusParams) (Registration, error)
+	UpsertVolunteerSettings(ctx context.Context, arg UpsertVolunteerSettingsParams) (VolunteerSetting, error)
 }
 
 var _ Querier = (*Queries)(nil)
