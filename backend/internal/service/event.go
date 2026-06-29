@@ -20,12 +20,13 @@ import (
 type EventService struct {
 	pool    *pgxpool.Pool
 	queries *db.Queries
+	access  *EventAccessService
 	log     *slog.Logger
 }
 
 // NewEventService creates an EventService with the given dependencies.
-func NewEventService(pool *pgxpool.Pool, queries *db.Queries, log *slog.Logger) *EventService {
-	return &EventService{pool: pool, queries: queries, log: log}
+func NewEventService(pool *pgxpool.Pool, queries *db.Queries, access *EventAccessService, log *slog.Logger) *EventService {
+	return &EventService{pool: pool, queries: queries, access: access, log: log}
 }
 
 // ListParams controls pagination and filtering for list queries.
@@ -287,7 +288,21 @@ func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) 
 //
 // Field-level validation is performed by the handler. Cross-field
 // venue constraints are validated against the merged state here.
-func (s *EventService) Update(ctx context.Context, id uuid.UUID, organizerID uuid.UUID, req dto.UpdateEventRequest) (db.Event, error) {
+func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UUID, req dto.UpdateEventRequest) (db.Event, error) {
+	role, err := s.access.ResolveStaffRole(ctx, id, actorID)
+	if err != nil {
+		return db.Event{}, err
+	}
+	switch role {
+	case EventStaffNone:
+		return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
+	case EventStaffVolunteerAdmin:
+		if HasDisallowedStaffUpdateFields(req) {
+			return db.Event{}, fmt.Errorf("event %s: %w", id, ErrEventStaffForbidden)
+		}
+		return s.updateStaffFields(ctx, id, actorID, req)
+	}
+
 	current, err := s.queries.GetEventByID(ctx, id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -314,7 +329,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, organizerID uui
 		Lat:              current.Lat,
 		Lng:              current.Lng,
 		Category:         current.Category,
-		OrganizerID:      organizerID,
+		OrganizerID:      actorID,
 	}
 
 	if req.Description != nil {
@@ -403,6 +418,82 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, organizerID uui
 			return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
 		}
 		return db.Event{}, fmt.Errorf("update event: %w", err)
+	}
+	return event, nil
+}
+
+func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.UUID, req dto.UpdateEventRequest) (db.Event, error) {
+	current, err := s.queries.GetEventByID(ctx, id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
+		}
+		return db.Event{}, fmt.Errorf("get event for staff update: %w", err)
+	}
+
+	description := current.Description
+	coverImage := current.CoverImageUrl
+	meetingURL := current.MeetingUrl
+	venueName := current.VenueName
+	lat := current.Lat
+	lng := current.Lng
+
+	if req.Description != nil {
+		description = req.Description
+	}
+	if req.CoverImageURL != nil {
+		coverImage = req.CoverImageURL
+	}
+	if req.MeetingURL != nil {
+		meetingURL = req.MeetingURL
+	}
+	if req.VenueName != nil {
+		venueName = req.VenueName
+	}
+	if req.Lat != nil {
+		lat, err = helper.Float64ToNumeric(*req.Lat)
+		if err != nil {
+			return db.Event{}, fmt.Errorf("convert lat: %w", err)
+		}
+	}
+	if req.Lng != nil {
+		lng, err = helper.Float64ToNumeric(*req.Lng)
+		if err != nil {
+			return db.Event{}, fmt.Errorf("convert lng: %w", err)
+		}
+	}
+
+	if current.IsVirtual {
+		if meetingURL == nil || *meetingURL == "" {
+			return db.Event{}, fmt.Errorf("%w: meeting_url is required for virtual events", ErrInvalidEvent)
+		}
+	} else {
+		if venueName == nil || *venueName == "" {
+			return db.Event{}, fmt.Errorf("%w: venue_name is required for physical events", ErrInvalidEvent)
+		}
+		if !lat.Valid {
+			return db.Event{}, fmt.Errorf("%w: lat is required for physical events", ErrInvalidEvent)
+		}
+		if !lng.Valid {
+			return db.Event{}, fmt.Errorf("%w: lng is required for physical events", ErrInvalidEvent)
+		}
+	}
+
+	event, err := s.queries.UpdateEventStaffFields(ctx, db.UpdateEventStaffFieldsParams{
+		ID:            id,
+		Description:   description,
+		CoverImageUrl: coverImage,
+		MeetingUrl:    meetingURL,
+		VenueName:     venueName,
+		Lat:           lat,
+		Lng:           lng,
+		OrganizerID:   actorID,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
+		}
+		return db.Event{}, fmt.Errorf("update event staff fields: %w", err)
 	}
 	return event, nil
 }

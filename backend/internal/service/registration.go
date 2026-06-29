@@ -21,12 +21,13 @@ import (
 type RegistrationService struct {
 	pool    *pgxpool.Pool
 	queries *db.Queries
+	access  *EventAccessService
 	log     *slog.Logger
 }
 
 // NewRegistrationService creates a RegistrationService with the given dependencies.
-func NewRegistrationService(pool *pgxpool.Pool, queries *db.Queries, log *slog.Logger) *RegistrationService {
-	return &RegistrationService{pool: pool, queries: queries, log: log}
+func NewRegistrationService(pool *pgxpool.Pool, queries *db.Queries, access *EventAccessService, log *slog.Logger) *RegistrationService {
+	return &RegistrationService{pool: pool, queries: queries, access: access, log: log}
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +224,38 @@ func validateCapacityForApproval(count, capacity int32, fromStatus, toStatus str
 	return nil
 }
 
+func registrationFromListRow(row db.ListMyRegistrationsRow) db.Registration {
+	return db.Registration{
+		ID:             row.ID,
+		EventID:        row.EventID,
+		UserID:         row.UserID,
+		Name:           row.Name,
+		Email:          row.Email,
+		Status:         row.Status,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      row.UpdatedAt,
+		AccessToken:    row.AccessToken,
+		TokenExpiresAt: row.TokenExpiresAt,
+		CheckedInAt:    row.CheckedInAt,
+	}
+}
+
+func registrationFromEventListRow(row db.ListEventRegistrationsRow) db.Registration {
+	return db.Registration{
+		ID:             row.ID,
+		EventID:        row.EventID,
+		UserID:         row.UserID,
+		Name:           row.Name,
+		Email:          row.Email,
+		Status:         row.Status,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      row.UpdatedAt,
+		AccessToken:    row.AccessToken,
+		TokenExpiresAt: row.TokenExpiresAt,
+		CheckedInAt:    row.CheckedInAt,
+	}
+}
+
 func mapRegistrationInsertError(err error, action string) error {
 	if helper.IsRegistrationDuplicate(err) {
 		return fmt.Errorf("%s: %w", action, ErrConflict)
@@ -287,7 +320,7 @@ func (s *RegistrationService) ListByUser(ctx context.Context, userID uuid.UUID, 
 		offset = 0
 	}
 
-	regs, err := s.queries.ListMyRegistrations(ctx, db.ListMyRegistrationsParams{
+	rows, err := s.queries.ListMyRegistrations(ctx, db.ListMyRegistrationsParams{
 		UserID: pgtype.UUID{Valid: true, Bytes: userID},
 		Limit:  limit,
 		Offset: offset,
@@ -296,9 +329,11 @@ func (s *RegistrationService) ListByUser(ctx context.Context, userID uuid.UUID, 
 		return nil, 0, fmt.Errorf("list my registrations: %w", err)
 	}
 
-	total, err := s.queries.CountMyRegistrations(ctx, pgtype.UUID{Valid: true, Bytes: userID})
-	if err != nil {
-		return nil, 0, fmt.Errorf("count my registrations: %w", err)
+	regs := make([]db.Registration, 0, len(rows))
+	var total int32
+	for _, row := range rows {
+		regs = append(regs, registrationFromListRow(row))
+		total = row.TotalCount
 	}
 
 	return regs, total, nil
@@ -309,9 +344,9 @@ func (s *RegistrationService) ListByUser(ctx context.Context, userID uuid.UUID, 
 // ---------------------------------------------------------------------------
 
 // ListByEvent returns a paginated list of registrations for the given
-// event, verifying that the requester is the event organizer. The second
-// return value is the total count.
-func (s *RegistrationService) ListByEvent(ctx context.Context, eventID uuid.UUID, organizerID uuid.UUID, params ListParams) ([]db.Registration, int32, error) {
+// event, verifying that the requester is event staff. The second return
+// value is the total count.
+func (s *RegistrationService) ListByEvent(ctx context.Context, eventID uuid.UUID, actorID uuid.UUID, params ListParams) ([]db.Registration, int32, error) {
 	limit := params.Limit
 	if limit <= 0 {
 		limit = 20
@@ -324,20 +359,13 @@ func (s *RegistrationService) ListByEvent(ctx context.Context, eventID uuid.UUID
 		offset = 0
 	}
 
-	event, err := s.queries.GetEventByID(ctx, eventID)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, 0, fmt.Errorf("event %s: %w", eventID, ErrEventNotFound)
-		}
-		return nil, 0, fmt.Errorf("get event: %w", err)
-	}
-	if event.OrganizerID != organizerID {
-		return nil, 0, fmt.Errorf("event %s: %w", eventID, ErrEventNotFound)
+	if _, err := s.access.RequireEventStaff(ctx, eventID, actorID); err != nil {
+		return nil, 0, err
 	}
 
-	regs, err := s.queries.ListEventRegistrations(ctx, db.ListEventRegistrationsParams{
+	rows, err := s.queries.ListEventRegistrations(ctx, db.ListEventRegistrationsParams{
 		EventID:     eventID,
-		OrganizerID: organizerID,
+		OrganizerID: actorID,
 		Limit:       limit,
 		Offset:      offset,
 	})
@@ -345,23 +373,22 @@ func (s *RegistrationService) ListByEvent(ctx context.Context, eventID uuid.UUID
 		return nil, 0, fmt.Errorf("list event registrations: %w", err)
 	}
 
-	total, err := s.queries.CountEventRegistrations(ctx, db.CountEventRegistrationsParams{
-		EventID:     eventID,
-		OrganizerID: organizerID,
-	})
-	if err != nil {
-		return nil, 0, fmt.Errorf("count event registrations: %w", err)
+	regs := make([]db.Registration, 0, len(rows))
+	var total int32
+	for _, row := range rows {
+		regs = append(regs, registrationFromEventListRow(row))
+		total = row.TotalCount
 	}
 
 	return regs, total, nil
 }
 
 // GetByIDAsAdmin returns a single registration, verifying that the
-// requester is the event organizer.
-func (s *RegistrationService) GetByIDAsAdmin(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID) (db.Registration, error) {
+// requester is event staff.
+func (s *RegistrationService) GetByIDAsAdmin(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (db.Registration, error) {
 	reg, err := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 		ID:          registrationID,
-		OrganizerID: organizerID,
+		OrganizerID: actorID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -373,7 +400,21 @@ func (s *RegistrationService) GetByIDAsAdmin(ctx context.Context, registrationID
 }
 
 // Approve sets a registration's status to "approved".
-func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (db.Registration, error) {
+	reg, err := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+		ID:          registrationID,
+		OrganizerID: actorID,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get registration: %w", err)
+	}
+	if err := s.access.RequireRegistrationModeration(ctx, reg.EventID, actorID); err != nil {
+		return db.Registration{}, err
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -382,9 +423,9 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 
 	qtx := s.queries.WithTx(tx)
 
-	reg, err := qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+	reg, err = qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 		ID:          registrationID,
-		OrganizerID: organizerID,
+		OrganizerID: actorID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -417,7 +458,7 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 
 	approved, err := qtx.ApproveRegistration(ctx, db.ApproveRegistrationParams{
 		ID:          registrationID,
-		OrganizerID: organizerID,
+		OrganizerID: actorID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -433,10 +474,27 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 }
 
 // Reject sets a registration's status to "rejected".
-func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (db.Registration, error) {
+	existing, err := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+		ID:          registrationID,
+		OrganizerID: actorID,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get registration: %w", err)
+	}
+	if err := s.access.RequireRegistrationModeration(ctx, existing.EventID, actorID); err != nil {
+		return db.Registration{}, err
+	}
+	if existing.Status != "pending" {
+		return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationInvalidStatus)
+	}
+
 	reg, err := s.queries.RejectRegistration(ctx, db.RejectRegistrationParams{
 		ID:          registrationID,
-		OrganizerID: organizerID,
+		OrganizerID: actorID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -511,10 +569,10 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 
 // CheckIn marks an attendee as checked in. If the attendee is already
 // checked in, the existing registration is returned idempotently.
-func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID, accessToken uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID, accessToken uuid.UUID) (db.Registration, error) {
 	reg, err := s.queries.CheckInRegistration(ctx, db.CheckInRegistrationParams{
 		ID:          registrationID,
-		OrganizerID: organizerID,
+		OrganizerID: actorID,
 		AccessToken: accessToken,
 	})
 	if err == pgx.ErrNoRows {
@@ -522,7 +580,7 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 		// Distinguish by fetching the registration
 		existing, fetchErr := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 			ID:          registrationID,
-			OrganizerID: organizerID,
+			OrganizerID: actorID,
 		})
 		if fetchErr == pgx.ErrNoRows {
 			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)

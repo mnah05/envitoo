@@ -24,18 +24,21 @@ type Server struct {
 	validate      *validator.Validate
 	events        *service.EventService
 	registrations *service.RegistrationService
+	volunteers    *service.VolunteerService
 }
 
 // New creates a Server with all services initialized.
 func New(pool *pgxpool.Pool, queries *db.Queries, log *slog.Logger) *Server {
 	validate := dto.NewValidator()
+	access := service.NewEventAccessService(queries)
 	return &Server{
 		pool:          pool,
 		queries:       queries,
 		log:           log,
 		validate:      validate,
-		events:        service.NewEventService(pool, queries, log),
-		registrations: service.NewRegistrationService(pool, queries, log),
+		events:        service.NewEventService(pool, queries, access, log),
+		registrations: service.NewRegistrationService(pool, queries, access, log),
+		volunteers:    service.NewVolunteerService(pool, queries, access, log),
 	}
 }
 
@@ -104,6 +107,27 @@ func (s *Server) Register(e *echo.Echo) {
 	protected.POST("/registrations/:id/reject", s.RejectRegistration)
 	protected.PATCH("/registrations/:id/status", s.UpdateRegistrationStatus)
 	protected.POST("/registrations/:id/check-in", s.CheckInAttendee)
+
+	// Public volunteer info
+	e.GET("/api/events/:id/volunteer/settings", s.GetVolunteerSettings)
+	e.GET("/api/events/:id/volunteer/roles", s.ListVolunteerRoles)
+
+	// Volunteer application routes (auth user)
+	protected.POST("/events/:id/volunteer/apply", s.CreateVolunteerApplication)
+	protected.GET("/me/event-staff", s.ListMyEventStaff)
+	protected.GET("/me/volunteer-applications", s.ListMyVolunteerApplications)
+	protected.GET("/volunteer-applications/:id", s.GetMyVolunteerApplication)
+	protected.DELETE("/volunteer-applications/:id", s.CancelVolunteerApplication)
+
+	// Organizer volunteer management
+	protected.PUT("/events/:id/volunteer/settings", s.UpsertVolunteerSettings)
+	protected.POST("/events/:id/volunteer/roles", s.CreateVolunteerRole)
+	protected.DELETE("/events/:id/volunteer/roles/:roleId", s.DeleteVolunteerRole)
+	protected.GET("/events/:id/volunteer/applications", s.ListEventVolunteerApplications)
+	protected.GET("/events/:id/volunteers", s.ListEventVolunteers)
+	protected.GET("/volunteer-applications/:id/admin", s.GetVolunteerApplicationAsAdmin)
+	protected.POST("/volunteer-applications/:id/approve", s.ApproveVolunteerApplication)
+	protected.POST("/volunteer-applications/:id/reject", s.RejectVolunteerApplication)
 }
 
 // Health handles GET /healthz.

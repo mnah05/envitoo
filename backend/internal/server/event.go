@@ -172,6 +172,9 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
+		if errors.Is(err, service.ErrEventStaffForbidden) {
+			return echo.NewHTTPError(http.StatusForbidden, "insufficient event permissions")
+		}
 		if errors.Is(err, service.ErrInvalidEvent) {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}

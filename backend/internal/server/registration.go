@@ -292,6 +292,9 @@ func (s *Server) ApproveRegistration(c echo.Context) error {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
 		}
+		if errors.Is(err, service.ErrEventStaffForbidden) {
+			return echo.NewHTTPError(http.StatusForbidden, "registration approval is not allowed for this event")
+		}
 		if errors.Is(err, service.ErrEventFull) {
 			return echo.NewHTTPError(http.StatusConflict, "event is full")
 		}
@@ -320,6 +323,12 @@ func (s *Server) RejectRegistration(c echo.Context) error {
 	if err != nil {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
+		}
+		if errors.Is(err, service.ErrEventStaffForbidden) {
+			return echo.NewHTTPError(http.StatusForbidden, "registration rejection is not allowed for this event")
+		}
+		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
+			return echo.NewHTTPError(http.StatusConflict, "only pending registrations can be rejected")
 		}
 		log.ErrorContext(c.Request().Context(), "reject registration", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
