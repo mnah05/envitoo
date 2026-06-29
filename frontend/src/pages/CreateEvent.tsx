@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
@@ -213,13 +214,12 @@ export function CreateEvent() {
                   <label htmlFor="starts_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Start
                   </label>
-                  <Input
+                  <DateTimePicker
                     id="starts_at"
-                    type="datetime-local"
                     value={form.starts_at}
-                    onChange={(e) => set("starts_at", e.target.value)}
+                    onChange={(v) => set("starts_at", v)}
                     aria-invalid={!!fieldErrors.starts_at}
-                    className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                    placeholder="Pick start date & time"
                   />
                   {fieldErrors.starts_at && (
                     <p className="text-xs text-destructive">{fieldErrors.starts_at}</p>
@@ -229,13 +229,12 @@ export function CreateEvent() {
                   <label htmlFor="ends_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     End
                   </label>
-                  <Input
+                  <DateTimePicker
                     id="ends_at"
-                    type="datetime-local"
                     value={form.ends_at}
-                    onChange={(e) => set("ends_at", e.target.value)}
+                    onChange={(v) => set("ends_at", v)}
                     aria-invalid={!!fieldErrors.ends_at}
-                    className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                    placeholder="Pick end date & time"
                   />
                   {fieldErrors.ends_at && (
                     <p className="text-xs text-destructive">{fieldErrors.ends_at}</p>
