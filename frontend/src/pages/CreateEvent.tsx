@@ -1,32 +1,28 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
-import { LocateFixed, Calendar, MapPin, Globe, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  Globe,
+  MapPin,
+  Sparkles,
+  Ticket,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldSet,
-} from "@/components/ui/field";
+import { Badge } from "@/components/ui/badge";
+import { PageContainer } from "@/components/domain/Layout";
 import { useCreateEvent } from "@/hooks/use-events";
 import { CreateEventInput, CATEGORIES, CATEGORY_LABELS, type CreateEventValues } from "@/lib/api";
-
-const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD", "CAD", "JPY"];
+import {
+  LocationSearch,
+  type LocationSelection,
+} from "@/components/domain/LocationSearch";
+import { cn } from "@/lib/utils";
 
 interface FormState {
   title: string;
@@ -34,42 +30,42 @@ interface FormState {
   starts_at: string;
   ends_at: string;
   capacity: string;
-  price: string;
-  currency: string;
   requires_approval: boolean;
   cover_image_url: string;
-  is_virtual: string;
+  is_virtual: boolean;
   meeting_url: string;
-  venue_name: string;
-  lat: string;
-  lng: string;
   category: string;
 }
 
-const initial: FormState = {
-  title: "",
-  description: "",
-  starts_at: "",
-  ends_at: "",
-  capacity: "50",
-  price: "0",
-  currency: "INR",
-  requires_approval: false,
-  cover_image_url: "",
-  is_virtual: "physical",
-  meeting_url: "",
-  venue_name: "",
-  lat: "",
-  lng: "",
-  category: "",
-};
+function defaultDateTime(offsetHours = 1): string {
+  const d = new Date();
+  d.setHours(d.getHours() + offsetHours, 0, 0, 0);
+  return d.toISOString().slice(0, 16);
+}
+
+function createInitialState(): FormState {
+  const starts_at = defaultDateTime(1);
+  const ends_at = defaultDateTime(3);
+  return {
+    title: "",
+    description: "",
+    starts_at,
+    ends_at,
+    capacity: "50",
+    requires_approval: false,
+    cover_image_url: "",
+    is_virtual: false,
+    meeting_url: "",
+    category: "",
+  };
+}
 
 export function CreateEvent() {
   const navigate = useNavigate();
   const createMut = useCreateEvent();
-  const [form, setForm] = useState<FormState>(initial);
+  const [form, setForm] = useState<FormState>(createInitialState);
+  const [location, setLocation] = useState<LocationSelection | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [isFree, setIsFree] = useState(true);
 
   useEffect(() => {
     document.title = "Create event — EnviToo";
@@ -79,41 +75,28 @@ export function CreateEvent() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function useMyLocation() {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        set("lat", pos.coords.latitude.toFixed(6));
-        set("lng", pos.coords.longitude.toFixed(6));
-      },
-      () => undefined,
-    );
-  }
-
   function buildPayload(): CreateEventValues | { errors: Record<string, string> } {
-    const isVirtual = form.is_virtual === "virtual";
     const errors: Record<string, string> = {};
 
-    if (!form.title.trim()) errors.title = "Title is required";
-    if (!form.starts_at) errors.starts_at = "Start time is required";
-    if (!form.ends_at) errors.ends_at = "End time is required";
+    if (!form.title.trim()) errors.title = "Give your event a name";
+    if (!form.starts_at) errors.starts_at = "Pick a start time";
+    if (!form.ends_at) errors.ends_at = "Pick an end time";
     else if (form.starts_at && new Date(form.ends_at) <= new Date(form.starts_at))
-      errors.ends_at = "End time must be after the start time";
+      errors.ends_at = "End time must be after start";
     const cap = Number(form.capacity);
-    if (!form.capacity || !Number.isFinite(cap) || cap < 1) errors.capacity = "Capacity must be at least 1";
-    const price = Number(form.price);
-    if (!Number.isFinite(price) || price < 0) errors.price = "Price must be 0 or more";
+    if (!form.capacity || !Number.isFinite(cap) || cap < 1)
+      errors.capacity = "Capacity must be at least 1";
 
-    if (isVirtual) {
-      if (!form.meeting_url.trim()) errors.meeting_url = "Meeting URL is required for virtual events";
+    if (form.is_virtual) {
+      if (!form.meeting_url.trim()) errors.meeting_url = "Add a meeting link";
       else if (!/^https?:\/\//i.test(form.meeting_url)) errors.meeting_url = "Enter a valid URL";
+    } else if (!location) {
+      errors.location = "Search and select a location";
     } else {
-      if (!form.venue_name.trim()) errors.venue_name = "Venue is required for in-person events";
-      const lat = Number(form.lat);
-      const lng = Number(form.lng);
-      if (!Number.isFinite(lat) || lat < -90 || lat > 90) errors.lat = "Enter a valid latitude";
-      if (!Number.isFinite(lng) || lng < -180 || lng > 180) errors.lng = "Enter a valid longitude";
+      if (!location.venueName.trim()) errors.location = "Venue name is required";
+      if (!location.locationAddress.trim()) errors.location = "Address is required";
     }
+
     if (form.cover_image_url && !/^https?:\/\//i.test(form.cover_image_url))
       errors.cover_image_url = "Enter a valid image URL";
 
@@ -125,15 +108,17 @@ export function CreateEvent() {
       starts_at: new Date(form.starts_at).toISOString(),
       ends_at: new Date(form.ends_at).toISOString(),
       capacity: Math.round(cap),
-      price_in_paise: Math.round(price * 100),
-      currency: form.currency,
+      price_in_paise: 0,
+      currency: "INR",
       requires_approval: form.requires_approval,
       cover_image_url: form.cover_image_url.trim() || undefined,
-      is_virtual: isVirtual,
-      meeting_url: isVirtual ? form.meeting_url.trim() : undefined,
-      venue_name: !isVirtual ? form.venue_name.trim() : undefined,
-      lat: !isVirtual ? Number(form.lat) : undefined,
-      lng: !isVirtual ? Number(form.lng) : undefined,
+      is_virtual: form.is_virtual,
+      meeting_url: form.is_virtual ? form.meeting_url.trim() : undefined,
+      venue_name: !form.is_virtual && location ? location.venueName.trim() : undefined,
+      location_address:
+        !form.is_virtual && location ? location.locationAddress.trim() : undefined,
+      lat: !form.is_virtual && location ? location.lat : undefined,
+      lng: !form.is_virtual && location ? location.lng : undefined,
       category: (form.category || undefined) as CreateEventValues["category"],
     };
 
@@ -164,346 +149,309 @@ export function CreateEvent() {
     }
   }
 
-  const isVirtual = form.is_virtual === "virtual";
-
   return (
-    <div className="min-h-screen pt-16">
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        {/* Header */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Create an event
+    <div className="relative min-h-screen pt-16">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-yellow-950/20 via-background to-background" />
+        <div className="absolute -top-32 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-yellow-500/8 blur-3xl" />
+      </div>
+
+      <PageContainer width="narrow" className="py-10 sm:py-14">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mb-6 -ml-2 text-muted-foreground hover:text-foreground"
+          onClick={() => navigate(-1)}
+        >
+          <ArrowLeft data-icon="inline-start" />
+          Back
+        </Button>
+
+        <div className="mb-8">
+          <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+            <Sparkles className="size-3.5 text-primary" />
+            New event
+          </span>
+          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+            Create an <span className="text-gradient-gold">event</span>
           </h1>
-          <p className="mt-2 text-muted-foreground">
-            Set up your event page, invite friends, and sell tickets.
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            Set the basics — you can add a cover image and fine-tune details later.
           </p>
         </div>
 
-        <form onSubmit={onSubmit}>
-          <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
-            {/* ─── Main form ─── */}
-            <div className="space-y-10">
-              {/* Basic info */}
-              <section>
-                <div className="mb-6 flex items-center gap-3 border-b border-border pb-4">
-                  <Sparkles className="size-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Basic info</h2>
-                </div>
-                <FieldGroup>
-                  <Field data-invalid={!!fieldErrors.title}>
-                    <FieldLabel htmlFor="title">Event title</FieldLabel>
-                    <Input
-                      id="title"
-                      value={form.title}
-                      onChange={(e) => set("title", e.target.value)}
-                      placeholder="e.g. AI Builders Meetup"
-                      aria-invalid={!!fieldErrors.title}
-                      className="h-10"
-                    />
-                    {fieldErrors.title && <FieldError>{fieldErrors.title}</FieldError>}
-                  </Field>
+        <form onSubmit={onSubmit} className="space-y-8">
+          {/* Title */}
+          <div>
+            <label htmlFor="title" className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Event name
+            </label>
+            <input
+              id="title"
+              value={form.title}
+              onChange={(e) => set("title", e.target.value)}
+              placeholder="What's happening?"
+              aria-invalid={!!fieldErrors.title}
+              className={cn(
+                "w-full border-0 bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/40 sm:text-3xl",
+                fieldErrors.title && "text-destructive placeholder:text-destructive/40",
+              )}
+            />
+            {fieldErrors.title && (
+              <p className="mt-1 text-sm text-destructive">{fieldErrors.title}</p>
+            )}
+          </div>
 
-                  <Field>
-                    <FieldLabel htmlFor="description">Description</FieldLabel>
-                    <Textarea
-                      id="description"
-                      value={form.description}
-                      onChange={(e) => set("description", e.target.value)}
-                      placeholder="Tell people what your event is about"
-                      rows={4}
-                    />
-                    <FieldDescription>Plain text. Up to 5000 characters.</FieldDescription>
-                  </Field>
-
-                  <Field data-invalid={!!fieldErrors.category}>
-                    <FieldLabel htmlFor="category">Category</FieldLabel>
-                    <Select value={form.category} onValueChange={(v) => set("category", v)}>
-                      <SelectTrigger id="category" className="h-10">
-                        <SelectValue placeholder="Choose a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {CATEGORY_LABELS[c]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </FieldGroup>
-              </section>
-
-              {/* Date & time */}
-              <section>
-                <div className="mb-6 flex items-center gap-3 border-b border-border pb-4">
-                  <Calendar className="size-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Date &amp; time</h2>
-                </div>
-                <FieldSet>
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <Field data-invalid={!!fieldErrors.starts_at}>
-                      <FieldLabel htmlFor="starts_at">Starts</FieldLabel>
-                      <Input
-                        id="starts_at"
-                        type="datetime-local"
-                        value={form.starts_at}
-                        onChange={(e) => set("starts_at", e.target.value)}
-                        aria-invalid={!!fieldErrors.starts_at}
-                        className="h-10"
-                      />
-                      {fieldErrors.starts_at && <FieldError>{fieldErrors.starts_at}</FieldError>}
-                    </Field>
-                    <Field data-invalid={!!fieldErrors.ends_at}>
-                      <FieldLabel htmlFor="ends_at">Ends</FieldLabel>
-                      <Input
-                        id="ends_at"
-                        type="datetime-local"
-                        value={form.ends_at}
-                        onChange={(e) => set("ends_at", e.target.value)}
-                        aria-invalid={!!fieldErrors.ends_at}
-                        className="h-10"
-                      />
-                      {fieldErrors.ends_at && <FieldError>{fieldErrors.ends_at}</FieldError>}
-                    </Field>
-                  </div>
-                </FieldSet>
-              </section>
-
-              {/* Location */}
-              <section>
-                <div className="mb-6 flex items-center gap-3 border-b border-border pb-4">
-                  <MapPin className="size-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Location</h2>
-                </div>
-                <FieldSet>
-                  <Field>
-                    <FieldLabel>Event format</FieldLabel>
-                    <ToggleGroup
-                      type="single"
-                      value={form.is_virtual}
-                      onValueChange={(v) => v && set("is_virtual", v)}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      <ToggleGroupItem value="physical" className="flex-1 gap-2">
-                        <MapPin className="size-4" />
-                        In person
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="virtual" className="flex-1 gap-2">
-                        <Globe className="size-4" />
-                        Virtual
-                      </ToggleGroupItem>
-                    </ToggleGroup>
-                  </Field>
-
-                  {isVirtual ? (
-                    <Field data-invalid={!!fieldErrors.meeting_url}>
-                      <FieldLabel htmlFor="meeting_url">Meeting URL</FieldLabel>
-                      <Input
-                        id="meeting_url"
-                        type="url"
-                        value={form.meeting_url}
-                        onChange={(e) => set("meeting_url", e.target.value)}
-                        placeholder="https://meet.example/abc"
-                        aria-invalid={!!fieldErrors.meeting_url}
-                        className="h-10"
-                      />
-                      {fieldErrors.meeting_url && <FieldError>{fieldErrors.meeting_url}</FieldError>}
-                    </Field>
-                  ) : (
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <Field data-invalid={!!fieldErrors.venue_name} className="sm:col-span-2">
-                        <FieldLabel htmlFor="venue_name">Venue name</FieldLabel>
-                        <Input
-                          id="venue_name"
-                          value={form.venue_name}
-                          onChange={(e) => set("venue_name", e.target.value)}
-                          placeholder="e.g. Convention Center, Hall B"
-                          aria-invalid={!!fieldErrors.venue_name}
-                          className="h-10"
-                        />
-                        {fieldErrors.venue_name && <FieldError>{fieldErrors.venue_name}</FieldError>}
-                      </Field>
-                      <Field data-invalid={!!fieldErrors.lat}>
-                        <FieldLabel htmlFor="lat">Latitude</FieldLabel>
-                        <Input
-                          id="lat"
-                          type="number"
-                          step="any"
-                          value={form.lat}
-                          onChange={(e) => set("lat", e.target.value)}
-                          placeholder="12.9716"
-                          aria-invalid={!!fieldErrors.lat}
-                          className="h-10"
-                        />
-                        {fieldErrors.lat && <FieldError>{fieldErrors.lat}</FieldError>}
-                      </Field>
-                      <Field data-invalid={!!fieldErrors.lng}>
-                        <FieldLabel htmlFor="lng">Longitude</FieldLabel>
-                        <Input
-                          id="lng"
-                          type="number"
-                          step="any"
-                          value={form.lng}
-                          onChange={(e) => set("lng", e.target.value)}
-                          placeholder="77.5946"
-                          aria-invalid={!!fieldErrors.lng}
-                          className="h-10"
-                        />
-                        {fieldErrors.lng && <FieldError>{fieldErrors.lng}</FieldError>}
-                      </Field>
-                      <div className="sm:col-span-2">
-                        <Button type="button" variant="outline" size="sm" onClick={useMyLocation}>
-                          <LocateFixed data-icon="inline-start" />
-                          Use my location
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </FieldSet>
-              </section>
-
-              {/* Cover image */}
-              <section>
-                <div className="mb-6 flex items-center gap-3 border-b border-border pb-4">
-                  <Globe className="size-5 text-primary" />
-                  <h2 className="text-lg font-semibold">Cover image</h2>
-                </div>
-                <Field data-invalid={!!fieldErrors.cover_image_url}>
-                  <FieldLabel htmlFor="cover_image_url">Cover image URL</FieldLabel>
+          {/* Meta rows */}
+          <div className="divide-y divide-border/80 overflow-hidden rounded-2xl border border-border bg-card/50 shadow-sm shadow-primary/5">
+            {/* Date & time */}
+            <div className="flex items-start gap-4 px-4 py-4">
+              <Calendar className="mt-2.5 size-5 shrink-0 text-primary/80" />
+              <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="starts_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Start
+                  </label>
                   <Input
-                    id="cover_image_url"
-                    type="url"
-                    value={form.cover_image_url}
-                    onChange={(e) => set("cover_image_url", e.target.value)}
-                    placeholder="https://…/cover.jpg"
-                    aria-invalid={!!fieldErrors.cover_image_url}
-                    className="h-10"
+                    id="starts_at"
+                    type="datetime-local"
+                    value={form.starts_at}
+                    onChange={(e) => set("starts_at", e.target.value)}
+                    aria-invalid={!!fieldErrors.starts_at}
+                    className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                   />
-                  {fieldErrors.cover_image_url ? (
-                    <FieldError>{fieldErrors.cover_image_url}</FieldError>
-                  ) : (
-                    <FieldDescription>Optional. A 16:9 image works best.</FieldDescription>
+                  {fieldErrors.starts_at && (
+                    <p className="text-xs text-destructive">{fieldErrors.starts_at}</p>
                   )}
-                </Field>
-              </section>
-            </div>
-
-            {/* ─── Sidebar — quick config ─── */}
-            <div className="order-first lg:order-last">
-              <div className="sticky top-24 space-y-6 rounded-2xl border border-border bg-card p-6">
-                <div>
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                    Tickets
-                  </h3>
-                  <FieldSet>
-                    <Field>
-                      <FieldLabel>Ticketed event</FieldLabel>
-                      <Switch checked={!isFree} onCheckedChange={(v) => { setIsFree(!v); if (v) set("price", "0"); }} />
-                    </Field>
-
-                    {!isFree && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field data-invalid={!!fieldErrors.price}>
-                          <FieldLabel htmlFor="price">Price</FieldLabel>
-                          <Input
-                            id="price"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={form.price}
-                            onChange={(e) => set("price", e.target.value)}
-                            aria-invalid={!!fieldErrors.price}
-                            className="h-10"
-                          />
-                          {fieldErrors.price && <FieldError>{fieldErrors.price}</FieldError>}
-                        </Field>
-                        <Field>
-                          <FieldLabel htmlFor="currency">Currency</FieldLabel>
-                          <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
-                            <SelectTrigger id="currency" className="h-10">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {CURRENCIES.map((c) => (
-                                <SelectItem key={c} value={c}>
-                                  {c}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                      </div>
-                    )}
-                    {isFree && (
-                      <p className="text-xs text-muted-foreground">Your event is free. Toggle to add pricing.</p>
-                    )}
-                  </FieldSet>
                 </div>
-
-                <SeparatorLine />
-
                 <div>
-                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                    Settings
-                  </h3>
-                  <FieldSet>
-                    <Field data-invalid={!!fieldErrors.capacity}>
-                      <FieldLabel htmlFor="sidebar-capacity">Capacity</FieldLabel>
-                      <Input
-                        id="sidebar-capacity"
-                        type="number"
-                        min={1}
-                        value={form.capacity}
-                        onChange={(e) => set("capacity", e.target.value)}
-                        aria-invalid={!!fieldErrors.capacity}
-                        className="h-10"
-                      />
-                      {fieldErrors.capacity && <FieldError>{fieldErrors.capacity}</FieldError>}
-                    </Field>
-
-                    <Field>
-                      <div className="flex items-center justify-between">
-                        <FieldLabel htmlFor="requires_approval" className="!w-auto">Require approval</FieldLabel>
-                        <Switch
-                          id="requires_approval"
-                          checked={form.requires_approval}
-                          onCheckedChange={(v) => set("requires_approval", v)}
-                        />
-                      </div>
-                    </Field>
-                  </FieldSet>
+                  <label htmlFor="ends_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    End
+                  </label>
+                  <Input
+                    id="ends_at"
+                    type="datetime-local"
+                    value={form.ends_at}
+                    onChange={(e) => set("ends_at", e.target.value)}
+                    aria-invalid={!!fieldErrors.ends_at}
+                    className="h-10 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                  />
+                  {fieldErrors.ends_at && (
+                    <p className="text-xs text-destructive">{fieldErrors.ends_at}</p>
+                  )}
                 </div>
-
-                <SeparatorLine />
-
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={createMut.isPending}
-                  className="w-full"
-                >
-                  {createMut.isPending && <Spinner data-icon="inline-start" />}
-                  Publish event
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate(-1)}
-                  className="w-full"
-                >
-                  Cancel
-                </Button>
               </div>
             </div>
+
+            {/* Location */}
+            <div className="px-4 py-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  {form.is_virtual ? (
+                    <Globe className="size-5 text-primary/80" />
+                  ) : (
+                    <MapPin className="size-5 text-primary/80" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {form.is_virtual ? "Online event" : "In-person"}
+                  </span>
+                </div>
+                <div className="flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      set("is_virtual", false);
+                      setFieldErrors((e) => {
+                        const next = { ...e };
+                        delete next.meeting_url;
+                        return next;
+                      });
+                    }}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 font-medium transition-colors",
+                      !form.is_virtual
+                        ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    In person
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      set("is_virtual", true);
+                      setLocation(null);
+                      setFieldErrors((e) => {
+                        const next = { ...e };
+                        delete next.location;
+                        return next;
+                      });
+                    }}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 font-medium transition-colors",
+                      form.is_virtual
+                        ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Online
+                  </button>
+                </div>
+              </div>
+
+              {form.is_virtual ? (
+                <Input
+                  type="url"
+                  value={form.meeting_url}
+                  onChange={(e) => set("meeting_url", e.target.value)}
+                  placeholder="https://zoom.us/j/..."
+                  aria-invalid={!!fieldErrors.meeting_url}
+                  className="h-11"
+                />
+              ) : (
+                <LocationSearch
+                  value={location}
+                  onChange={setLocation}
+                  error={fieldErrors.location}
+                />
+              )}
+              {fieldErrors.meeting_url && (
+                <p className="mt-1.5 text-sm text-destructive">{fieldErrors.meeting_url}</p>
+              )}
+            </div>
+
+            {/* Free ticket */}
+            <div className="flex items-center gap-4 px-4 py-4">
+              <Ticket className="size-5 shrink-0 text-primary/80" />
+              <div className="flex flex-1 items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Free event</p>
+                  <p className="text-xs text-muted-foreground">Paid tickets coming soon</p>
+                </div>
+                <Badge variant="secondary" className="shrink-0 border-primary/20 bg-primary/10 text-primary">
+                  Free
+                </Badge>
+              </div>
+            </div>
+
+            {/* Capacity */}
+            <div className="flex items-center gap-4 px-4 py-4">
+              <Users className="size-5 shrink-0 text-primary/80" />
+              <div className="flex flex-1 items-center justify-between gap-3">
+                <label htmlFor="capacity" className="text-sm font-medium">
+                  Capacity
+                </label>
+                <Input
+                  id="capacity"
+                  type="number"
+                  min={1}
+                  value={form.capacity}
+                  onChange={(e) => set("capacity", e.target.value)}
+                  aria-invalid={!!fieldErrors.capacity}
+                  className="h-9 w-24 text-right"
+                />
+              </div>
+              {fieldErrors.capacity && (
+                <p className="text-xs text-destructive">{fieldErrors.capacity}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label htmlFor="description" className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Description
+            </label>
+            <Textarea
+              id="description"
+              value={form.description}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder="Tell people what to expect…"
+              rows={5}
+              className="resize-none rounded-xl border-border/80 bg-card/40 text-base shadow-none focus-visible:border-primary/40 focus-visible:ring-primary/20"
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <Sparkles className="size-3.5 text-primary" />
+              Category
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => set("category", form.category === c ? "" : c)}
+                  className={cn(
+                    "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                    form.category === c
+                      ? "border-primary/50 bg-primary/15 text-primary shadow-sm shadow-primary/10"
+                      : "border-border text-muted-foreground hover:border-primary/30 hover:bg-card/50 hover:text-foreground",
+                  )}
+                >
+                  {CATEGORY_LABELS[c]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Cover URL + settings */}
+          <div className="space-y-4 rounded-2xl border border-border bg-card/50 p-4 shadow-sm shadow-primary/5">
+            <div>
+              <label htmlFor="cover_image_url" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Cover image URL <span className="normal-case tracking-normal text-muted-foreground/70">(optional)</span>
+              </label>
+              <Input
+                id="cover_image_url"
+                type="url"
+                value={form.cover_image_url}
+                onChange={(e) => set("cover_image_url", e.target.value)}
+                placeholder="https://…"
+                aria-invalid={!!fieldErrors.cover_image_url}
+                className="h-10"
+              />
+              {fieldErrors.cover_image_url && (
+                <p className="mt-1 text-xs text-destructive">{fieldErrors.cover_image_url}</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Require approval to register</p>
+                <p className="text-xs text-muted-foreground">Review guests before they join</p>
+              </div>
+              <Switch
+                checked={form.requires_approval}
+                onCheckedChange={(v) => set("requires_approval", v)}
+              />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => navigate(-1)}
+              className="order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={createMut.isPending}
+              className="order-1 w-full shadow-sm shadow-primary/20 transition-shadow hover:shadow-md hover:shadow-primary/30 sm:order-2 sm:w-auto sm:min-w-[10rem]"
+            >
+              {createMut.isPending && <Spinner data-icon="inline-start" />}
+              Create event
+            </Button>
           </div>
         </form>
-      </div>
+      </PageContainer>
     </div>
   );
-}
-
-function SeparatorLine() {
-  return <div className="h-px bg-border" />;
 }
