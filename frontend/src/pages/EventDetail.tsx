@@ -1,0 +1,223 @@
+import { Link, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { ArrowLeft, CalendarDays, Clock, Globe, MapPin, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageContainer } from "@/components/domain/Layout";
+import { EventCover } from "@/components/domain/EventCard";
+import { CategoryPill } from "@/components/domain/CategoryPill";
+import { EventStatusBadge } from "@/components/domain/StatusBadge";
+import { RegisterForm } from "@/components/domain/RegisterForm";
+import { useEventBySlug } from "@/hooks/use-events";
+import { formatEventDate, formatFullDate, formatPrice } from "@/lib/format";
+
+export function EventDetail() {
+  const { slug = "" } = useParams();
+  const { data: event, isLoading, error } = useEventBySlug(slug);
+
+  useEffect(() => {
+    document.title = event ? `${event.title} — Pulse` : "Event — Pulse";
+  }, [event]);
+
+  if (isLoading) {
+    return <EventDetailSkeleton />;
+  }
+
+  if (error || !event) {
+    return (
+      <div className="pt-16">
+        <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+          <h1 className="text-2xl font-bold">Event not found</h1>
+          <p className="text-muted-foreground">
+            This event may have been cancelled or doesn't exist.
+          </p>
+          <Button asChild variant="outline">
+            <Link to="/discover">Discover events</Link>
+          </Button>
+        </PageContainer>
+      </div>
+    );
+  }
+
+  const cancelled = event.status === "cancelled";
+
+  return (
+    <div className="pt-16">
+      {/* Cover */}
+      <div className="relative h-[40vh] min-h-[20rem] w-full overflow-hidden">
+        <EventCover event={event} rounded="rounded-none" className="h-full" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+        <PageContainer className="absolute inset-x-0 bottom-0">
+          <div className="flex flex-wrap items-center gap-2 pb-6">
+            {event.category && <CategoryPill category={event.category} />}
+            <EventStatusBadge status={event.status} />
+            {event.is_virtual && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-foreground backdrop-blur">
+                <Globe className="size-3.5" /> Virtual
+              </span>
+            )}
+          </div>
+        </PageContainer>
+      </div>
+
+      <PageContainer className="py-10">
+        <Button asChild variant="ghost" size="sm" className="mb-6 -ml-2">
+          <Link to="/discover">
+            <ArrowLeft data-icon="inline-start" />
+            Back to discover
+          </Link>
+        </Button>
+
+        <div className="grid gap-10 lg:grid-cols-[1fr_22rem]">
+          {/* Main */}
+          <div className="flex flex-col gap-6">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{event.title}</h1>
+              <p className="mt-3 text-muted-foreground">{formatFullDate(event.starts_at)}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <InfoRow icon={<CalendarDays className="size-5" />} label="When">
+                {formatEventDate(event.starts_at, event.ends_at)}
+              </InfoRow>
+              <InfoRow
+                icon={event.is_virtual ? <Globe className="size-5" /> : <MapPin className="size-5" />}
+                label="Where"
+              >
+                {event.is_virtual ? (
+                  <a
+                    href={event.meeting_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {event.meeting_url ? "Join online" : "Virtual event"}
+                  </a>
+                ) : (
+                  event.venue_name || "Location to be announced"
+                )}
+              </InfoRow>
+              <InfoRow icon={<Users className="size-5" />} label="Capacity">
+                {event.capacity} seats
+              </InfoRow>
+              <InfoRow icon={<Clock className="size-5" />} label="Price">
+                {formatPrice(event.price_in_paise, event.currency)}
+              </InfoRow>
+            </div>
+
+            {event.description && (
+              <div className="flex flex-col gap-3">
+                <h2 className="text-lg font-semibold">About this event</h2>
+                <Separator />
+                <p className="whitespace-pre-line text-pretty leading-relaxed text-muted-foreground">
+                  {event.description}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Register card */}
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <div className="rounded-2xl border bg-card p-6 shadow-sm">
+              {cancelled ? (
+                <div className="rounded-xl bg-muted p-6 text-center">
+                  <p className="font-semibold">This event has been cancelled.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Registrations are closed.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4 flex items-baseline justify-between">
+                    <span className="text-2xl font-bold">
+                      {formatPrice(event.price_in_paise, event.currency)}
+                    </span>
+                    {event.requires_approval && (
+                      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                        Approval required
+                      </span>
+                    )}
+                  </div>
+                  <RegisterForm event={event} />
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
+      </PageContainer>
+    </div>
+  );
+}
+
+function InfoRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
+      <span className="mt-0.5 text-muted-foreground">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-0.5 font-medium">{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function EventDetailSkeleton() {
+  return (
+    <div className="pt-16">
+      <Skeleton className="h-[40vh] min-h-[20rem] w-full rounded-none" />
+      <PageContainer className="py-10">
+        <Skeleton className="mb-6 h-8 w-24" />
+        <div className="grid gap-10 lg:grid-cols-[1fr_22rem]">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-9 w-2/3" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-xl border bg-card p-4">
+                  <Skeleton className="size-5 rounded" />
+                  <div className="flex flex-col gap-2">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-px w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          </div>
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <div className="rounded-2xl border bg-card p-6 shadow-sm">
+              <div className="mb-4 flex items-baseline justify-between">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+              </div>
+              <div className="flex flex-col gap-4">
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-9 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </div>
+          </aside>
+        </div>
+      </PageContainer>
+    </div>
+  );
+}

@@ -1,0 +1,160 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+  Pulse design system — Airbnb-inspired.
+  Light, white surfaces, rounded cover-image-led cards, Rausch coral CTAs,
+  crisp neo-grotesk (Inter), generous whitespace. Boldness spent in one
+  place: the coral accent on hero + CTAs; everything else stays quiet.
+*/
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-skeleton: var(--skeleton);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+
+  /* Fluid type scale — Luma-calm proportions, clamp() fluid from mobile up.
+     Maps to Tailwind text-* utilities; existing classes pick this up automatically. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.1;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: clamp(1.05rem, 1vw + 0.7rem, 1.125rem);
+  --text-lg--line-height: 1.45;
+  --text-xl: clamp(1.15rem, 1vw + 0.8rem, 1.25rem);
+  --text-xl--line-height: 1.4;
+  --text-2xl: clamp(1.35rem, 1.2vw + 0.9rem, 1.5rem);
+  --text-2xl--line-height: 1.35;
+  --text-3xl: clamp(1.6rem, 1.5vw + 1rem, 1.875rem);
+  --text-3xl--line-height: 1.25;
+  --text-4xl: clamp(1.9rem, 2vw + 1.1rem, 2.25rem);
+  --text-4xl--line-height: 1.2;
+  --text-5xl: clamp(2.3rem, 2.5vw + 1.2rem, 3rem);
+  --text-5xl--line-height: 1.1;
+  --text-6xl: clamp(2.8rem, 3vw + 1.4rem, 3.75rem);
+  --text-6xl--line-height: 1.05;
+  --text-7xl: clamp(3.2rem, 3.5vw + 1.5rem, 4.5rem);
+  --text-7xl--line-height: 1;
+}
+
+:root {
+  --radius: 14px;
+
+  /* Surfaces & text */
+  --background: #ffffff;
+  --foreground: #222222;
+  --card: #ffffff;
+  --card-foreground: #222222;
+  --popover: #ffffff;
+  --popover-foreground: #222222;
+
+  /* Primary = Rausch coral */
+  --primary: #ff385c;
+  --primary-foreground: #ffffff;
+
+  /* Secondary / muted = Airbnb light surfaces */
+  --secondary: #f7f7f7;
+  --secondary-foreground: #222222;
+  --muted: #f7f7f7;
+  --muted-foreground: #717171;
+  --accent: #f7f7f7;
+  --accent-foreground: #222222;
+
+  /* Destructive */
+  --destructive: #c1351f;
+  --destructive-foreground: #ffffff;
+
+  /* Lines & inputs */
+  --border: #dddddd;
+  --input: #dddddd;
+  --ring: #ff385c;
+
+  /* Skeleton — visible against #fff card and #f7f7f7 muted surfaces */
+  --skeleton: #e8e8e8;
+}
+
+.dark {
+  --background: #1a1a1a;
+  --foreground: #f7f7f7;
+  --card: #222222;
+  --card-foreground: #f7f7f7;
+  --popover: #222222;
+  --popover-foreground: #f7f7f7;
+  --primary: #ff385c;
+  --primary-foreground: #ffffff;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f7f7f7;
+  --muted: #2a2a2a;
+  --muted-foreground: #b0b0b0;
+  --accent: #2a2a2a;
+  --accent-foreground: #f7f7f7;
+  --destructive: #e0563f;
+  --destructive-foreground: #ffffff;
+  --border: #383838;
+  --input: #383838;
+  --ring: #ff385c;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+}
+
+/* Respect reduced motion globally */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
