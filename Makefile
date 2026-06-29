@@ -4,8 +4,8 @@
 # Configurable paths and commands
 GO        ?= go
 NPM       ?= npm
-BACKEND   := pulse-backend
-FRONTEND  := pulse-frontend
+BACKEND   := backend
+FRONTEND  := frontend
 BACKEND_PKG := ./cmd/server
 FRONTEND_PORT := 5173
 BACKEND_PORT := 8080
