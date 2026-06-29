@@ -30,3 +30,22 @@ func IsRegistrationDuplicate(err error) bool {
 	return IsUniqueViolation(err, "registrations_event_id_email_key") ||
 		IsUniqueViolation(err, "idx_registrations_user_event")
 }
+
+// IsForeignKeyViolation returns true when err is a Postgres foreign-key
+// violation, e.g. ON DELETE RESTRICT blocking a parent delete.
+func IsForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if err == nil {
+		return false
+	}
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == pgerrcode.ForeignKeyViolation
+	}
+	return false
+}
+
+// IsVolunteerApplicationDuplicate returns true when err is a unique violation
+// on the active volunteer application (event_id, user_id) partial index.
+func IsVolunteerApplicationDuplicate(err error) bool {
+	return IsUniqueViolation(err, "idx_volunteer_apps_event_user_active")
+}
