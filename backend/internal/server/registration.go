@@ -229,7 +229,7 @@ func (s *Server) ListEventRegistrations(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	limit := parseLimit(c.QueryParam("limit"), 20, 100)
+	limit := parseLimit(c.QueryParam("limit"), 20, 500)
 	offset := parseOffset(c.QueryParam("offset"))
 
 	regs, total, err := s.registrations.ListByEvent(c.Request().Context(), eventID, u.ID, service.ListParams{

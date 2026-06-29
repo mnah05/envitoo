@@ -139,6 +139,7 @@ export function EditEvent() {
         !form.is_virtual && location ? location.locationAddress.trim() : undefined,
       lat: !form.is_virtual && location ? location.lat : undefined,
       lng: !form.is_virtual && location ? location.lng : undefined,
+      is_virtual: form.is_virtual,
     };
 
     if (isOrganizer) {
@@ -146,7 +147,6 @@ export function EditEvent() {
       if (form.ends_at) payload.ends_at = new Date(form.ends_at).toISOString();
       if (form.capacity) payload.capacity = Math.round(cap);
       payload.requires_approval = form.requires_approval;
-      payload.is_virtual = form.is_virtual;
       payload.category = (form.category || undefined) as UpdateEventValues["category"];
     }
 

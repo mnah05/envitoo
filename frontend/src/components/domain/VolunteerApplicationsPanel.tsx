@@ -14,29 +14,26 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
 import { RoleBadge } from "@/components/domain/RoleBadge";
 import { VolunteerAppStatusBadge } from "@/components/domain/StatusBadge";
 import {
-  useEventVolunteerApplications,
   useApproveVolunteerApplication,
   useRejectVolunteerApplication,
 } from "@/hooks/use-volunteers";
 import { formatCardDate } from "@/lib/format";
 import type { VolunteerApplication } from "@/lib/api";
 
-const PAGE_SIZE = 20;
-
 export function VolunteerApplicationsPanel({
   eventId,
   isOrganizer,
+  applications: apps,
+  total,
 }: {
   eventId: string;
   isOrganizer: boolean;
+  applications: VolunteerApplication[];
+  total: number;
 }) {
-  const { data, isLoading } = useEventVolunteerApplications(eventId, { limit: PAGE_SIZE });
-  const apps = data?.applications ?? [];
-  const total = data?.total ?? 0;
   const approveMut = useApproveVolunteerApplication(eventId);
   const rejectMut = useRejectVolunteerApplication(eventId);
 
@@ -57,13 +54,7 @@ export function VolunteerApplicationsPanel({
       </div>
 
       <div className="mt-4">
-        {isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : apps.length === 0 ? (
+        {apps.length === 0 ? (
           <Empty className="border">
             <EmptyMedia variant="icon">
               <ClipboardList className="size-6" />

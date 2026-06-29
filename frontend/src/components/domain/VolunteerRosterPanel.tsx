@@ -14,14 +14,18 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useEventVolunteers } from "@/hooks/use-volunteers";
 import { formatCardDate, initials } from "@/lib/format";
+import type { Volunteer } from "@/lib/api";
 
-export function VolunteerRosterPanel({ eventId }: { eventId: string }) {
-  const { data, isLoading } = useEventVolunteers(eventId);
-  const volunteers = data?.volunteers ?? [];
-  const total = data?.total ?? 0;
+export function VolunteerRosterPanel({
+  eventId,
+  volunteers,
+  total,
+}: {
+  eventId: string;
+  volunteers: Volunteer[];
+  total: number;
+}) {
 
   return (
     <div className="rounded-2xl border bg-card p-6 shadow-sm">
@@ -36,13 +40,7 @@ export function VolunteerRosterPanel({ eventId }: { eventId: string }) {
       </div>
 
       <div className="mt-4">
-        {isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : volunteers.length === 0 ? (
+        {volunteers.length === 0 ? (
           <Empty className="border">
             <EmptyMedia variant="icon">
               <HeartHandshake className="size-6" />

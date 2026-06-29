@@ -34,7 +34,7 @@ WHERE
                 JOIN volunteer_roles vr ON vr.id = va.role_id
             WHERE
                 va.event_id = e.id
-                AND va.user_id = $8
+                AND va.user_id = $9
                 AND va.status = 'approved'
                 AND vr.is_admin = true
         )

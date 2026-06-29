@@ -65,7 +65,7 @@ export function EventDashboard() {
   const isVolunteerAdmin =
     !isOrganizer && staffData?.events.some((e) => e.event_id === id) === true;
 
-  const { data, isLoading: regsLoading } = useEventRegistrations(id, { limit: 100 }, !!id);
+  const { data, isLoading: regsLoading } = useEventRegistrations(id, { limit: 500 }, !!id);
   const regs = data?.registrations ?? [];
 
   const statusMut = useUpdateRegistrationStatus();

@@ -5,6 +5,7 @@ import { Footer } from "@/components/domain/Footer";
 import { Loading } from "@/components/domain/Layout";
 import { useSmoothScroll } from "@/hooks/use-smooth-scroll";
 import { ProtectedRoute, PublicOnlyRoute } from "@/routes/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 const Landing = lazy(() =>
   import("@/pages/Landing").then((m) => ({ default: m.Landing })),
@@ -64,30 +65,32 @@ function SiteLayout() {
 
 export function App() {
   return (
-    <Suspense fallback={<Loading />}>
-      <Routes>
-        <Route element={<SiteLayout />}>
-          <Route path="/" element={<Landing />} />
-          <Route path="/discover" element={<Discover />} />
-          <Route path="/e/:slug" element={<EventDetail />} />
-          <Route path="/ticket" element={<GuestTicket />} />
+    <ErrorBoundary>
+      <Suspense fallback={<Loading />}>
+        <Routes>
+          <Route element={<SiteLayout />}>
+            <Route path="/" element={<Landing />} />
+            <Route path="/discover" element={<Discover />} />
+            <Route path="/e/:slug" element={<EventDetail />} />
+            <Route path="/ticket" element={<GuestTicket />} />
 
-          <Route element={<ProtectedRoute />}>
-            <Route path="/home" element={<MyTickets />} />
-            <Route path="/create" element={<CreateEvent />} />
-            <Route path="/manage" element={<ManageEvents />} />
-            <Route path="/manage/:id" element={<EventDashboard />} />
-            <Route path="/manage/:id/edit" element={<EditEvent />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/home" element={<MyTickets />} />
+              <Route path="/create" element={<CreateEvent />} />
+              <Route path="/manage" element={<ManageEvents />} />
+              <Route path="/manage/:id" element={<EventDashboard />} />
+              <Route path="/manage/:id/edit" element={<EditEvent />} />
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
           </Route>
 
-          <Route path="*" element={<NotFound />} />
-        </Route>
-
-        <Route element={<PublicOnlyRoute />}>
-          <Route path="/signin/*" element={<SignInPage />} />
-          <Route path="/signup/*" element={<SignUpPage />} />
-        </Route>
-      </Routes>
-    </Suspense>
+          <Route element={<PublicOnlyRoute />}>
+            <Route path="/signin/*" element={<SignInPage />} />
+            <Route path="/signup/*" element={<SignUpPage />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
