@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Calendar,
+  Check,
+  Copy,
+  ExternalLink,
   Globe,
   MapPin,
   Sparkles,
@@ -16,6 +20,13 @@ import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PageContainer } from "@/components/domain/Layout";
 import { useCreateEvent } from "@/hooks/use-events";
 import { CreateEventInput, CATEGORIES, CATEGORY_LABELS, type CreateEventValues } from "@/lib/api";
@@ -67,6 +78,24 @@ export function CreateEvent() {
   const [form, setForm] = useState<FormState>(createInitialState);
   const [location, setLocation] = useState<LocationSelection | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [createdEvent, setCreatedEvent] = useState<{ id: string; slug: string; title: string } | null>(null);
+
+  const eventUrl = createdEvent
+    ? `${window.location.origin}/e/${createdEvent.slug}`
+    : "";
+
+  const [copied, setCopied] = useState(false);
+
+  const copyLink = useCallback(async () => {
+    if (!eventUrl) return;
+    try {
+      await navigator.clipboard.writeText(eventUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy link");
+    }
+  }, [eventUrl]);
 
   useEffect(() => {
     document.title = "Create event — EnviToo";
@@ -144,7 +173,7 @@ export function CreateEvent() {
     setFieldErrors({});
     try {
       const event = await createMut.mutateAsync(result);
-      navigate(`/manage/${event.id}`);
+      setCreatedEvent({ id: event.id, slug: event.slug, title: event.title });
     } catch {
       // mutation onError surfaces a toast
     }
@@ -451,6 +480,66 @@ export function CreateEvent() {
           </div>
         </form>
       </PageContainer>
+
+      {/* Post-creation share dialog */}
+      <Dialog open={!!createdEvent} onOpenChange={(open) => {
+        if (!open && createdEvent) {
+          navigate(`/manage/${createdEvent.id}`);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <span className="grid size-8 place-items-center rounded-full bg-primary/20 text-primary">
+                <Sparkles className="size-4" />
+              </span>
+              Event published!
+            </DialogTitle>
+            <DialogDescription className="pt-1 text-base">
+              Your event <span className="font-semibold text-foreground">{createdEvent?.title}</span> is now live.
+            </DialogDescription>
+          </DialogHeader>
+
+          {eventUrl && (
+            <div className="space-y-3">
+              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Shareable link
+              </label>
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2.5">
+                <ExternalLink className="size-4 shrink-0 text-primary" />
+                <span className="min-w-0 truncate text-sm text-muted-foreground">
+                  {eventUrl}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={copyLink} className="flex-1 gap-2">
+                  {copied ? (
+                    <><Check className="size-4" /> Copied!</>
+                  ) : (
+                    <><Copy className="size-4" /> Copy link</>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => navigate(`/e/${createdEvent!.slug}`, { replace: true })}
+                >
+                  <ExternalLink className="size-4" />
+                  View page
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground"
+                onClick={() => navigate(`/manage/${createdEvent!.id}`, { replace: true })}
+              >
+                Go to dashboard
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

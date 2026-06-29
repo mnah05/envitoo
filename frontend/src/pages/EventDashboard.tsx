@@ -1,8 +1,11 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect } from "react";
-import { ArrowLeft, CalendarDays, CheckCircle2, Globe, MapPin, Users } from "lucide-react";
+import { useCallback } from "react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Copy, Globe, HeartHandshake, MapPin, Pencil, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -27,7 +30,9 @@ import {
 import { PageContainer } from "@/components/domain/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EventStatusBadge, RegStatusBadge } from "@/components/domain/StatusBadge";
-import { useMyEvents } from "@/hooks/use-events";
+import { VolunteerDashboard } from "@/components/domain/VolunteerDashboard";
+import { useMyEvents, useEvent } from "@/hooks/use-events";
+import { useMyEventStaff } from "@/hooks/use-volunteers";
 import {
   useEventRegistrations,
   useUpdateRegistrationStatus,
@@ -43,11 +48,22 @@ import {
 
 export function EventDashboard() {
   const { id = "" } = useParams();
-  const { data: myEvents, isLoading: eventLoading } = useMyEvents(
+  const { data: myEvents, isLoading: myEventsLoading } = useMyEvents(
     { includeCancelled: true },
     !!id,
   );
-  const event = myEvents?.events.find((e) => e.id === id);
+  const myEvent = myEvents?.events.find((e) => e.id === id);
+  const isOrganizer = !!myEvent;
+
+  const { data: publicEvent, isLoading: publicLoading } = useEvent(
+    id,
+    !!id && !myEvent && !myEventsLoading,
+  );
+  const event = myEvent ?? publicEvent;
+
+  const { data: staffData } = useMyEventStaff({}, !!id && !isOrganizer);
+  const isVolunteerAdmin =
+    !isOrganizer && staffData?.events.some((e) => e.event_id === id) === true;
 
   const { data, isLoading: regsLoading } = useEventRegistrations(id, { limit: 100 }, !!id);
   const regs = data?.registrations ?? [];
@@ -56,14 +72,31 @@ export function EventDashboard() {
   const checkInMut = useCheckIn();
 
   useEffect(() => {
-    document.title = event ? `${event.title} — Manage — Pulse` : "Manage — Pulse";
+    document.title = event ? `${event.title} — Manage — EnviToo` : "Manage — EnviToo";
   }, [event]);
+
+  const eventLoading = myEventsLoading || publicLoading;
+
+  const eventUrl = event ? `${window.location.origin}/e/${event.slug}` : "";
+  const [copied, setCopied] = useState(false);
+
+  const copyLink = useCallback(async () => {
+    if (!eventUrl) return;
+    try {
+      await navigator.clipboard.writeText(eventUrl);
+      setCopied(true);
+      toast.success("Link copied!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy link");
+    }
+  }, [eventUrl]);
 
   if (eventLoading && !event) {
     return <EventDashboardSkeleton />;
   }
 
-  if (!event) {
+  if (!event || (!isOrganizer && !isVolunteerAdmin)) {
     return (
       <div className="pt-16">
         <PageContainer className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center">
@@ -109,87 +142,124 @@ export function EventDashboard() {
               </span>
             </div>
           </div>
-          <Button asChild variant="outline">
-            <Link to={`/e/${event.slug}`} target="_blank">
-              View public page
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline">
+              <Link to={`/e/${event.slug}`} target="_blank">
+                View public page
+              </Link>
+            </Button>
+            <Button variant="outline" size="icon" onClick={copyLink} title="Copy link">
+              {copied ? <CheckCircle2 className="size-4 text-primary" /> : <Copy className="size-4" />}
+            </Button>
+            <Button asChild variant="outline">
+              <Link to={`/manage/${event.id}/edit`}>
+                <Pencil data-icon="inline-start" />
+                Edit details
+              </Link>
+            </Button>
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat icon={<Users className="size-5" />} label="Capacity" value={event.capacity} />
-          <Stat icon={<CheckCircle2 className="size-5" />} label="Approved" value={approved} />
-          <Stat icon={<Users className="size-5" />} label="Pending" value={pending} />
-          <Stat icon={<CheckCircle2 className="size-5" />} label="Checked in" value={checkedIn} />
-        </div>
-        {event.status !== "cancelled" && (
-          <p className="mt-3 text-sm text-muted-foreground">{seatsLeft} seats remaining.</p>
-        )}
+        {/* Tabs */}
+        <div className="mt-8">
+          <Tabs defaultValue="registrations">
+            <TabsList>
+              <TabsTrigger value="registrations">
+                <Users data-icon="inline-start" />
+                Registrations
+              </TabsTrigger>
+              {(isOrganizer || isVolunteerAdmin) && (
+                <TabsTrigger value="volunteers">
+                  <HeartHandshake data-icon="inline-start" />
+                  Volunteers
+                </TabsTrigger>
+              )}
+            </TabsList>
 
-        {/* Registrations */}
-        <div className="mt-10">
-          <h2 className="text-xl font-semibold">Registrations</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{regs.length} total</p>
-
-          {regsLoading ? (
-            <div className="mt-6 overflow-hidden rounded-2xl border">
-              <div className="flex items-center gap-4 border-b bg-card px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-3 w-32" />
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-3 w-20" />
+            <TabsContent value="registrations">
+              {/* Stats */}
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Stat icon={<Users className="size-5" />} label="Capacity" value={event.capacity} />
+                <Stat icon={<CheckCircle2 className="size-5" />} label="Approved" value={approved} />
+                <Stat icon={<Users className="size-5" />} label="Pending" value={pending} />
+                <Stat icon={<CheckCircle2 className="size-5" />} label="Checked in" value={checkedIn} />
               </div>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-4 border-b px-4 py-3 last:border-0">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                  <Skeleton className="h-4 w-16" />
-                </div>
-              ))}
-            </div>
-          ) : regs.length === 0 ? (
-            <Empty className="mt-6 min-h-[30vh] border">
-              <EmptyMedia variant="icon">
-                <Users className="size-6" />
-              </EmptyMedia>
-              <EmptyTitle>No registrations yet</EmptyTitle>
-              <EmptyDescription>
-                Share your event page to start collecting signups.
-              </EmptyDescription>
-            </Empty>
-          ) : (
-            <div className="mt-6 overflow-x-auto rounded-2xl border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Attendee</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Check-in</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {regs.map((reg) => (
-                    <RegistrationRow
-                      key={reg.id}
-                      reg={reg}
-                      eventCancelled={event.status === "cancelled"}
-                      statusPending={statusMut.isPending}
-                      checkInPending={checkInMut.isPending}
-                      onStatus={(status) => statusMut.mutate({ id: reg.id, values: { status } })}
-                      onCheckIn={() =>
-                        reg.access_token &&
-                        checkInMut.mutate({ id: reg.id, values: { access_token: reg.access_token } })
-                      }
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+              {event.status !== "cancelled" && (
+                <p className="mt-3 text-sm text-muted-foreground">{seatsLeft} seats remaining.</p>
+              )}
+
+              {/* Registrations */}
+              <div className="mt-8">
+                <h2 className="text-xl font-semibold">Registrations</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{regs.length} total</p>
+
+                {regsLoading ? (
+                  <div className="mt-6 overflow-hidden rounded-2xl border">
+                    <div className="flex items-center gap-4 border-b bg-card px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-3 w-32" />
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 border-b px-4 py-3 last:border-0">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                    ))}
+                  </div>
+                ) : regs.length === 0 ? (
+                  <Empty className="mt-6 min-h-[30vh] border">
+                    <EmptyMedia variant="icon">
+                      <Users className="size-6" />
+                    </EmptyMedia>
+                    <EmptyTitle>No registrations yet</EmptyTitle>
+                    <EmptyDescription>
+                      Share your event page to start collecting signups.
+                    </EmptyDescription>
+                  </Empty>
+                ) : (
+                  <div className="mt-6 overflow-x-auto rounded-2xl border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Attendee</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Check-in</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {regs.map((reg) => (
+                          <RegistrationRow
+                            key={reg.id}
+                            reg={reg}
+                            eventCancelled={event.status === "cancelled"}
+                            statusPending={statusMut.isPending}
+                            checkInPending={checkInMut.isPending}
+                            onStatus={(status) => statusMut.mutate({ id: reg.id, values: { status } })}
+                            onCheckIn={() =>
+                              reg.access_token &&
+                              checkInMut.mutate({ id: reg.id, values: { access_token: reg.access_token } })
+                            }
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {(isOrganizer || isVolunteerAdmin) && (
+              <TabsContent value="volunteers">
+                <VolunteerDashboard event={event} />
+              </TabsContent>
+            )}
+          </Tabs>
         </div>
       </PageContainer>
     </div>

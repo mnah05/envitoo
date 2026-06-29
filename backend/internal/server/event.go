@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -10,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/mnah05/pulse/internal/dto"
-	"github.com/mnah05/pulse/internal/middleware"
-	"github.com/mnah05/pulse/internal/service"
+	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/middleware"
+	"github.com/mnah05/envitoo/internal/service"
 )
 
 // CreateEvent handles POST /api/events.
@@ -113,6 +114,10 @@ func (s *Server) ListPublicEvents(c echo.Context) error {
 		StartsBefore: startsBefore,
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			log.DebugContext(c.Request().Context(), "client disconnected", "error", err)
+			return nil
+		}
 		log.ErrorContext(c.Request().Context(), "list public events", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
@@ -337,11 +342,13 @@ func parseOffset(raw string) int32 {
 
 // parseTime parses an ISO 8601 timestamp from a query parameter. Returns
 // the zero time if the param is empty or invalid.
+// Handles both RFC3339 (no fractional seconds) and RFC3339Nano (with
+// fractional seconds), e.g. "2026-06-29T11:09:08Z" or "2026-06-29T11:09:08.875Z".
 func parseTime(raw string) time.Time {
 	if raw == "" {
 		return time.Time{}
 	}
-	t, err := time.Parse(time.RFC3339, raw)
+	t, err := time.Parse(time.RFC3339Nano, raw)
 	if err != nil {
 		return time.Time{}
 	}
