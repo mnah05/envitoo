@@ -48,7 +48,7 @@ export function EventDetail() {
   return (
     <div className="pt-16">
       {/* Cover */}
-      <div className="relative h-[40vh] min-h-[20rem] w-full overflow-hidden">
+      <div className="relative h-[28vh] min-h-[14rem] w-full overflow-hidden sm:h-[40vh] sm:min-h-[20rem]">
         <EventCover event={event} rounded="rounded-none" className="h-full" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
         <PageContainer className="absolute inset-x-0 bottom-0">
@@ -72,7 +72,7 @@ export function EventDetail() {
           </Link>
         </Button>
 
-        <div className="grid gap-10 lg:grid-cols-[1fr_22rem]">
+        <div className="flex flex-col gap-10 lg:grid lg:grid-cols-[1fr_22rem]">
           {/* Main */}
           <div className="flex flex-col gap-6">
             <div>
@@ -117,20 +117,10 @@ export function EventDetail() {
                 {formatPrice(event.price_in_paise, event.currency)}
               </InfoRow>
             </div>
-
-            {event.description && (
-              <div className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold">About this event</h2>
-                <Separator />
-                <p className="whitespace-pre-line text-pretty leading-relaxed text-muted-foreground">
-                  {event.description}
-                </p>
-              </div>
-            )}
           </div>
 
-          {/* Register + volunteer card */}
-          <aside className="flex flex-col gap-6 lg:sticky lg:top-24 lg:self-start">
+          {/* Register + volunteer card — above description on mobile, right column on desktop */}
+          <aside className="flex flex-col gap-6 lg:sticky lg:top-24 lg:row-span-2 lg:self-start">
             <div className="rounded-2xl border bg-card p-6 shadow-sm">
               {cancelled ? (
                 <div className="rounded-xl bg-muted p-6 text-center">
@@ -160,6 +150,17 @@ export function EventDetail() {
               <VolunteerApplyForm event={event} settings={volunteerSettings} />
             )}
           </aside>
+
+          {/* Description — below register card on mobile, below info on desktop */}
+          {event.description && (
+            <div className="flex flex-col gap-3 lg:col-start-1 lg:row-start-2">
+              <h2 className="text-lg font-semibold">About this event</h2>
+              <Separator />
+              <p className="whitespace-pre-line text-pretty leading-relaxed text-muted-foreground">
+                {event.description}
+              </p>
+            </div>
+          )}
         </div>
       </PageContainer>
     </div>

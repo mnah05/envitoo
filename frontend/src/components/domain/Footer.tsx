@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 export function Footer() {
   return (
     <footer className="border-t bg-background">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 pb-24 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:pb-10">
         <div className="flex items-center gap-2">
           <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
             P

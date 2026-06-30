@@ -2,6 +2,7 @@ import { Routes, Route, Outlet, useLocation } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { Header } from "@/components/domain/Header";
 import { Footer } from "@/components/domain/Footer";
+import { BottomNav } from "@/components/domain/BottomNav";
 import { Loading } from "@/components/domain/Layout";
 import { useSmoothScroll } from "@/hooks/use-smooth-scroll";
 import { ProtectedRoute, PublicOnlyRoute } from "@/routes/ProtectedRoute";
@@ -53,12 +54,13 @@ function SiteLayout() {
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
-      <main className="flex-1">
+      <main className="flex-1 pb-16 sm:pb-0">
         <Suspense fallback={<Loading />}>
           <Outlet />
         </Suspense>
       </main>
       <Footer />
+      <BottomNav />
     </div>
   );
 }

@@ -328,7 +328,7 @@ export function EditEvent() {
                         });
                       }}
                       className={cn(
-                        "rounded-md px-2.5 py-1 font-medium transition-colors",
+                        "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                         !form.is_virtual
                           ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                           : "text-muted-foreground hover:text-foreground",
@@ -348,7 +348,7 @@ export function EditEvent() {
                         });
                       }}
                       className={cn(
-                        "rounded-md px-2.5 py-1 font-medium transition-colors",
+                        "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                         form.is_virtual
                           ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                           : "text-muted-foreground hover:text-foreground",

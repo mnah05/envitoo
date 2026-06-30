@@ -22,7 +22,7 @@ export function CategoryPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset",
         CATEGORY_STYLES[category] ?? CATEGORY_STYLES.other,
         className,
       )}

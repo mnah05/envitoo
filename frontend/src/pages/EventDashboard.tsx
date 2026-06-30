@@ -142,21 +142,23 @@ export function EventDashboard() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+            <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link to={`/e/${event.slug}`} target="_blank">
                 View public page
               </Link>
             </Button>
-            <Button variant="outline" size="icon" onClick={copyLink} title="Copy link">
-              {copied ? <CheckCircle2 className="size-4 text-primary" /> : <Copy className="size-4" />}
-            </Button>
-            <Button asChild variant="outline">
-              <Link to={`/manage/${event.id}/edit`}>
-                <Pencil data-icon="inline-start" />
-                Edit details
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={copyLink} title="Copy link" className="flex-1 sm:flex-initial">
+                {copied ? <CheckCircle2 className="size-4 text-primary" /> : <Copy className="size-4" />}
+              </Button>
+              <Button asChild variant="outline" className="flex-1 sm:flex-initial">
+                <Link to={`/manage/${event.id}/edit`}>
+                  <Pencil data-icon="inline-start" />
+                  Edit details
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -221,35 +223,56 @@ export function EventDashboard() {
                     </EmptyDescription>
                   </Empty>
                 ) : (
-                  <div className="mt-6 overflow-x-auto rounded-2xl border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Attendee</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Check-in</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {regs.map((reg) => (
-                          <RegistrationRow
-                            key={reg.id}
-                            reg={reg}
-                            eventCancelled={event.status === "cancelled"}
-                            statusPending={statusMut.isPending}
-                            checkInPending={checkInMut.isPending}
-                            onStatus={(status) => statusMut.mutate({ id: reg.id, values: { status } })}
-                            onCheckIn={() =>
-                              reg.access_token &&
-                              checkInMut.mutate({ id: reg.id, values: { access_token: reg.access_token } })
-                            }
-                          />
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <>
+                    {/* Desktop: table */}
+                    <div className="mt-6 hidden overflow-x-auto rounded-2xl border md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Attendee</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Check-in</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {regs.map((reg) => (
+                            <RegistrationRow
+                              key={reg.id}
+                              reg={reg}
+                              eventCancelled={event.status === "cancelled"}
+                              statusPending={statusMut.isPending}
+                              checkInPending={checkInMut.isPending}
+                              onStatus={(status) => statusMut.mutate({ id: reg.id, values: { status } })}
+                              onCheckIn={() =>
+                                reg.access_token &&
+                                checkInMut.mutate({ id: reg.id, values: { access_token: reg.access_token } })
+                              }
+                            />
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile: stacked cards */}
+                    <div className="mt-6 flex flex-col gap-3 md:hidden">
+                      {regs.map((reg) => (
+                        <RegistrationCard
+                          key={reg.id}
+                          reg={reg}
+                          eventCancelled={event.status === "cancelled"}
+                          statusPending={statusMut.isPending}
+                          checkInPending={checkInMut.isPending}
+                          onStatus={(status) => statusMut.mutate({ id: reg.id, values: { status } })}
+                          onCheckIn={() =>
+                            reg.access_token &&
+                            checkInMut.mutate({ id: reg.id, values: { access_token: reg.access_token } })
+                          }
+                        />
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </TabsContent>
@@ -347,6 +370,70 @@ function RegistrationRow({
         </div>
       </TableCell>
     </TableRow>
+  );
+}
+
+function RegistrationCard({
+  reg,
+  eventCancelled,
+  statusPending,
+  checkInPending,
+  onStatus,
+  onCheckIn,
+}: {
+  reg: Registration;
+  eventCancelled: boolean;
+  statusPending: boolean;
+  checkInPending: boolean;
+  onStatus: (status: UpdateRegistrationStatusValues["status"]) => void;
+  onCheckIn: () => void;
+}) {
+  const busy = statusPending || checkInPending;
+
+  function handleStatusChange(next: string) {
+    const parsed = UpdateRegistrationStatusInput.safeParse({ status: next });
+    if (!parsed.success || parsed.data.status === reg.status) return;
+    onStatus(parsed.data.status);
+  }
+
+  return (
+    <div className="rounded-2xl border bg-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{reg.name}</p>
+          <p className="truncate text-sm text-muted-foreground">{reg.email}</p>
+        </div>
+        <RegStatusBadge status={reg.status} />
+      </div>
+      <div className="mt-3 flex items-center gap-2 text-sm">
+        {reg.checked_in_at ? (
+          <span className="inline-flex items-center gap-1.5 text-emerald-700">
+            <CheckCircle2 className="size-4" /> Checked in
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Not checked in</span>
+        )}
+      </div>
+      <div className="mt-3 flex flex-col gap-2">
+        <Select value={reg.status} onValueChange={handleStatusChange} disabled={busy}>
+          <SelectTrigger size="sm" className="w-full capitalize">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {regStatus.options.map((status) => (
+              <SelectItem key={status} value={status} className="capitalize">
+                {status}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {reg.status === "approved" && !reg.checked_in_at && !eventCancelled && (
+          <Button size="sm" onClick={onCheckIn} disabled={busy} className="w-full">
+            {checkInPending ? <Spinner /> : "Check in"}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 
