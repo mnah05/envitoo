@@ -60,7 +60,13 @@ func (s *Server) GetEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewEventResponse(event))
+	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	if err != nil {
+		log.ErrorContext(c.Request().Context(), "get event registration count", "id", id, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetEventBySlug handles GET /api/events/slug/:slug.
@@ -81,7 +87,13 @@ func (s *Server) GetEventBySlug(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewEventResponse(event))
+	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	if err != nil {
+		log.ErrorContext(c.Request().Context(), "get event by slug registration count", "slug", slug, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ListPublicEvents handles GET /api/events (public discovery).
@@ -147,7 +159,13 @@ func (s *Server) ListMyEvents(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewEventListResponse(dto.ToEventResponses(events), limit, offset, total))
+	items, err := s.events.EventResponsesWithCounts(c.Request().Context(), events)
+	if err != nil {
+		log.ErrorContext(c.Request().Context(), "list my events registration counts", "organizer_id", u.ID, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, dto.NewEventListResponse(items, limit, offset, total))
 }
 
 // UpdateEvent handles PATCH /api/events/:id.

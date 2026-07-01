@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useCallback } from "react";
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CalendarDays, CheckCircle2, Copy, Globe, HeartHandshake, MapPin, Pencil, ScanLine, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, CalendarDays, Check, CheckCircle2, Copy, Globe, HeartHandshake, MapPin, Pencil, ScanLine, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -37,7 +37,10 @@ import { useMyEventStaff } from "@/hooks/use-volunteers";
 import {
   useEventRegistrations,
   useUpdateRegistrationStatus,
+  useApproveRegistration,
+  useRejectRegistration,
   useCheckIn,
+  useCheckInByEventToken,
 } from "@/hooks/use-registrations";
 import { formatEventDate } from "@/lib/format";
 import {
@@ -46,6 +49,8 @@ import {
   type Registration,
   type UpdateRegistrationStatusValues,
 } from "@/lib/api";
+
+const REG_PAGE_SIZE = 100;
 
 export function EventDashboard() {
   const { id = "" } = useParams();
@@ -66,25 +71,31 @@ export function EventDashboard() {
   const isVolunteerAdmin =
     !isOrganizer && staffData?.events.some((e) => e.event_id === id) === true;
 
-  const { data, isLoading: regsLoading } = useEventRegistrations(id, { limit: 500 }, !!id);
+  const [regPage, setRegPage] = useState(0);
+  useEffect(() => {
+    setRegPage(0);
+  }, [id]);
+  const { data, isLoading: regsLoading } = useEventRegistrations(
+    id,
+    { limit: REG_PAGE_SIZE, offset: regPage * REG_PAGE_SIZE },
+    !!id,
+  );
   const regs = data?.registrations ?? [];
+  const regTotal = data?.total ?? 0;
+  const regPageCount = Math.max(1, Math.ceil(regTotal / REG_PAGE_SIZE));
 
   const statusMut = useUpdateRegistrationStatus();
+  const approveMut = useApproveRegistration();
+  const rejectMut = useRejectRegistration();
   const checkInMut = useCheckIn();
+  const checkInByTokenMut = useCheckInByEventToken(id);
   const [scannerOpen, setScannerOpen] = useState(false);
 
-  const regsRef = useRef(regs);
-  regsRef.current = regs;
   const handleScannedToken = useCallback(
     (token: string) => {
-      const match = regsRef.current.find((r) => r.access_token === token);
-      if (!match) {
-        toast.error("Ticket not found for this event");
-        return;
-      }
-      checkInMut.mutate({ id: match.id, values: { access_token: token } });
+      checkInByTokenMut.mutate({ access_token: token });
     },
-    [checkInMut],
+    [checkInByTokenMut],
   );
 
   useEffect(() => {
@@ -129,7 +140,11 @@ export function EventDashboard() {
   const approved = regs.filter((r) => r.status === "approved").length;
   const pending = regs.filter((r) => r.status === "pending").length;
   const checkedIn = regs.filter((r) => r.checked_in_at).length;
-  const seatsLeft = Math.max(0, event.capacity - approved);
+  const activeRegistrations = event.registration_count;
+  const seatsLeft = Math.max(0, event.capacity - activeRegistrations);
+  const canModerateRegistrations = isVolunteerAdmin && event.requires_approval;
+  const moderationPending =
+    statusMut.isPending || approveMut.isPending || rejectMut.isPending;
 
   return (
     <div className="pt-16">
@@ -211,7 +226,15 @@ export function EventDashboard() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-semibold">Registrations</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{regs.length} total</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {regTotal} total
+                      {regPageCount > 1 && (
+                        <span className="text-muted-foreground/80">
+                          {" "}
+                          · page {regPage + 1} of {regPageCount}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   {(isOrganizer || isVolunteerAdmin) && (
                     <Button variant="outline" size="sm" onClick={() => setScannerOpen(true)} className="gap-1.5">
@@ -238,7 +261,7 @@ export function EventDashboard() {
                       </div>
                     ))}
                   </div>
-                ) : regs.length === 0 ? (
+                ) : regTotal === 0 ? (
                   <Empty className="mt-6 min-h-[30vh] border">
                     <EmptyMedia variant="icon">
                       <Users className="size-6" />
@@ -268,9 +291,13 @@ export function EventDashboard() {
                               key={reg.id}
                               reg={reg}
                               eventCancelled={event.status === "cancelled"}
-                              statusPending={statusMut.isPending}
-                              checkInPending={checkInMut.isPending}
+                              isOrganizer={isOrganizer}
+                              canModerate={canModerateRegistrations}
+                              statusPending={moderationPending}
+                              checkInPending={checkInMut.isPending || checkInByTokenMut.isPending}
                               onStatus={(status) => statusMut.mutate({ id: reg.id, values: { status } })}
+                              onApprove={() => approveMut.mutate(reg.id)}
+                              onReject={() => rejectMut.mutate(reg.id)}
                               onCheckIn={() =>
                                 reg.access_token &&
                                 checkInMut.mutate({ id: reg.id, values: { access_token: reg.access_token } })
@@ -288,9 +315,13 @@ export function EventDashboard() {
                           key={reg.id}
                           reg={reg}
                           eventCancelled={event.status === "cancelled"}
-                          statusPending={statusMut.isPending}
-                          checkInPending={checkInMut.isPending}
+                          isOrganizer={isOrganizer}
+                          canModerate={canModerateRegistrations}
+                          statusPending={moderationPending}
+                          checkInPending={checkInMut.isPending || checkInByTokenMut.isPending}
                           onStatus={(status) => statusMut.mutate({ id: reg.id, values: { status } })}
+                          onApprove={() => approveMut.mutate(reg.id)}
+                          onReject={() => rejectMut.mutate(reg.id)}
                           onCheckIn={() =>
                             reg.access_token &&
                             checkInMut.mutate({ id: reg.id, values: { access_token: reg.access_token } })
@@ -298,6 +329,30 @@ export function EventDashboard() {
                         />
                       ))}
                     </div>
+
+                    {regPageCount > 1 && (
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={regPage === 0}
+                          onClick={() => setRegPage((p) => Math.max(0, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-sm text-muted-foreground">
+                          Page {regPage + 1} of {regPageCount}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={regPage >= regPageCount - 1}
+                          onClick={() => setRegPage((p) => Math.min(regPageCount - 1, p + 1))}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -344,16 +399,24 @@ function Stat({
 function RegistrationRow({
   reg,
   eventCancelled,
+  isOrganizer,
+  canModerate,
   statusPending,
   checkInPending,
   onStatus,
+  onApprove,
+  onReject,
   onCheckIn,
 }: {
   reg: Registration;
   eventCancelled: boolean;
+  isOrganizer: boolean;
+  canModerate: boolean;
   statusPending: boolean;
   checkInPending: boolean;
   onStatus: (status: UpdateRegistrationStatusValues["status"]) => void;
+  onApprove: () => void;
+  onReject: () => void;
   onCheckIn: () => void;
 }) {
   const busy = statusPending || checkInPending;
@@ -382,18 +445,40 @@ function RegistrationRow({
       </TableCell>
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-2">
-          <Select value={reg.status} onValueChange={handleStatusChange} disabled={busy}>
-            <SelectTrigger size="sm" className="w-36 capitalize">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {regStatus.options.map((status) => (
-                <SelectItem key={status} value={status} className="capitalize">
-                  {status}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {isOrganizer && (
+            <Select value={reg.status} onValueChange={handleStatusChange} disabled={busy}>
+              <SelectTrigger size="sm" className="w-36 capitalize">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {regStatus.options.map((status) => (
+                  <SelectItem key={status} value={status} className="capitalize">
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {canModerate && reg.status === "pending" && (
+            <>
+              <Button
+                size="xs"
+                className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                onClick={onApprove}
+                disabled={busy}
+              >
+                <Check className="size-3.5" /> Approve
+              </Button>
+              <Button
+                size="xs"
+                className="bg-rose-50 text-rose-700 hover:bg-rose-100"
+                onClick={onReject}
+                disabled={busy}
+              >
+                <X className="size-3.5" /> Reject
+              </Button>
+            </>
+          )}
           {reg.status === "approved" && !reg.checked_in_at && !eventCancelled && (
             <Button size="xs" onClick={onCheckIn} disabled={busy}>
               {checkInPending ? <Spinner /> : "Check in"}
@@ -408,16 +493,24 @@ function RegistrationRow({
 function RegistrationCard({
   reg,
   eventCancelled,
+  isOrganizer,
+  canModerate,
   statusPending,
   checkInPending,
   onStatus,
+  onApprove,
+  onReject,
   onCheckIn,
 }: {
   reg: Registration;
   eventCancelled: boolean;
+  isOrganizer: boolean;
+  canModerate: boolean;
   statusPending: boolean;
   checkInPending: boolean;
   onStatus: (status: UpdateRegistrationStatusValues["status"]) => void;
+  onApprove: () => void;
+  onReject: () => void;
   onCheckIn: () => void;
 }) {
   const busy = statusPending || checkInPending;
@@ -447,18 +540,40 @@ function RegistrationCard({
         )}
       </div>
       <div className="mt-3 flex flex-col gap-2">
-        <Select value={reg.status} onValueChange={handleStatusChange} disabled={busy}>
-          <SelectTrigger size="sm" className="w-full capitalize">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {regStatus.options.map((status) => (
-              <SelectItem key={status} value={status} className="capitalize">
-                {status}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {isOrganizer && (
+          <Select value={reg.status} onValueChange={handleStatusChange} disabled={busy}>
+            <SelectTrigger size="sm" className="w-full capitalize">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {regStatus.options.map((status) => (
+                <SelectItem key={status} value={status} className="capitalize">
+                  {status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {canModerate && reg.status === "pending" && (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              onClick={onApprove}
+              disabled={busy}
+            >
+              <Check className="size-4" /> Approve
+            </Button>
+            <Button
+              size="sm"
+              className="flex-1 bg-rose-50 text-rose-700 hover:bg-rose-100"
+              onClick={onReject}
+              disabled={busy}
+            >
+              <X className="size-4" /> Reject
+            </Button>
+          </div>
+        )}
         {reg.status === "approved" && !reg.checked_in_at && !eventCancelled && (
           <Button size="sm" onClick={onCheckIn} disabled={busy} className="w-full">
             {checkInPending ? <Spinner /> : "Check in"}

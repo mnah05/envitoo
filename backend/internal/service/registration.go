@@ -351,8 +351,8 @@ func (s *RegistrationService) ListByEvent(ctx context.Context, eventID uuid.UUID
 	if limit <= 0 {
 		limit = 20
 	}
-	if limit > 100 {
-		limit = 100
+	if limit > 500 {
+		limit = 500
 	}
 	offset := params.Offset
 	if offset < 0 {
@@ -595,6 +595,9 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 			// Already checked in — return existing (idempotent 2xx)
 			return existing, nil
 		}
+		if existing.Status != "approved" {
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationInvalidStatus)
+		}
 		event, eventErr := s.queries.GetEventByID(ctx, existing.EventID)
 		if eventErr == nil && event.Status != "published" {
 			return db.Registration{}, fmt.Errorf("event %s: %w", existing.EventID, ErrEventNotOpen)
@@ -603,6 +606,45 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 	}
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("check in attendee: %w", err)
+	}
+	return reg, nil
+}
+
+// CheckInByEventToken checks in an attendee using the event id and QR access
+// token. Resolves the registration server-side so clients do not need the
+// full registration list loaded.
+func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, actorID, accessToken uuid.UUID) (db.Registration, error) {
+	reg, err := s.queries.CheckInRegistrationByEventToken(ctx, db.CheckInRegistrationByEventTokenParams{
+		EventID:     eventID,
+		OrganizerID: actorID,
+		AccessToken: accessToken,
+	})
+	if err == pgx.ErrNoRows {
+		existing, fetchErr := s.queries.GetRegistrationByEventTokenAdmin(ctx, db.GetRegistrationByEventTokenAdminParams{
+			EventID:     eventID,
+			AccessToken: accessToken,
+			OrganizerID: actorID,
+		})
+		if fetchErr == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("registration with token %s: %w", accessToken, ErrRegistrationNotFound)
+		}
+		if fetchErr != nil {
+			return db.Registration{}, fmt.Errorf("check-in by token lookup: %w", fetchErr)
+		}
+		if existing.CheckedInAt.Valid {
+			return existing, nil
+		}
+		if existing.Status != "approved" {
+			return db.Registration{}, fmt.Errorf("registration %s: %w", existing.ID, ErrRegistrationInvalidStatus)
+		}
+		event, eventErr := s.queries.GetEventByID(ctx, eventID)
+		if eventErr == nil && event.Status != "published" {
+			return db.Registration{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotOpen)
+		}
+		return db.Registration{}, fmt.Errorf("check-in by token failed: %w", err)
+	}
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("check in by event token: %w", err)
 	}
 	return reg, nil
 }

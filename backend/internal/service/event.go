@@ -47,14 +47,13 @@ type PublicListParams struct {
 	StartsBefore time.Time
 }
 
-// Create inserts a new event owned by organizerID. The slug is derived
-// from the title — the caller never provides it. On slug collision the
-// query is retried once with a UUID suffix appended to the slug.
+const maxEventSlugAttempts = 10
+
+// Create inserts a new event owned by organizerID. The slug is a random
+// 7-character string — the caller never provides it. Uniqueness is enforced
+// by the DB UNIQUE constraint on slug; on collision a new slug is generated
+// and the insert is retried (up to maxEventSlugAttempts).
 func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dto.CreateEventRequest) (db.Event, error) {
-	eventSlug, err := helper.Generate(req.Title)
-	if err != nil {
-		return db.Event{}, fmt.Errorf("slug generation failed: %w", err)
-	}
 	event := db.CreateEventParams{
 		OrganizerID:      organizerID,
 		Title:            req.Title,
@@ -67,7 +66,6 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		Status:           "published",
 		RequiresApproval: req.RequiresApproval,
 		CoverImageUrl:    req.CoverImageURL,
-		Slug:             eventSlug,
 		Category:         req.Category,
 		IsVirtual:        req.IsVirtual,
 		MeetingUrl:       req.MeetingURL,
@@ -102,20 +100,23 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		event.MeetingUrl = nil
 	}
 
-	created, err := s.queries.CreateEvent(ctx, event)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			// Slug collision — retry once with a UUID suffix.
-			event.Slug = eventSlug + "-" + uuid.New().String()[:8]
-			created, err = s.queries.CreateEvent(ctx, event)
-			if err != nil {
-				return db.Event{}, fmt.Errorf("create event after slug retry: %w", err)
-			}
+	for attempt := 0; attempt < maxEventSlugAttempts; attempt++ {
+		slug, err := helper.GenerateEventSlug()
+		if err != nil {
+			return db.Event{}, fmt.Errorf("slug generation failed: %w", err)
+		}
+		event.Slug = slug
+
+		created, err := s.queries.CreateEvent(ctx, event)
+		if err == nil {
 			return created, nil
 		}
-		return db.Event{}, fmt.Errorf("create event: %w", err)
+		if err != pgx.ErrNoRows {
+			return db.Event{}, fmt.Errorf("create event: %w", err)
+		}
+		// Slug collision — UNIQUE(slug) caused ON CONFLICT DO NOTHING; try again.
 	}
-	return created, nil
+	return db.Event{}, fmt.Errorf("create event: failed to allocate unique slug after %d attempts", maxEventSlugAttempts)
 }
 
 // GetByID returns a single event by its UUID. Returns ErrEventNotFound if the
@@ -338,6 +339,30 @@ func (s *EventService) fetchRegistrationCounts(ctx context.Context, events []db.
 	return counts, rows.Err()
 }
 
+// EventResponsesWithCounts converts events to responses with active registration counts.
+func (s *EventService) EventResponsesWithCounts(ctx context.Context, events []db.Event) ([]dto.EventResponse, error) {
+	counts, err := s.fetchRegistrationCounts(ctx, events)
+	if err != nil {
+		return nil, fmt.Errorf("fetch registration counts: %w", err)
+	}
+	items := make([]dto.EventResponse, 0, len(events))
+	for _, e := range events {
+		resp := dto.NewEventResponse(e)
+		resp.RegistrationCount = counts[e.ID]
+		items = append(items, resp)
+	}
+	return items, nil
+}
+
+// EventResponseWithCount converts a single event to a response with its active registration count.
+func (s *EventService) EventResponseWithCount(ctx context.Context, event db.Event) (dto.EventResponse, error) {
+	items, err := s.EventResponsesWithCounts(ctx, []db.Event{event})
+	if err != nil {
+		return dto.EventResponse{}, err
+	}
+	return items[0], nil
+}
+
 // Update applies a partial patch to an existing event. Ownership is
 // enforced in the SQL (WHERE id = $1 AND organizer_id = $18). If the
 // event does not exist or belongs to a different organizer, the query
@@ -400,6 +425,13 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		params.EndsAt = *req.EndsAt
 	}
 	if req.Capacity != nil {
+		count, countErr := s.queries.CountActiveRegistrationsByEvent(ctx, id)
+		if countErr != nil {
+			return db.Event{}, fmt.Errorf("count registrations for capacity: %w", countErr)
+		}
+		if *req.Capacity < count {
+			return db.Event{}, fmt.Errorf("%w: capacity cannot be less than current registrations (%d)", ErrInvalidEvent, count)
+		}
 		params.Capacity = *req.Capacity
 	}
 	if req.PriceInPaise != nil {

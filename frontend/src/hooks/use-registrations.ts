@@ -19,6 +19,7 @@ import {
   rejectRegistration,
   updateRegistrationStatus,
   checkInAttendee,
+  checkInByEventToken,
   type CreateGuestRegistrationValues,
   type CreateRegistrationValues,
   type CheckInValues,
@@ -147,6 +148,7 @@ export function useApproveRegistration() {
     onSuccess: (reg) => {
       toast.success("Attendee approved");
       qc.invalidateQueries({ queryKey: ["registrations", "event", reg.event_id] });
+      qc.invalidateQueries({ queryKey: ["events"] });
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Failed to approve");
@@ -162,6 +164,7 @@ export function useRejectRegistration() {
     onSuccess: (reg) => {
       toast.success("Attendee rejected");
       qc.invalidateQueries({ queryKey: ["registrations", "event", reg.event_id] });
+      qc.invalidateQueries({ queryKey: ["events"] });
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Failed to reject");
@@ -178,6 +181,7 @@ export function useUpdateRegistrationStatus() {
     onSuccess: (reg) => {
       toast.success("Status updated");
       qc.invalidateQueries({ queryKey: ["registrations", "event", reg.event_id] });
+      qc.invalidateQueries({ queryKey: ["events"] });
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Failed to update status");
@@ -194,6 +198,23 @@ export function useCheckIn() {
     onSuccess: (reg) => {
       toast.success("Checked in");
       qc.invalidateQueries({ queryKey: ["registrations", "event", reg.event_id] });
+      qc.invalidateQueries({ queryKey: ["events"] });
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : "Check-in failed");
+    },
+  });
+}
+
+export function useCheckInByEventToken(eventId: string) {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (values: CheckInValues) => checkInByEventToken(api, eventId, values),
+    onSuccess: (reg) => {
+      toast.success("Checked in");
+      qc.invalidateQueries({ queryKey: ["registrations", "event", reg.event_id] });
+      qc.invalidateQueries({ queryKey: ["events"] });
     },
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Check-in failed");

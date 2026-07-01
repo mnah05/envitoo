@@ -146,6 +146,11 @@ export function EventDetail() {
               </InfoRow>
               <InfoRow icon={<Users className="size-5" />} label="Capacity">
                 {event.capacity} seats
+                {!cancelled && (
+                  <span className="block text-sm font-normal text-muted-foreground">
+                    {Math.max(0, event.capacity - event.registration_count)} seats left
+                  </span>
+                )}
               </InfoRow>
               <InfoRow icon={<Clock className="size-5" />} label="Price">
                 {formatPrice(event.price_in_paise, event.currency)}

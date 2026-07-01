@@ -25,6 +25,8 @@ type Querier interface {
 	CancelVolunteerApplication(ctx context.Context, arg CancelVolunteerApplicationParams) (VolunteerApplication, error)
 	// Route 13: POST /api/registrations/:id/check-in
 	CheckInRegistration(ctx context.Context, arg CheckInRegistrationParams) (Registration, error)
+	// Route 14: POST /api/events/:id/check-in
+	CheckInRegistrationByEventToken(ctx context.Context, arg CheckInRegistrationByEventTokenParams) (Registration, error)
 	CountActiveRegistrationsByEvent(ctx context.Context, eventID uuid.UUID) (int32, error)
 	CountEventsByOrganizer(ctx context.Context, arg CountEventsByOrganizerParams) (int32, error)
 	CountPublicEvents(ctx context.Context, arg CountPublicEventsParams) (int32, error)
@@ -52,6 +54,7 @@ type Querier interface {
 	GetPublishedEventBySlug(ctx context.Context, slug string) (Event, error)
 	// Route 2: GET /api/guest-registrations?token=
 	GetRegistrationByAccessToken(ctx context.Context, accessToken uuid.UUID) (Registration, error)
+	GetRegistrationByEventTokenAdmin(ctx context.Context, arg GetRegistrationByEventTokenAdminParams) (Registration, error)
 	// Route 5: GET /api/registrations/:id
 	GetRegistrationByID(ctx context.Context, arg GetRegistrationByIDParams) (Registration, error)
 	// Route 9: GET /api/registrations/:id/admin

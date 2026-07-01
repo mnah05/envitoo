@@ -170,6 +170,7 @@ UPDATE registrations r
    )
    AND e.status = 'published'
    AND r.access_token = $3
+   AND r.status = 'approved'
    AND r.checked_in_at IS NULL
 RETURNING r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
 `
@@ -183,6 +184,57 @@ type CheckInRegistrationParams struct {
 // Route 13: POST /api/registrations/:id/check-in
 func (q *Queries) CheckInRegistration(ctx context.Context, arg CheckInRegistrationParams) (Registration, error) {
 	row := q.db.QueryRow(ctx, checkInRegistration, arg.ID, arg.OrganizerID, arg.AccessToken)
+	var i Registration
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.UserID,
+		&i.Name,
+		&i.Email,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AccessToken,
+		&i.TokenExpiresAt,
+		&i.CheckedInAt,
+	)
+	return i, err
+}
+
+const checkInRegistrationByEventToken = `-- name: CheckInRegistrationByEventToken :one
+UPDATE registrations r
+   SET checked_in_at = now(), updated_at = now()
+  FROM events e
+ WHERE r.event_id = $1
+   AND e.id = r.event_id
+   AND (
+     e.organizer_id = $2
+     OR EXISTS (
+       SELECT 1
+       FROM volunteer_applications va
+       JOIN volunteer_roles vr ON vr.id = va.role_id
+       WHERE va.event_id = e.id
+         AND va.user_id = $2
+         AND va.status = 'approved'
+         AND vr.is_admin = true
+     )
+   )
+   AND e.status = 'published'
+   AND r.access_token = $3
+   AND r.status = 'approved'
+   AND r.checked_in_at IS NULL
+RETURNING r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
+`
+
+type CheckInRegistrationByEventTokenParams struct {
+	EventID     uuid.UUID
+	OrganizerID uuid.UUID
+	AccessToken uuid.UUID
+}
+
+// Route 14: POST /api/events/:id/check-in
+func (q *Queries) CheckInRegistrationByEventToken(ctx context.Context, arg CheckInRegistrationByEventTokenParams) (Registration, error) {
+	row := q.db.QueryRow(ctx, checkInRegistrationByEventToken, arg.EventID, arg.OrganizerID, arg.AccessToken)
 	var i Registration
 	err := row.Scan(
 		&i.ID,
@@ -316,6 +368,51 @@ WHERE r.access_token = $1
 // Route 2: GET /api/guest-registrations?token=
 func (q *Queries) GetRegistrationByAccessToken(ctx context.Context, accessToken uuid.UUID) (Registration, error) {
 	row := q.db.QueryRow(ctx, getRegistrationByAccessToken, accessToken)
+	var i Registration
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.UserID,
+		&i.Name,
+		&i.Email,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AccessToken,
+		&i.TokenExpiresAt,
+		&i.CheckedInAt,
+	)
+	return i, err
+}
+
+const getRegistrationByEventTokenAdmin = `-- name: GetRegistrationByEventTokenAdmin :one
+SELECT r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
+FROM registrations r
+JOIN events e ON e.id = r.event_id
+WHERE r.event_id = $1
+  AND r.access_token = $2
+  AND (
+    e.organizer_id = $3
+    OR EXISTS (
+      SELECT 1
+      FROM volunteer_applications va
+      JOIN volunteer_roles vr ON vr.id = va.role_id
+      WHERE va.event_id = e.id
+        AND va.user_id = $3
+        AND va.status = 'approved'
+        AND vr.is_admin = true
+    )
+  )
+`
+
+type GetRegistrationByEventTokenAdminParams struct {
+	EventID     uuid.UUID
+	AccessToken uuid.UUID
+	OrganizerID uuid.UUID
+}
+
+func (q *Queries) GetRegistrationByEventTokenAdmin(ctx context.Context, arg GetRegistrationByEventTokenAdminParams) (Registration, error) {
+	row := q.db.QueryRow(ctx, getRegistrationByEventTokenAdmin, arg.EventID, arg.AccessToken, arg.OrganizerID)
 	var i Registration
 	err := row.Scan(
 		&i.ID,

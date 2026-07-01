@@ -102,6 +102,7 @@ func (s *Server) Register(e *echo.Echo) {
 
 	// Admin/Organizer registration routes
 	protected.GET("/events/:id/registrations", s.ListEventRegistrations)
+	protected.POST("/events/:id/check-in", s.CheckInByEventToken)
 	protected.GET("/registrations/:id/admin", s.GetRegistrationAsAdmin)
 	protected.POST("/registrations/:id/approve", s.ApproveRegistration)
 	protected.POST("/registrations/:id/reject", s.RejectRegistration)

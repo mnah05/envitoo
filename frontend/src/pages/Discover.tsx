@@ -5,7 +5,7 @@ import { EventCard } from "@/components/domain/EventCard";
 import { EventCardSkeleton } from "@/components/domain/EventCardSkeleton";
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
 import { usePublicEvents } from "@/hooks/use-events";
-import { CATEGORIES, CATEGORY_LABELS } from "@/lib/api";
+import { CATEGORIES, CATEGORY_LABELS, type Event } from "@/lib/api";
 
 const PAGE_SIZE = 100;
 
@@ -99,7 +99,7 @@ function CategorySection({
   events,
 }: {
   label: string;
-  events: Array<{ id: string }>;
+  events: Event[];
 }) {
   return (
     <section>

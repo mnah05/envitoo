@@ -206,5 +206,50 @@ UPDATE registrations r
    )
    AND e.status = 'published'
    AND r.access_token = $3
+   AND r.status = 'approved'
    AND r.checked_in_at IS NULL
 RETURNING r.*;
+
+-- Route 14: POST /api/events/:id/check-in
+-- name: CheckInRegistrationByEventToken :one
+UPDATE registrations r
+   SET checked_in_at = now(), updated_at = now()
+  FROM events e
+ WHERE r.event_id = $1
+   AND e.id = r.event_id
+   AND (
+     e.organizer_id = $2
+     OR EXISTS (
+       SELECT 1
+       FROM volunteer_applications va
+       JOIN volunteer_roles vr ON vr.id = va.role_id
+       WHERE va.event_id = e.id
+         AND va.user_id = $2
+         AND va.status = 'approved'
+         AND vr.is_admin = true
+     )
+   )
+   AND e.status = 'published'
+   AND r.access_token = $3
+   AND r.status = 'approved'
+   AND r.checked_in_at IS NULL
+RETURNING r.*;
+
+-- name: GetRegistrationByEventTokenAdmin :one
+SELECT r.*
+FROM registrations r
+JOIN events e ON e.id = r.event_id
+WHERE r.event_id = $1
+  AND r.access_token = $2
+  AND (
+    e.organizer_id = $3
+    OR EXISTS (
+      SELECT 1
+      FROM volunteer_applications va
+      JOIN volunteer_roles vr ON vr.id = va.role_id
+      WHERE va.event_id = e.id
+        AND va.user_id = $3
+        AND va.status = 'approved'
+        AND vr.is_admin = true
+    )
+  );

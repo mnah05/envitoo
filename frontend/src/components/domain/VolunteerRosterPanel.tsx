@@ -18,11 +18,9 @@ import { formatCardDate, initials } from "@/lib/format";
 import type { Volunteer } from "@/lib/api";
 
 export function VolunteerRosterPanel({
-  eventId,
   volunteers,
   total,
 }: {
-  eventId: string;
   volunteers: Volunteer[];
   total: number;
 }) {

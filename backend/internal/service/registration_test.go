@@ -1,0 +1,30 @@
+package service
+
+import "testing"
+
+func TestValidateCapacityForApproval(t *testing.T) {
+	tests := []struct {
+		name       string
+		count      int32
+		capacity   int32
+		fromStatus string
+		toStatus   string
+		wantErr    bool
+	}{
+		{name: "pending to approved at capacity", count: 10, capacity: 10, fromStatus: "pending", toStatus: "approved"},
+		{name: "pending to approved over capacity", count: 11, capacity: 10, fromStatus: "pending", toStatus: "approved", wantErr: true},
+		{name: "rejected to approved at capacity", count: 10, capacity: 10, fromStatus: "rejected", toStatus: "approved", wantErr: true},
+		{name: "cancelled to approved with room", count: 9, capacity: 10, fromStatus: "cancelled", toStatus: "approved"},
+		{name: "approved to approved noop", count: 10, capacity: 10, fromStatus: "approved", toStatus: "approved"},
+		{name: "pending to rejected", count: 10, capacity: 10, fromStatus: "pending", toStatus: "rejected"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCapacityForApproval(tt.count, tt.capacity, tt.fromStatus, tt.toStatus)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateCapacityForApproval() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

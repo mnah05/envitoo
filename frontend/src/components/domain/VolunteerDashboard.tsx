@@ -68,7 +68,6 @@ export function VolunteerDashboard({ event }: { event: Event }) {
         total={appsData?.total ?? 0}
       />
       <VolunteerRosterPanel
-        eventId={event.id}
         volunteers={volData?.volunteers ?? []}
         total={volData?.total ?? 0}
       />

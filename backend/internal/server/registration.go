@@ -401,10 +401,53 @@ func (s *Server) CheckInAttendee(c echo.Context) error {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
 		}
+		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
+			return echo.NewHTTPError(http.StatusConflict, "only approved registrations can be checked in")
+		}
 		if errors.Is(err, service.ErrEventNotOpen) {
 			return echo.NewHTTPError(http.StatusConflict, "check-in is not allowed for this event")
 		}
 		log.ErrorContext(c.Request().Context(), "check in attendee", "id", id, "organizer_id", u.ID, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, dto.NewRegistrationResponse(reg))
+}
+
+// CheckInByEventToken handles POST /api/events/:id/check-in.
+func (s *Server) CheckInByEventToken(c echo.Context) error {
+	log := middleware.LoggerFromContext(c.Request().Context())
+
+	eventID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid event id")
+	}
+
+	var req dto.CheckInRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if err := s.validate.Struct(req); err != nil {
+		return validationError(c, err)
+	}
+
+	u, ok := middleware.UserFromContext(c)
+	if !ok {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+	}
+
+	reg, err := s.registrations.CheckInByEventToken(c.Request().Context(), eventID, u.ID, req.AccessToken)
+	if err != nil {
+		if errors.Is(err, service.ErrRegistrationNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
+		}
+		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
+			return echo.NewHTTPError(http.StatusConflict, "only approved registrations can be checked in")
+		}
+		if errors.Is(err, service.ErrEventNotOpen) {
+			return echo.NewHTTPError(http.StatusConflict, "check-in is not allowed for this event")
+		}
+		log.ErrorContext(c.Request().Context(), "check in by event token", "event_id", eventID, "actor_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 

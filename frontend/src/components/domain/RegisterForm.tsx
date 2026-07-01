@@ -24,6 +24,7 @@ export function RegisterForm({ event }: { event: Event }) {
   const [done, setDone] = useState<{ token?: string } | null>(null);
 
   const pending = guestMut.isPending || userMut.isPending;
+  const isFull = event.registration_count >= event.capacity;
 
   function validate(): boolean {
     const e: typeof errors = {};
@@ -67,6 +68,17 @@ export function RegisterForm({ event }: { event: Event }) {
         setErrors({ email: err.message });
       }
     }
+  }
+
+  if (isFull) {
+    return (
+      <div className="rounded-xl bg-muted p-6 text-center">
+        <p className="font-semibold">This event is full</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          All seats are currently reserved. Check back later for cancellations.
+        </p>
+      </div>
+    );
   }
 
   if (done) {

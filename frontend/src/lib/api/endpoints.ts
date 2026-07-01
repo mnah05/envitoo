@@ -220,6 +220,16 @@ export function checkInAttendee(api: Api, id: string, values: CheckInValues): Pr
     .then((d) => parseOrThrow(RegistrationSchema, d));
 }
 
+export function checkInByEventToken(
+  api: Api,
+  eventId: string,
+  values: CheckInValues,
+): Promise<Registration> {
+  return api
+    .post<unknown>(`/api/events/${eventId}/check-in`, values)
+    .then((d) => parseOrThrow(RegistrationSchema, d));
+}
+
 // --- Volunteer — public -----------------------------------------------------
 
 export function getVolunteerSettings(api: Api, eventId: string): Promise<VolunteerSettings> {
