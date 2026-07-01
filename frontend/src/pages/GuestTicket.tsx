@@ -1,7 +1,8 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useEffect } from "react";
-import { QRCodeSVG } from "qrcode.react";
-import { CalendarDays, Globe, MapPin, Ticket } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
+import { CalendarDays, Download, Globe, MapPin, Ticket } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { PageContainer } from "@/components/domain/Layout";
@@ -11,6 +12,8 @@ import { useEvent } from "@/hooks/use-events";
 import { useGuestRegistration, useCancelGuestRegistration } from "@/hooks/use-registrations";
 import { formatEventDate, formatFullDate, initials } from "@/lib/format";
 import { ApiError } from "@/lib/api";
+import { CancelTicketDialog } from "@/components/domain/CancelTicketDialog";
+import { generateTicketPdf } from "@/components/domain/TicketPDF";
 
 export function GuestTicket() {
   const [params] = useSearchParams();
@@ -18,6 +21,29 @@ export function GuestTicket() {
   const { data: reg, isLoading, error } = useGuestRegistration(token);
   const { data: event } = useEvent(reg?.event_id ?? "", !!reg?.event_id);
   const cancelMut = useCancelGuestRegistration();
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  async function handleDownload() {
+    if (!reg || !event) return;
+    const canvas = qrCanvasRef.current;
+    if (!canvas) return;
+    setPdfBusy(true);
+    try {
+      const qrDataUrl = canvas.toDataURL("image/png");
+      const blob = await generateTicketPdf({ event, reg, token }, qrDataUrl);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `envitoo-ticket-${token.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Could not generate PDF");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   useEffect(() => {
     document.title = "Your ticket — EnviToo";
@@ -42,7 +68,7 @@ export function GuestTicket() {
     return (
       <div className="pt-20">
         <PageContainer width="narrow" className="py-10">
-          <div className="mx-auto overflow-hidden rounded-3xl border bg-card shadow-sm">
+<div className="mx-auto overflow-hidden rounded-3xl border bg-card shadow-sm">
             <div className="bg-foreground p-6">
               <div className="flex items-center justify-between">
                 <Skeleton className="h-4 w-28" />
@@ -181,13 +207,22 @@ export function GuestTicket() {
                   : "Present this QR at check-in. Keep this link safe — it's your only proof of registration."}
             </div>
             {!ticketCancelled && (
-              <Button
-                variant="outline"
-                disabled={cancelMut.isPending}
-                onClick={() => cancelMut.mutate(token)}
-              >
-                {cancelMut.isPending ? "Cancelling…" : "Cancel registration"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleDownload}
+                  disabled={pdfBusy || !event}
+                >
+                  <Download className="size-4" />
+                  {pdfBusy ? "Generating…" : "Download ticket"}
+                </Button>
+                <CancelTicketDialog
+                  pending={cancelMut.isPending}
+                  onConfirm={() => cancelMut.mutate(token)}
+                  triggerLabel="Cancel registration"
+                  triggerSize="default"
+                />
+              </div>
             )}
           </div>
         </div>
@@ -195,6 +230,11 @@ export function GuestTicket() {
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Lost the link? Search your inbox for the registration confirmation.
         </p>
+
+        {/* High-resolution QR for PDF export — visually hidden but rendered. */}
+        <div aria-hidden className="sr-only">
+          <QRCodeCanvas ref={qrCanvasRef} value={ticketUrl} size={320} level="M" />
+        </div>
       </PageContainer>
     </div>
   );

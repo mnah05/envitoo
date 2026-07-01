@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo } from "react";
-import { CalendarDays, ClipboardList, Globe, MapPin, ShieldCheck, Ticket } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarDays, ClipboardList, Download, Globe, MapPin, ShieldCheck, Ticket } from "lucide-react";
+import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Empty,
@@ -16,6 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EventStatusBadge, RegStatusBadge } from "@/components/domain/StatusBadge";
 import { MyVolunteerApplications } from "@/components/domain/MyVolunteerApplications";
 import { MyEventStaffList } from "@/components/domain/MyEventStaffList";
+import { CancelTicketDialog } from "@/components/domain/CancelTicketDialog";
+import { generateTicketPdf } from "@/components/domain/TicketPDF";
 import { useMyRegistrations, useCancelRegistration } from "@/hooks/use-registrations";
 import { useEvent } from "@/hooks/use-events";
 import { formatEventDate } from "@/lib/format";
@@ -107,6 +109,29 @@ function TicketCard({ reg }: { reg: Registration }) {
   const ticketUrl = reg.access_token
     ? `${window.location.origin}/ticket?token=${reg.access_token}`
     : null;
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  async function handleDownload() {
+    if (!event || !reg.access_token) return;
+    const canvas = qrCanvasRef.current;
+    if (!canvas) return;
+    setPdfBusy(true);
+    try {
+      const qrDataUrl = canvas.toDataURL("image/png");
+      const blob = await generateTicketPdf({ event, reg, token: reg.access_token }, qrDataUrl);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `envitoo-ticket-${reg.access_token.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Could not generate PDF");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   if (isLoading) {
     return <Skeleton className="h-64 w-full rounded-2xl" />;
@@ -169,15 +194,20 @@ function TicketCard({ reg }: { reg: Registration }) {
             {eventCancelled && <EventStatusBadge status="cancelled" />}
           </div>
           <div className="mt-1 flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownload}
+              disabled={pdfBusy || !ticketUrl}
+            >
+              <Download className="size-4" />
+              {pdfBusy ? "Generating…" : "Download"}
+            </Button>
             {canCancel && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={cancelMut.isPending}
-                onClick={() => cancelMut.mutate(reg.id)}
-              >
-                {cancelMut.isPending ? "Cancelling…" : "Cancel"}
-              </Button>
+              <CancelTicketDialog
+                pending={cancelMut.isPending}
+                onConfirm={() => cancelMut.mutate(reg.id)}
+              />
             )}
             <Button variant="ghost" size="sm" asChild>
               <Link to={`/e/${event.slug}`}>
@@ -187,6 +217,13 @@ function TicketCard({ reg }: { reg: Registration }) {
           </div>
         </div>
       </div>
+
+      {/* High-resolution QR for PDF export — visually hidden but rendered. */}
+      {ticketUrl && (
+        <div aria-hidden className="sr-only">
+          <QRCodeCanvas ref={qrCanvasRef} value={ticketUrl} size={320} level="M" />
+        </div>
+      )}
     </div>
   );
 }

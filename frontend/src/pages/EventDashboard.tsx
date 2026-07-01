@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useCallback } from "react";
-import { useEffect, useState } from "react";
-import { ArrowLeft, CalendarDays, CheckCircle2, Copy, Globe, HeartHandshake, MapPin, Pencil, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Copy, Globe, HeartHandshake, MapPin, Pencil, ScanLine, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -31,6 +31,7 @@ import { PageContainer } from "@/components/domain/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EventStatusBadge, RegStatusBadge } from "@/components/domain/StatusBadge";
 import { VolunteerDashboard } from "@/components/domain/VolunteerDashboard";
+import { CheckInScanner } from "@/components/domain/CheckInScanner";
 import { useMyEvents, useEvent } from "@/hooks/use-events";
 import { useMyEventStaff } from "@/hooks/use-volunteers";
 import {
@@ -70,6 +71,21 @@ export function EventDashboard() {
 
   const statusMut = useUpdateRegistrationStatus();
   const checkInMut = useCheckIn();
+  const [scannerOpen, setScannerOpen] = useState(false);
+
+  const regsRef = useRef(regs);
+  regsRef.current = regs;
+  const handleScannedToken = useCallback(
+    (token: string) => {
+      const match = regsRef.current.find((r) => r.access_token === token);
+      if (!match) {
+        toast.error("Ticket not found for this event");
+        return;
+      }
+      checkInMut.mutate({ id: match.id, values: { access_token: token } });
+    },
+    [checkInMut],
+  );
 
   useEffect(() => {
     document.title = event ? `${event.title} — Manage — EnviToo` : "Manage — EnviToo";
@@ -192,8 +208,18 @@ export function EventDashboard() {
 
               {/* Registrations */}
               <div className="mt-8">
-                <h2 className="text-xl font-semibold">Registrations</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{regs.length} total</p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold">Registrations</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">{regs.length} total</p>
+                  </div>
+                  {(isOrganizer || isVolunteerAdmin) && (
+                    <Button variant="outline" size="sm" onClick={() => setScannerOpen(true)} className="gap-1.5">
+                      <ScanLine className="size-4" />
+                      Scan to check in
+                    </Button>
+                  )}
+                </div>
 
                 {regsLoading ? (
                   <div className="mt-6 overflow-hidden rounded-2xl border">
@@ -285,6 +311,12 @@ export function EventDashboard() {
           </Tabs>
         </div>
       </PageContainer>
+
+      <CheckInScanner
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onResult={handleScannedToken}
+      />
     </div>
   );
 }

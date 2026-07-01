@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect } from "react";
-import { ArrowLeft, CalendarDays, Clock, Globe, MapPin, Users } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, CalendarDays, Check, Clock, Globe, MapPin, Share2, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +11,7 @@ import { CategoryPill } from "@/components/domain/CategoryPill";
 import { EventStatusBadge } from "@/components/domain/StatusBadge";
 import { RegisterForm } from "@/components/domain/RegisterForm";
 import { VolunteerApplyForm } from "@/components/domain/VolunteerApplyForm";
+import { EventMap } from "@/components/domain/EventMap";
 import { useEventBySlug } from "@/hooks/use-events";
 import { useVolunteerSettings } from "@/hooks/use-volunteers";
 import { formatEventDate, formatFullDate, formatPrice } from "@/lib/format";
@@ -22,6 +24,25 @@ export function EventDetail() {
   useEffect(() => {
     document.title = event ? `${event.title} — EnviToo` : "Event — EnviToo";
   }, [event]);
+
+  const eventUrl = event ? `${window.location.origin}/e/${event.slug}` : "";
+  const [copied, setCopied] = useState(false);
+
+  const share = useCallback(async () => {
+    if (!eventUrl) return;
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title: event?.title ?? "EnviToo event", url: eventUrl });
+        return;
+      }
+      await navigator.clipboard.writeText(eventUrl);
+      toast.success("Link copied!");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      if (typeof navigator.share !== "function") toast.error("Could not copy link");
+    }
+  }, [eventUrl, event?.title]);
 
   if (isLoading) {
     return <EventDetailSkeleton />;
@@ -65,12 +86,25 @@ export function EventDetail() {
       </div>
 
       <PageContainer className="py-10">
-        <Button asChild variant="ghost" size="sm" className="mb-6 -ml-2">
-          <Link to="/discover">
-            <ArrowLeft data-icon="inline-start" />
-            Back to discover
-          </Link>
-        </Button>
+        <div className="mb-6 flex items-center justify-between gap-2">
+          <Button asChild variant="ghost" size="sm" className="-ml-2">
+            <Link to="/discover">
+              <ArrowLeft data-icon="inline-start" />
+              Back to discover
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={share} className="gap-1.5">
+            {copied ? (
+              <>
+                <Check className="size-4" /> Copied!
+              </>
+            ) : (
+              <>
+                <Share2 className="size-4" /> Share
+              </>
+            )}
+          </Button>
+        </div>
 
         <div className="flex flex-col gap-10 lg:grid lg:grid-cols-[1fr_22rem]">
           {/* Main */}
@@ -150,6 +184,14 @@ export function EventDetail() {
               <VolunteerApplyForm event={event} settings={volunteerSettings} />
             )}
           </aside>
+
+          {/* Map — physical events with coordinates */}
+          {!event.is_virtual && event.lat != null && event.lng != null && (
+            <div className="lg:col-start-1 lg:row-start-3">
+              <h2 className="mb-3 text-lg font-semibold">Where to find it</h2>
+              <EventMap lat={event.lat} lng={event.lng} label={event.venue_name ?? event.title} />
+            </div>
+          )}
 
           {/* Description — below register card on mobile, below info on desktop */}
           {event.description && (

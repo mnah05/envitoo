@@ -56,11 +56,73 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
+  const locationIqKey = import.meta.env.VITE_LOCATIONIQ_KEY as string | undefined;
+  if (locationIqKey) {
+    return searchLocationIq(trimmed, locationIqKey, signal);
+  }
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
   if (mapboxToken) {
     return searchMapbox(trimmed, mapboxToken, signal);
   }
   return searchPhoton(trimmed, signal);
+}
+
+interface LocationIqAddress {
+  name?: string;
+  road?: string;
+  house_number?: string;
+  suburb?: string;
+  neighbourhood?: string;
+  city?: string;
+  town?: string;
+  village?: string;
+  state?: string;
+  country?: string;
+  postcode?: string;
+}
+
+interface LocationIqResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: LocationIqAddress;
+  type?: string;
+}
+
+async function searchLocationIq(
+  query: string,
+  key: string,
+  signal?: AbortSignal,
+): Promise<PlaceResult[]> {
+  const url = new URL("https://us1.locationiq.com/v1/autocomplete.php");
+  url.searchParams.set("key", key);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("limit", "6");
+  url.searchParams.set("countrycodes", "in");
+
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error("Address search failed");
+  const data = (await res.json()) as LocationIqResult[];
+  return data.map((r) => {
+    const addr = r.address ?? {};
+    const venueName =
+      addr.name && addr.name !== addr.road
+        ? addr.name
+        : addr.road || r.display_name.split(",")[0]?.trim() || "Venue";
+    const line1 = addr.house_number ? `${addr.house_number} ${addr.road ?? ""}`.trim() : addr.road;
+    const parts = [
+      line1,
+      addr.suburb ?? addr.neighbourhood,
+      addr.city ?? addr.town ?? addr.village,
+      addr.state,
+      addr.postcode,
+      addr.country,
+    ].filter(Boolean);
+    const locationAddress = parts.length > 0 ? parts.join(", ") : r.display_name;
+    return { venueName, locationAddress, lat: Number(r.lat), lng: Number(r.lon) };
+  });
 }
 
 async function searchPhoton(query: string, signal?: AbortSignal): Promise<PlaceResult[]> {
