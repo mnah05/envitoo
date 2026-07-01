@@ -101,7 +101,11 @@ export function Header() {
 
             <SignedOut>
               <SignInButton mode="redirect" forceRedirectUrl="/home">
-                <Button variant="ghost" size="sm">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(!solid && "bg-background/50 backdrop-blur-sm")}
+                >
                   Sign in
                 </Button>
               </SignInButton>

@@ -51,7 +51,7 @@ export function BottomNav() {
         <SignedOut>
           <SignInButton mode="redirect" forceRedirectUrl="/home">
             <button
-              className="flex flex-1 flex-col items-center justify-center gap-1 text-muted-foreground"
+              className="flex flex-1 flex-col items-center justify-center gap-1 text-primary"
               aria-label="Sign in"
             >
               <UserRound className="size-5" />
