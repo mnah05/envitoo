@@ -3,25 +3,21 @@ import { Calendar, MapPin, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCardDate, formatCardTime, formatPrice } from "@/lib/format";
 import { type Event } from "@/lib/api";
-import { CategoryPill } from "./CategoryPill";
 
 export function EventCard({ event, index = 0 }: { event: Event; index?: number }) {
   const href = `/e/${event.slug}`;
   return (
     <Link
       to={href}
-      className="group flex flex-col overflow-hidden rounded-2xl border bg-card transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex flex-col overflow-hidden rounded-xl border bg-card transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       style={{ animationDelay: `${index * 40}ms` }}
     >
       <EventCover event={event} />
       <div className="flex flex-1 flex-col gap-2 p-4">
-        <div className="flex items-center gap-2">
-          {event.category && <CategoryPill category={event.category} />}
-          <span className="text-xs font-medium text-muted-foreground">
-            {formatCardDate(event.starts_at)}
-          </span>
-        </div>
-        <h3 className="line-clamp-2 text-base font-semibold leading-snug text-foreground group-hover:text-primary">
+        <span className="text-xs font-medium text-muted-foreground">
+          {formatCardDate(event.starts_at)}
+        </span>
+        <h3 className="line-clamp-2 text-base font-medium leading-snug text-foreground group-hover:text-primary">
           {event.title}
         </h3>
         <div className="mt-auto flex items-center gap-1.5 pt-2 text-sm text-muted-foreground">

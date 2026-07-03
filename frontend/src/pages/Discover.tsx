@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { PageContainer } from "@/components/domain/Layout";
 import { EventCard } from "@/components/domain/EventCard";
 import { EventCardSkeleton } from "@/components/domain/EventCardSkeleton";
@@ -10,6 +12,9 @@ import { CATEGORIES, CATEGORY_LABELS, type Event } from "@/lib/api";
 const PAGE_SIZE = 100;
 
 export function Discover() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedCategory = searchParams.get("category");
+
   const nowIso = useMemo(() => new Date().toISOString(), []);
 
   const { data, isLoading, isError, refetch } = usePublicEvents({
@@ -19,7 +24,18 @@ export function Discover() {
 
   const allEvents = data?.events ?? [];
 
-  // Group non-full events by category
+  const published = useMemo(
+    () =>
+      allEvents.filter(
+        (e) =>
+          e.status === "published" &&
+          e.registration_count < e.capacity &&
+          (!selectedCategory || (e.category ?? "other") === selectedCategory),
+      ),
+    [allEvents, selectedCategory],
+  );
+
+  // Group non-full published events by category
   const grouped = useMemo(() => {
     const map = new Map<string, typeof allEvents>();
     for (const e of allEvents) {
@@ -39,22 +55,74 @@ export function Discover() {
     document.title = "Discover — EnviToo";
   }, []);
 
+  function clearCategory() {
+    setSearchParams((prev) => {
+      prev.delete("category");
+      return prev;
+    });
+  }
+
   return (
     <div className="pt-16">
-      {/* Hero */}
-      <div className="border-b bg-background">
-        <PageContainer className="py-10">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Discover events
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Find your next experience — from tech talks to fitness meetups.
-          </p>
-        </PageContainer>
-      </div>
+      {/* Header */}
+      <PageContainer className="py-14 sm:py-20">
+        <h1 className="display-hero text-balance text-4xl tracking-tight sm:text-5xl">
+          Discover events
+        </h1>
+        <p className="mt-3 text-muted-foreground">
+          Browse what's happening — find your next experience.
+        </p>
+      </PageContainer>
+
+      {/* Browse by category */}
+      <PageContainer className="pb-6">
+        <h2 className="label-muted mb-4">Browse by category</h2>
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-4">
+          {CATEGORIES.map((c) => {
+            const isActive = selectedCategory === c;
+            return (
+              <Link
+                key={c}
+                to={`/discover?category=${c}`}
+                className="group flex min-w-[14rem] flex-shrink-0 items-center justify-between gap-2 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40 sm:min-w-0"
+              >
+                <div>
+                  <p className="text-sm font-medium">{CATEGORY_LABELS[c]}</p>
+                  <p className="text-xs text-muted-foreground">Explore</p>
+                </div>
+                <ArrowRight
+                  className={
+                    "size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" +
+                    (isActive ? " text-primary" : "")
+                  }
+                />
+              </Link>
+            );
+          })}
+        </div>
+      </PageContainer>
 
       {/* Content */}
-      <PageContainer className="pb-20">
+      <PageContainer className="pb-28 sm:pb-20">
+        {selectedCategory && (
+          <div className="mb-8 flex items-center justify-between gap-3">
+            <p className="text-muted-foreground">
+              Showing{" "}
+              <span className="font-medium text-foreground">
+                {CATEGORY_LABELS[selectedCategory as keyof typeof CATEGORY_LABELS] ?? selectedCategory}
+              </span>{" "}
+              events
+            </p>
+            <button
+              type="button"
+              onClick={clearCategory}
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              All categories →
+            </button>
+          </div>
+        )}
+
         {isError ? (
           <Empty className="min-h-[40vh] border">
             <EmptyTitle>Couldn't load events</EmptyTitle>
@@ -66,11 +134,29 @@ export function Discover() {
             </Button>
           </Empty>
         ) : isLoading ? (
-          <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <EventCardSkeleton key={i} />
             ))}
           </div>
+        ) : selectedCategory ? (
+          published.length > 0 ? (
+            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {published.map((event, i) => (
+                <EventCard key={event.id} event={event} index={i} />
+              ))}
+            </div>
+          ) : (
+            <Empty className="min-h-[40vh] border">
+              <EmptyTitle>No events in this category</EmptyTitle>
+              <EmptyDescription>
+                Check back soon — new events are being added every day.
+              </EmptyDescription>
+              <Button variant="outline" onClick={clearCategory}>
+                View all categories
+              </Button>
+            </Empty>
+          )
         ) : activeCategories.length === 0 ? (
           <Empty className="min-h-[40vh] border">
             <EmptyTitle>No events yet</EmptyTitle>

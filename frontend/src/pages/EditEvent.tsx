@@ -5,9 +5,7 @@ import {
   Calendar,
   Globe,
   MapPin,
-  Pencil,
   ShieldAlert,
-  Sparkles,
   Ticket,
   Users,
 } from "lucide-react";
@@ -48,6 +46,7 @@ interface FormState {
   ends_at: string;
   capacity: string;
   requires_approval: boolean;
+  visibility: "public" | "unlisted";
   cover_image_url: string;
   is_virtual: boolean;
   meeting_url: string;
@@ -82,6 +81,7 @@ export function EditEvent() {
         ends_at: isoToLocalInput(event.ends_at),
         capacity: String(event.capacity),
         requires_approval: event.requires_approval,
+        visibility: event.visibility ?? "public",
         cover_image_url: event.cover_image_url ?? "",
         is_virtual: event.is_virtual,
         meeting_url: event.meeting_url ?? "",
@@ -148,6 +148,9 @@ export function EditEvent() {
       if (form.capacity) payload.capacity = Math.round(cap);
       payload.requires_approval = form.requires_approval;
       payload.category = (form.category || undefined) as UpdateEventValues["category"];
+      if (form.visibility !== event.visibility) {
+        payload.visibility = form.visibility;
+      }
     }
 
     const parsed = UpdateEventInput.safeParse(payload);
@@ -212,11 +215,6 @@ export function EditEvent() {
 
   return (
     <div className="relative min-h-screen pt-16">
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-yellow-950/20 via-background to-background" />
-        <div className="absolute -top-32 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-yellow-500/8 blur-3xl" />
-      </div>
-
       <PageContainer width="narrow" className="py-10 sm:py-14">
         <Button
           asChild
@@ -230,16 +228,10 @@ export function EditEvent() {
           </Link>
         </Button>
 
-        <div className="mb-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <Pencil className="size-3.5 text-primary" />
-            Edit event
-          </span>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-            Update your <span className="text-gradient-gold">event</span>
-          </h1>
+        <div className="mb-10">
+          <h1 className="display-hero text-3xl tracking-tight sm:text-4xl">Update event</h1>
           <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-            Fine-tune details, location, and settings for your event.
+            Fine-tune details, location, and settings.
           </p>
         </div>
 
@@ -257,20 +249,20 @@ export function EditEvent() {
         <form onSubmit={onSubmit} className="space-y-8">
           {/* Event title (read-only) */}
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <p className="label-muted mb-2">
               Event name
             </p>
             <p className="text-2xl font-semibold tracking-tight sm:text-3xl">{event.title}</p>
           </div>
 
           {/* Meta card */}
-          <div className="divide-y divide-border/80 overflow-hidden rounded-2xl border border-border bg-card/50 shadow-sm shadow-primary/5">
+          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
             {isOrganizer && (
               <div className="flex items-start gap-4 px-4 py-4">
                 <Calendar className="mt-2.5 size-5 shrink-0 text-primary/80" />
                 <div className="grid flex-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label htmlFor="starts_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <label htmlFor="starts_at" className="label-muted mb-1 block">
                       Start
                     </label>
                     <Input
@@ -283,7 +275,7 @@ export function EditEvent() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="ends_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <label htmlFor="ends_at" className="label-muted mb-1 block">
                       End
                     </label>
                     <Input
@@ -428,58 +420,26 @@ export function EditEvent() {
                 </div>
               </>
             )}
-          </div>
 
           {/* Description */}
-          <div>
-            <label htmlFor="description" className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Description
-            </label>
-            <Textarea
-              id="description"
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="Tell people what to expect…"
-              rows={5}
-              className="resize-none rounded-xl border-border/80 bg-card/40 text-base shadow-none focus-visible:border-primary/40 focus-visible:ring-primary/20"
-            />
-          </div>
-
-          {/* Category — organizer only */}
-          {isOrganizer && (
-            <div>
-              <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                <Sparkles className="size-3.5 text-primary" />
-                Category
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => set("category", form.category === c ? "" : c)}
-                    className={cn(
-                      "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-                      form.category === c
-                        ? "border-primary/50 bg-primary/15 text-primary shadow-sm shadow-primary/10"
-                        : "border-border text-muted-foreground hover:border-primary/30 hover:bg-card/50 hover:text-foreground",
-                    )}
-                  >
-                    {CATEGORY_LABELS[c]}
-                  </button>
-                ))}
-              </div>
+            <div className="px-4 py-4">
+              <label htmlFor="description" className="label-muted mb-2 block">
+                Description
+              </label>
+              <Textarea
+                id="description"
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+                placeholder="Tell people what to expect…"
+                rows={5}
+                className="resize-none rounded-xl border-border bg-background text-base shadow-none focus-visible:border-primary/40 focus-visible:ring-primary/20"
+              />
             </div>
-          )}
 
-          {/* Cover URL + settings */}
-          <div className="space-y-4 rounded-2xl border border-border bg-card/50 p-4 shadow-sm shadow-primary/5">
-            <div>
-              <label
-                htmlFor="cover_image_url"
-                className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground"
-              >
-                Cover image URL <span className="normal-case tracking-normal text-muted-foreground/70">(optional)</span>
+            {/* Cover image URL */}
+            <div className="px-4 py-4">
+              <label htmlFor="cover_image_url" className="label-muted mb-1.5 block">
+                Cover image URL <span className="text-muted-foreground/70">(optional)</span>
               </label>
               <Input
                 id="cover_image_url"
@@ -496,7 +456,7 @@ export function EditEvent() {
             </div>
 
             {isOrganizer && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4 px-4 py-4">
                 <div>
                   <p className="text-sm font-medium">Require approval to register</p>
                   <p className="text-xs text-muted-foreground">Review guests before they join</p>
@@ -507,26 +467,71 @@ export function EditEvent() {
                 />
               </div>
             )}
+
+            {isOrganizer && (
+              <div className="flex items-center justify-between gap-4 px-4 py-4">
+                <div>
+                  <p className="text-sm font-medium">List on Discover page</p>
+                  <p className="text-xs text-muted-foreground">
+                    Unlisted events are only accessible via direct link
+                  </p>
+                </div>
+                <Switch
+                  checked={form.visibility === "public"}
+                  onCheckedChange={(v) => set("visibility", v ? "public" : "unlisted")}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => navigate(-1)}
-              className="order-2 sm:order-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="lg"
-              disabled={updateMut.isPending}
-              className="order-1 w-full shadow-sm shadow-primary/20 transition-shadow hover:shadow-md hover:shadow-primary/30 sm:order-2 sm:w-auto sm:min-w-[10rem]"
-            >
-              {updateMut.isPending && <Spinner data-icon="inline-start" />}
-              Save changes
-            </Button>
+          {/* Category — organizer only */}
+          {isOrganizer && (
+            <div>
+              <p className="label-muted mb-3">Category</p>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => set("category", form.category === c ? "" : c)}
+                    className={cn(
+                      "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                      form.category === c
+                        ? "border-primary/50 bg-primary/15 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                    )}
+                  >
+                    {CATEGORY_LABELS[c]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Spacer so sticky footer / bottom nav doesn't cover content */}
+          <div className="h-32 sm:h-24" aria-hidden />
+
+          {/* Sticky action footer (inside form so submit associates natively) */}
+          <div className="fixed inset-x-0 bottom-16 z-30 border-t bg-background/90 backdrop-blur-md sm:bottom-0 sm:pb-[env(safe-area-inset-bottom)]">
+            <PageContainer width="narrow" className="flex items-center justify-between gap-3 py-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => navigate(-1)}
+                className="text-muted-foreground hover:text-foreground sm:hidden"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={updateMut.isPending}
+                className="ml-auto rounded-full px-6 sm:min-w-[10rem]"
+              >
+                {updateMut.isPending && <Spinner data-icon="inline-start" />}
+                Save changes
+              </Button>
+            </PageContainer>
           </div>
         </form>
       </PageContainer>

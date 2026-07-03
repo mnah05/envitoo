@@ -17,15 +17,7 @@ export function Footer() {
           <Link to="/create" className="hover:text-foreground">
             Create event
           </Link>
-          <a
-            href="https://github.com/mnah05/envitoo"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-foreground"
-          >
-            GitHub
-          </a>
-        </nav>
+          </nav>
         <p className="text-sm text-muted-foreground">
           © {new Date().getFullYear()} EnviToo
         </p>

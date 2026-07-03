@@ -43,6 +43,7 @@ interface FormState {
   ends_at: string;
   capacity: string;
   requires_approval: boolean;
+  visibility: "public" | "unlisted";
   cover_image_url: string;
   is_virtual: boolean;
   meeting_url: string;
@@ -65,6 +66,7 @@ function createInitialState(): FormState {
     ends_at,
     capacity: "50",
     requires_approval: false,
+    visibility: "public",
     cover_image_url: "",
     is_virtual: false,
     meeting_url: "",
@@ -150,6 +152,7 @@ export function CreateEvent() {
       lat: !form.is_virtual && location ? location.lat : undefined,
       lng: !form.is_virtual && location ? location.lng : undefined,
       category: (form.category || undefined) as CreateEventValues["category"],
+      visibility: form.visibility === "unlisted" ? "unlisted" : undefined,
     };
 
     const parsed = CreateEventInput.safeParse(payload);
@@ -181,11 +184,6 @@ export function CreateEvent() {
 
   return (
     <div className="relative min-h-screen pt-16">
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-yellow-950/20 via-background to-background" />
-        <div className="absolute -top-32 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-yellow-500/8 blur-3xl" />
-      </div>
-
       <PageContainer width="narrow" className="py-10 sm:py-14">
         <Button
           type="button"
@@ -198,23 +196,17 @@ export function CreateEvent() {
           Back
         </Button>
 
-        <div className="mb-8">
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-            <Sparkles className="size-3.5 text-primary" />
-            New event
-          </span>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-            Create an <span className="text-gradient-gold">event</span>
-          </h1>
+        <div className="mb-10">
+          <h1 className="display-hero text-3xl tracking-tight sm:text-4xl">Create event</h1>
           <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-            Set the basics — you can add a cover image and fine-tune details later.
+            Set the basics — you can fine-tune details later.
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-8">
           {/* Title */}
           <div>
-            <label htmlFor="title" className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <label htmlFor="title" className="label-muted mb-2 block">
               Event name
             </label>
             <input
@@ -234,15 +226,15 @@ export function CreateEvent() {
           </div>
 
           {/* Meta rows */}
-          <div className="divide-y divide-border/80 overflow-hidden rounded-2xl border border-border bg-card/50 shadow-sm shadow-primary/5">
+          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
             {/* Date & time */}
             <div className="flex items-start gap-4 px-4 py-4">
               <Calendar className="mt-2.5 size-5 shrink-0 text-primary/80" />
               <div className="grid flex-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="starts_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Start
-                  </label>
+<label htmlFor="starts_at" className="label-muted mb-1 block">
+                      Start
+                    </label>
                   <DateTimePicker
                     id="starts_at"
                     value={form.starts_at}
@@ -255,9 +247,9 @@ export function CreateEvent() {
                   )}
                 </div>
                 <div>
-                  <label htmlFor="ends_at" className="mb-1 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    End
-                  </label>
+<label htmlFor="ends_at" className="label-muted mb-1 block">
+                      End
+                    </label>
                   <DateTimePicker
                     id="ends_at"
                     value={form.ends_at}
@@ -384,53 +376,26 @@ export function CreateEvent() {
                 <p className="text-xs text-destructive">{fieldErrors.capacity}</p>
               )}
             </div>
-          </div>
 
-          {/* Description */}
-          <div>
-            <label htmlFor="description" className="mb-2 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Description
-            </label>
-            <Textarea
-              id="description"
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="Tell people what to expect…"
-              rows={5}
-              className="resize-none rounded-xl border-border/80 bg-card/40 text-base shadow-none focus-visible:border-primary/40 focus-visible:ring-primary/20"
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <p className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <Sparkles className="size-3.5 text-primary" />
-              Category
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => set("category", form.category === c ? "" : c)}
-                  className={cn(
-                    "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-                    form.category === c
-                      ? "border-primary/50 bg-primary/15 text-primary shadow-sm shadow-primary/10"
-                      : "border-border text-muted-foreground hover:border-primary/30 hover:bg-card/50 hover:text-foreground",
-                  )}
-                >
-                  {CATEGORY_LABELS[c]}
-                </button>
-              ))}
+            {/* Description */}
+            <div className="px-4 py-4">
+              <label htmlFor="description" className="label-muted mb-2 block">
+                Description
+              </label>
+              <Textarea
+                id="description"
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+                placeholder="Tell people what to expect…"
+                rows={5}
+                className="resize-none rounded-xl border-border bg-background text-base shadow-none focus-visible:border-primary/40 focus-visible:ring-primary/20"
+              />
             </div>
-          </div>
 
-          {/* Cover URL + settings */}
-          <div className="space-y-4 rounded-2xl border border-border bg-card/50 p-4 shadow-sm shadow-primary/5">
-            <div>
-              <label htmlFor="cover_image_url" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Cover image URL <span className="normal-case tracking-normal text-muted-foreground/70">(optional)</span>
+            {/* Cover image URL */}
+            <div className="px-4 py-4">
+              <label htmlFor="cover_image_url" className="label-muted mb-1.5 block">
+                Cover image URL <span className="text-muted-foreground/70">(optional)</span>
               </label>
               <Input
                 id="cover_image_url"
@@ -446,7 +411,8 @@ export function CreateEvent() {
               )}
             </div>
 
-            <div className="flex items-center justify-between">
+            {/* Require approval */}
+            <div className="flex items-center justify-between gap-4 px-4 py-4">
               <div>
                 <p className="text-sm font-medium">Require approval to register</p>
                 <p className="text-xs text-muted-foreground">Review guests before they join</p>
@@ -456,27 +422,68 @@ export function CreateEvent() {
                 onCheckedChange={(v) => set("requires_approval", v)}
               />
             </div>
+
+            {/* Visibility */}
+            <div className="flex items-center justify-between gap-4 px-4 py-4">
+              <div>
+                <p className="text-sm font-medium">List on Discover page</p>
+                <p className="text-xs text-muted-foreground">
+                  Unlisted events are only accessible via direct link
+                </p>
+              </div>
+              <Switch
+                checked={form.visibility === "public"}
+                onCheckedChange={(v) => set("visibility", v ? "public" : "unlisted")}
+              />
+            </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => navigate(-1)}
-              className="order-2 sm:order-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="lg"
-              disabled={createMut.isPending}
-              className="order-1 w-full shadow-sm shadow-primary/20 transition-shadow hover:shadow-md hover:shadow-primary/30 sm:order-2 sm:w-auto sm:min-w-[10rem]"
-            >
-              {createMut.isPending && <Spinner data-icon="inline-start" />}
-              Create event
-            </Button>
+          {/* Category */}
+          <div>
+            <p className="label-muted mb-3">Category</p>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => set("category", form.category === c ? "" : c)}
+                  className={cn(
+                    "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                    form.category === c
+                      ? "border-primary/50 bg-primary/15 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                  )}
+                >
+                  {CATEGORY_LABELS[c]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Spacer so sticky footer / bottom nav doesn't cover content */}
+          <div className="h-32 sm:h-24" aria-hidden />
+
+          {/* Sticky action footer (inside form so submit associates natively) */}
+          <div className="fixed inset-x-0 bottom-16 z-30 border-t bg-background/90 backdrop-blur-md sm:bottom-0 sm:pb-[env(safe-area-inset-bottom)]">
+            <PageContainer width="narrow" className="flex items-center justify-between gap-3 py-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => navigate(-1)}
+                className="text-muted-foreground hover:text-foreground sm:hidden"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={createMut.isPending}
+                className="ml-auto rounded-full px-6 sm:min-w-[10rem]"
+              >
+                {createMut.isPending && <Spinner data-icon="inline-start" />}
+                Create event
+              </Button>
+            </PageContainer>
           </div>
         </form>
       </PageContainer>
@@ -502,7 +509,7 @@ export function CreateEvent() {
 
           {eventUrl && (
             <div className="space-y-3">
-              <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <label className="label-muted">
                 Shareable link
               </label>
               <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2.5">

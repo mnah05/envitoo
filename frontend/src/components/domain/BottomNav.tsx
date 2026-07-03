@@ -33,7 +33,7 @@ export function BottomNav() {
             <>
               <span
                 className={cn(
-                  "grid size-11 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95",
+                  "grid size-11 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95",
                   isActive && "ring-2 ring-primary/40 ring-offset-2 ring-offset-background",
                 )}
               >
