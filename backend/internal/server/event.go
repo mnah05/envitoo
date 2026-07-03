@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/dto"
 	"github.com/mnah05/envitoo/internal/middleware"
 	"github.com/mnah05/envitoo/internal/service"
@@ -33,13 +34,15 @@ func (s *Server) CreateEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	event, err := s.events.Create(c.Request().Context(), u.ID, req)
+	ctx := c.Request().Context()
+	event, err := s.events.Create(ctx, u.ID, req)
 	if err != nil {
-		log.ErrorContext(c.Request().Context(), "create event", "organizer_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "create event", "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
-	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	resp, err := s.events.EventResponseWithCount(ctx, event)
 	if err != nil {
 		log.ErrorContext(c.Request().Context(), "create event response", "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
@@ -47,7 +50,6 @@ func (s *Server) CreateEvent(c echo.Context) error {
 
 	return c.JSON(http.StatusCreated, resp)
 }
-
 // GetEvent handles GET /api/events/:id.
 func (s *Server) GetEvent(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
@@ -57,18 +59,19 @@ func (s *Server) GetEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid event id")
 	}
 
-	event, err := s.events.GetViewableByID(c.Request().Context(), id)
+	ctx := c.Request().Context()
+	resp, err := cache.GetJSON(ctx, s.cache, "GET:/api/events/"+id.String(), cache.EventTTL, func(ctx context.Context) (dto.EventResponse, error) {
+		event, err := s.events.GetViewableByID(ctx, id)
+		if err != nil {
+			return dto.EventResponse{}, err
+		}
+		return s.events.EventResponseWithCount(ctx, event)
+	})
 	if err != nil {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
-		log.ErrorContext(c.Request().Context(), "get event", "id", id, "error", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-
-	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
-	if err != nil {
-		log.ErrorContext(c.Request().Context(), "get event registration count", "id", id, "error", err)
+		log.ErrorContext(ctx, "get event", "id", id, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
@@ -84,18 +87,19 @@ func (s *Server) GetEventBySlug(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "slug is required")
 	}
 
-	event, err := s.events.GetViewableBySlug(c.Request().Context(), slug)
+	ctx := c.Request().Context()
+	resp, err := cache.GetJSON(ctx, s.cache, "GET:/api/events/slug/"+slug, cache.EventTTL, func(ctx context.Context) (dto.EventResponse, error) {
+		event, err := s.events.GetViewableBySlug(ctx, slug)
+		if err != nil {
+			return dto.EventResponse{}, err
+		}
+		return s.events.EventResponseWithCount(ctx, event)
+	})
 	if err != nil {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
-		log.ErrorContext(c.Request().Context(), "get event by slug", "slug", slug, "error", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-
-	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
-	if err != nil {
-		log.ErrorContext(c.Request().Context(), "get event by slug registration count", "slug", slug, "error", err)
+		log.ErrorContext(ctx, "get event by slug", "slug", slug, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
@@ -121,26 +125,40 @@ func (s *Server) ListPublicEvents(c echo.Context) error {
 
 	startsAfter := parseTime(c.QueryParam("starts_after"))
 	startsBefore := parseTime(c.QueryParam("starts_before"))
+	category := c.QueryParam("category")
+	search := c.QueryParam("q")
+	ctx := c.Request().Context()
 
-	events, total, err := s.events.ListPublic(c.Request().Context(), service.PublicListParams{
+	listParams := service.PublicListParams{
 		Limit:        limit,
 		Offset:       offset,
-		Category:     c.QueryParam("category"),
+		Category:     category,
 		VirtualMode:  virtualMode,
-		Search:       c.QueryParam("q"),
+		Search:       search,
 		StartsAfter:  startsAfter,
 		StartsBefore: startsBefore,
+	}
+	key := "GET:/api/events"
+	if q := c.Request().URL.RawQuery; q != "" {
+		key += "?" + q
+	}
+	resp, err := cache.GetJSON(ctx, s.cache, key, cache.PublicListTTL, func(ctx context.Context) (dto.EventListResponse, error) {
+		events, total, err := s.events.ListPublic(ctx, listParams)
+		if err != nil {
+			return dto.EventListResponse{}, err
+		}
+		return dto.NewEventListResponse(events, limit, offset, total), nil
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			log.DebugContext(c.Request().Context(), "client disconnected", "error", err)
+			log.DebugContext(ctx, "client disconnected", "error", err)
 			return nil
 		}
-		log.ErrorContext(c.Request().Context(), "list public events", "error", err)
+		log.ErrorContext(ctx, "list public events", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewEventListResponse(events, limit, offset, total))
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ListMyEvents handles GET /api/me/events.
@@ -196,7 +214,9 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	event, err := s.events.Update(c.Request().Context(), id, u.ID, req)
+	ctx := c.Request().Context()
+	oldSlug := s.lookupEventSlug(ctx, id)
+	event, err := s.events.Update(ctx, id, u.ID, req)
 	if err != nil {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
@@ -207,11 +227,20 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 		if errors.Is(err, service.ErrInvalidEvent) {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
-		log.ErrorContext(c.Request().Context(), "update event", "id", id, "organizer_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "update event", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+	keys := []string{"GET:/api/events/" + id.String()}
+	if oldSlug != "" {
+		keys = append(keys, "GET:/api/events/slug/"+oldSlug)
+	}
+	if event.Slug != "" {
+		keys = append(keys, "GET:/api/events/slug/"+event.Slug)
+	}
+	s.cache.Delete(ctx, keys...)
+	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
-	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	resp, err := s.events.EventResponseWithCount(ctx, event)
 	if err != nil {
 		log.ErrorContext(c.Request().Context(), "update event response", "id", id, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
@@ -234,16 +263,19 @@ func (s *Server) CancelEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	event, err := s.events.Cancel(c.Request().Context(), id, u.ID)
+	ctx := c.Request().Context()
+	event, err := s.events.Cancel(ctx, id, u.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
-		log.ErrorContext(c.Request().Context(), "cancel event", "id", id, "organizer_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "cancel event", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+	s.cache.Delete(ctx, "GET:/api/events/"+id.String(), "GET:/api/events/slug/"+event.Slug)
+	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
-	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	resp, err := s.events.EventResponseWithCount(ctx, event)
 	if err != nil {
 		log.ErrorContext(c.Request().Context(), "cancel event response", "id", id, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")

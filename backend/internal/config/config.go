@@ -19,6 +19,7 @@ type Config struct {
 	DBHealthCheckPeriod  time.Duration
 	DisablePreparedStmts bool
 	ClerkSecretKey       string
+	RedisURL             string
 }
 
 // Load reads environment variables prefixed with DB_ and CLERK_ into a Config.
@@ -26,7 +27,7 @@ func Load() (Config, error) {
 	k := koanf.New(".")
 
 	err := k.Load(env.Provider("", ".", func(key string) string {
-		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") {
+		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") || key == "REDIS_URL" {
 			return key
 		}
 		return ""
@@ -53,6 +54,7 @@ func Load() (Config, error) {
 		DBHealthCheckPeriod:  durationOr(k, "DB_HEALTH_CHECK_PERIOD", time.Minute),
 		DisablePreparedStmts: k.Bool("DB_DISABLE_PREPARED_STATEMENTS"),
 		ClerkSecretKey:       clerkSecretKey,
+		RedisURL:             k.String("REDIS_URL"),
 	}, nil
 }
 

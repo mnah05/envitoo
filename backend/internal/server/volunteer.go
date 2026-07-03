@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/dto"
 	"github.com/mnah05/envitoo/internal/middleware"
 	"github.com/mnah05/envitoo/internal/service"
@@ -25,16 +27,23 @@ func (s *Server) GetVolunteerSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid event id")
 	}
 
-	settings, err := s.volunteers.GetSettings(c.Request().Context(), eventID)
+	ctx := c.Request().Context()
+	resp, err := cache.GetJSON(ctx, s.cache, "GET:/api/events/"+eventID.String()+"/volunteer/settings", cache.VolunteerTTL, func(ctx context.Context) (dto.VolunteerSettingsResponse, error) {
+		settings, err := s.volunteers.GetSettings(ctx, eventID)
+		if err != nil {
+			return dto.VolunteerSettingsResponse{}, err
+		}
+		return dto.NewVolunteerSettingsResponse(settings), nil
+	})
 	if err != nil {
 		if errors.Is(err, service.ErrVolunteerSettingsNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "volunteer settings not found")
 		}
-		log.ErrorContext(c.Request().Context(), "get volunteer settings", "event_id", eventID, "error", err)
+		log.ErrorContext(ctx, "get volunteer settings", "event_id", eventID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewVolunteerSettingsResponse(settings))
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ListVolunteerRoles handles GET /api/events/:id/volunteer/roles.
@@ -46,16 +55,23 @@ func (s *Server) ListVolunteerRoles(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid event id")
 	}
 
-	roles, err := s.volunteers.ListRolesByEvent(c.Request().Context(), eventID)
+	ctx := c.Request().Context()
+	resp, err := cache.GetJSON(ctx, s.cache, "GET:/api/events/"+eventID.String()+"/volunteer/roles", cache.VolunteerTTL, func(ctx context.Context) ([]dto.VolunteerRoleResponse, error) {
+		roles, err := s.volunteers.ListRolesByEvent(ctx, eventID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]dto.VolunteerRoleResponse, 0, len(roles))
+		for _, r := range roles {
+			out = append(out, dto.NewVolunteerRoleResponse(r))
+		}
+		return out, nil
+	})
 	if err != nil {
-		log.ErrorContext(c.Request().Context(), "list volunteer roles", "event_id", eventID, "error", err)
+		log.ErrorContext(ctx, "list volunteer roles", "event_id", eventID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	resp := make([]dto.VolunteerRoleResponse, 0, len(roles))
-	for _, r := range roles {
-		resp = append(resp, dto.NewVolunteerRoleResponse(r))
-	}
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -236,14 +252,16 @@ func (s *Server) UpsertVolunteerSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	settings, err := s.volunteers.UpsertSettings(c.Request().Context(), eventID, u.ID, req)
+	ctx := c.Request().Context()
+	settings, err := s.volunteers.UpsertSettings(ctx, eventID, u.ID, req)
 	if err != nil {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
-		log.ErrorContext(c.Request().Context(), "upsert volunteer settings", "event_id", eventID, "user_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "upsert volunteer settings", "event_id", eventID, "user_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+	s.cache.Delete(ctx, "GET:/api/events/"+eventID.String()+"/volunteer/settings")
 
 	return c.JSON(http.StatusOK, dto.NewVolunteerSettingsResponse(settings))
 }
@@ -270,7 +288,8 @@ func (s *Server) CreateVolunteerRole(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	role, err := s.volunteers.CreateRole(c.Request().Context(), eventID, u.ID, req)
+	ctx := c.Request().Context()
+	role, err := s.volunteers.CreateRole(ctx, eventID, u.ID, req)
 	if err != nil {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
@@ -278,9 +297,10 @@ func (s *Server) CreateVolunteerRole(c echo.Context) error {
 		if errors.Is(err, service.ErrVolunteerRoleDuplicate) {
 			return echo.NewHTTPError(http.StatusConflict, "role name already exists")
 		}
-		log.ErrorContext(c.Request().Context(), "create volunteer role", "event_id", eventID, "user_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "create volunteer role", "event_id", eventID, "user_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+	s.cache.Delete(ctx, "GET:/api/events/"+eventID.String()+"/volunteer/roles")
 
 	return c.JSON(http.StatusCreated, dto.NewVolunteerRoleResponse(role))
 }
@@ -304,7 +324,8 @@ func (s *Server) DeleteVolunteerRole(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	role, err := s.volunteers.DeleteRole(c.Request().Context(), eventID, roleID, u.ID)
+	ctx := c.Request().Context()
+	role, err := s.volunteers.DeleteRole(ctx, eventID, roleID, u.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrVolunteerRoleNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "role not found")
@@ -315,9 +336,10 @@ func (s *Server) DeleteVolunteerRole(c echo.Context) error {
 		if errors.Is(err, service.ErrVolunteerRoleInUse) {
 			return echo.NewHTTPError(http.StatusConflict, "role has applications")
 		}
-		log.ErrorContext(c.Request().Context(), "delete volunteer role", "event_id", eventID, "role_id", roleID, "user_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "delete volunteer role", "event_id", eventID, "role_id", roleID, "user_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+	s.cache.Delete(ctx, "GET:/api/events/"+eventID.String()+"/volunteer/roles")
 
 	return c.JSON(http.StatusOK, dto.NewVolunteerRoleResponse(role))
 }

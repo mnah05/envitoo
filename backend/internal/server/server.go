@@ -10,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 
+	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
 	"github.com/mnah05/envitoo/internal/middleware"
@@ -20,6 +21,7 @@ import (
 type Server struct {
 	pool          *pgxpool.Pool
 	queries       *db.Queries
+	cache         *cache.Store
 	log           *slog.Logger
 	validate      *validator.Validate
 	events        *service.EventService
@@ -28,12 +30,13 @@ type Server struct {
 }
 
 // New creates a Server with all services initialized.
-func New(pool *pgxpool.Pool, queries *db.Queries, log *slog.Logger) *Server {
+func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, log *slog.Logger) *Server {
 	validate := dto.NewValidator()
 	access := service.NewEventAccessService(queries)
 	return &Server{
 		pool:          pool,
 		queries:       queries,
+		cache:         c,
 		log:           log,
 		validate:      validate,
 		events:        service.NewEventService(pool, queries, access, log),
@@ -44,6 +47,7 @@ func New(pool *pgxpool.Pool, queries *db.Queries, log *slog.Logger) *Server {
 
 // Register wires all routes onto the given Echo instance.
 func (s *Server) Register(e *echo.Echo) {
+	e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustLoopback(true))
 	e.Use(echoMiddleware.Recover())
 	e.Use(echoMiddleware.RequestID())
 
@@ -58,6 +62,11 @@ func (s *Server) Register(e *echo.Echo) {
 		}
 	})
 
+	e.Use(echoMiddleware.BodyLimit("1MB"))
+	e.Use(echoMiddleware.TimeoutWithConfig(echoMiddleware.TimeoutConfig{
+		Timeout: 30 * time.Second,
+	}))
+
 	e.Use(echoMiddleware.CORSWithConfig(echoMiddleware.CORSConfig{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPatch, http.MethodPost, http.MethodDelete, http.MethodOptions},
@@ -66,27 +75,26 @@ func (s *Server) Register(e *echo.Echo) {
 		AllowCredentials: false,
 	}))
 
-	e.Use(echoMiddleware.RateLimiter(echoMiddleware.NewRateLimiterMemoryStoreWithConfig(
-		echoMiddleware.RateLimiterMemoryStoreConfig{
-			Rate:      30,
-			Burst:     60,
-			ExpiresIn: 3 * time.Minute,
-		},
-	)))
-
 	e.GET("/healthz", s.Health)
-	protected := e.Group("/api", middleware.Auth(), middleware.LoadUser(s.pool, s.queries))
-	protected.GET("/me", s.Me)
+
+	public := e.Group("/api", middleware.PublicRateLimiter(middleware.DefaultPublicConfig))
 
 	// Public event discovery
-	e.GET("/api/events/slug/:slug", s.GetEventBySlug)
-	e.GET("/api/events/:id", s.GetEvent)
-	e.GET("/api/events", s.ListPublicEvents)
+	public.GET("/events/slug/:slug", s.GetEventBySlug)
+	public.GET("/events/:id", s.GetEvent)
+	public.GET("/events", s.ListPublicEvents)
 
 	// Public guest registration
-	e.POST("/api/events/:id/register/guest", s.CreateGuestRegistration)
-	e.GET("/api/guest-registrations", s.GetGuestRegistration)
-	e.DELETE("/api/guest-registrations", s.CancelGuestRegistration)
+	public.POST("/events/:id/register/guest", s.CreateGuestRegistration)
+	public.GET("/guest-registrations", s.GetGuestRegistration)
+	public.DELETE("/guest-registrations", s.CancelGuestRegistration)
+
+	// Public volunteer info
+	public.GET("/events/:id/volunteer/settings", s.GetVolunteerSettings)
+	public.GET("/events/:id/volunteer/roles", s.ListVolunteerRoles)
+
+	protected := e.Group("/api", middleware.Auth(), middleware.LoadUser(s.pool, s.queries, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(middleware.DefaultAuthConfig))
+	protected.GET("/me", s.Me)
 
 	// Host-only event management
 	protected.POST("/events", s.CreateEvent)
@@ -109,10 +117,6 @@ func (s *Server) Register(e *echo.Echo) {
 	protected.PATCH("/registrations/:id/status", s.UpdateRegistrationStatus)
 	protected.POST("/registrations/:id/check-in", s.CheckInAttendee)
 
-	// Public volunteer info
-	e.GET("/api/events/:id/volunteer/settings", s.GetVolunteerSettings)
-	e.GET("/api/events/:id/volunteer/roles", s.ListVolunteerRoles)
-
 	// Volunteer application routes (auth user)
 	protected.POST("/events/:id/volunteer/apply", s.CreateVolunteerApplication)
 	protected.GET("/me/event-staff", s.ListMyEventStaff)
@@ -131,8 +135,11 @@ func (s *Server) Register(e *echo.Echo) {
 	protected.POST("/volunteer-applications/:id/reject", s.RejectVolunteerApplication)
 }
 
-// Health handles GET /healthz.
+// Health handles GET /healthz. Requires ?pass=iamwhoiamngga.
 func (s *Server) Health(c echo.Context) error {
+	if c.QueryParam("pass") != "iamwhoiamngga" {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 

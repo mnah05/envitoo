@@ -59,9 +59,13 @@ func Auth() echo.MiddlewareFunc {
 // The logger is retrieved from the request context via slog.FromContext;
 // a logger-injecting middleware must run before this one.
 //
+// GuestRegistrationInvalidator is invoked after guest registrations are
+// linked or cancelled during auth. Used to invalidate affected cache keys.
+type GuestRegistrationInvalidator func(ctx context.Context, email string)
+
 // Auth must run before LoadUser so that SessionClaims are available in
 // the request context.
-func LoadUser(pool *pgxpool.Pool, queries *db.Queries) echo.MiddlewareFunc {
+func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestRegistrationInvalidator) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
@@ -75,7 +79,7 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries) echo.MiddlewareFunc {
 			localUser, err := queries.GetUserByAuthUserID(ctx, claims.Subject)
 			switch {
 			case err == nil:
-				linkGuestRegistrations(ctx, queries, log, localUser.ID, localUser.Email)
+				linkGuestRegistrations(ctx, queries, log, localUser.ID, localUser.Email, onGuestRegsChanged)
 				c.Set(userContextKey, &localUser)
 				return next(c)
 			case !errors.Is(err, pgx.ErrNoRows):
@@ -117,7 +121,7 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries) echo.MiddlewareFunc {
 				// Race loser: another request (or webhook) inserted the
 				// user first. Roll back (defer) and re-fetch the winning
 				// row; skip onboarding — the winner already did it.
-				return refetchAndContinue(ctx, c, queries, claims.Subject, log, next)
+				return refetchAndContinue(ctx, c, queries, claims.Subject, log, onGuestRegsChanged, next)
 			}
 			if err != nil {
 				log.ErrorContext(ctx, "create local user", "clerk_user_id", claims.Subject, "error", err)
@@ -177,6 +181,9 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries) echo.MiddlewareFunc {
 			if linked > 0 || cancelled > 0 {
 				log.InfoContext(ctx, "linked guest registrations on onboarding",
 					"user_id", created.ID, "linked", linked, "cancelled_superseded", cancelled)
+				if onGuestRegsChanged != nil {
+					onGuestRegsChanged(ctx, email)
+				}
 			}
 			log.InfoContext(ctx, "user onboarded", "user_id", created.ID, "calendar_slug", slug)
 
@@ -198,6 +205,7 @@ func refetchAndContinue(
 	queries *db.Queries,
 	authUserID string,
 	log *slog.Logger,
+	onGuestRegsChanged GuestRegistrationInvalidator,
 	next echo.HandlerFunc,
 ) error {
 	localUser, err := queries.GetUserByAuthUserID(ctx, authUserID)
@@ -205,7 +213,7 @@ func refetchAndContinue(
 		log.ErrorContext(ctx, "refetch local user after race", "clerk_user_id", authUserID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
-	linkGuestRegistrations(ctx, queries, log, localUser.ID, localUser.Email)
+	linkGuestRegistrations(ctx, queries, log, localUser.ID, localUser.Email, onGuestRegsChanged)
 	c.Set(userContextKey, &localUser)
 	return next(c)
 }
@@ -214,7 +222,7 @@ func refetchAndContinue(
 // guest rows superseded by an existing user registration for the same event.
 // Errors are logged but do not fail the request — linking is best-effort on
 // the returning-user hot path.
-func linkGuestRegistrations(ctx context.Context, queries *db.Queries, log *slog.Logger, userID uuid.UUID, email string) {
+func linkGuestRegistrations(ctx context.Context, queries *db.Queries, log *slog.Logger, userID uuid.UUID, email string, onGuestRegsChanged GuestRegistrationInvalidator) {
 	linked, cancelled, err := linkGuestRegistrationsTx(ctx, queries, userID, email)
 	if err != nil {
 		log.ErrorContext(ctx, "link guest registrations", "user_id", userID, "error", err)
@@ -223,6 +231,9 @@ func linkGuestRegistrations(ctx context.Context, queries *db.Queries, log *slog.
 	if linked > 0 || cancelled > 0 {
 		log.InfoContext(ctx, "linked guest registrations",
 			"user_id", userID, "linked", linked, "cancelled_superseded", cancelled)
+		if onGuestRegsChanged != nil {
+			onGuestRegsChanged(ctx, email)
+		}
 	}
 }
 

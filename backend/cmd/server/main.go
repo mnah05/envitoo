@@ -13,6 +13,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 
+	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/config"
 	"github.com/mnah05/envitoo/internal/database"
 	"github.com/mnah05/envitoo/internal/db"
@@ -53,10 +54,26 @@ func main() {
 		"min_conns", cfg.DBMinConns,
 	)
 
+	var appCache *cache.Store
+	if cfg.RedisURL != "" {
+		redis, closeRedis, err := cache.Open(ctx, cfg.RedisURL)
+		if err != nil {
+			log.Warn("redis unavailable, caching disabled", "error", err)
+		} else {
+			defer func() {
+				if err := closeRedis(); err != nil {
+					log.Error("failed to close redis", "error", err)
+				}
+			}()
+			appCache = cache.New(redis, log)
+			log.Info("redis cache active")
+		}
+	}
+
 	e := echo.New()
 	e.HideBanner = false
 	e.HidePort = false
-	server.New(database.Pool(), queries, log).Register(e)
+	server.New(database.Pool(), queries, appCache, log).Register(e)
 
 	serveErr := make(chan error, 1)
 	go func() {
