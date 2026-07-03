@@ -100,6 +100,11 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		event.MeetingUrl = nil
 	}
 
+	visibility := "public"
+	if req.Visibility != nil && *req.Visibility == "unlisted" {
+		visibility = "unlisted"
+	}
+
 	for attempt := 0; attempt < maxEventSlugAttempts; attempt++ {
 		slug, err := helper.GenerateEventSlug()
 		if err != nil {
@@ -107,14 +112,34 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		}
 		event.Slug = slug
 
-		created, err := s.queries.CreateEvent(ctx, event)
-		if err == nil {
-			return created, nil
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return db.Event{}, fmt.Errorf("begin tx: %w", err)
 		}
-		if err != pgx.ErrNoRows {
+
+		qtx := s.queries.WithTx(tx)
+		created, err := qtx.CreateEvent(ctx, event)
+		if err == pgx.ErrNoRows {
+			_ = tx.Rollback(ctx)
+			continue
+		}
+		if err != nil {
+			_ = tx.Rollback(ctx)
 			return db.Event{}, fmt.Errorf("create event: %w", err)
 		}
-		// Slug collision — UNIQUE(slug) caused ON CONFLICT DO NOTHING; try again.
+
+		if _, err := qtx.UpsertEventVisibility(ctx, db.UpsertEventVisibilityParams{
+			EventID:    created.ID,
+			Visibility: visibility,
+		}); err != nil {
+			_ = tx.Rollback(ctx)
+			return db.Event{}, fmt.Errorf("create event visibility: %w", err)
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return db.Event{}, fmt.Errorf("commit tx: %w", err)
+		}
+		return created, nil
 	}
 	return db.Event{}, fmt.Errorf("create event: failed to allocate unique slug after %d attempts", maxEventSlugAttempts)
 }
@@ -281,17 +306,9 @@ func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) 
 		return nil, 0, fmt.Errorf("count public events: %w", err)
 	}
 
-	// Fetch registration counts for all returned events
-	counts, err := s.fetchRegistrationCounts(ctx, events)
+	items, err := s.EventResponsesWithCounts(ctx, events)
 	if err != nil {
-		s.log.WarnContext(ctx, "failed to fetch registration counts", "error", err)
-	}
-
-	items := make([]dto.EventResponse, 0, len(events))
-	for _, e := range events {
-		resp := dto.NewEventResponse(e)
-		resp.RegistrationCount = counts[e.ID]
-		items = append(items, resp)
+		return nil, 0, fmt.Errorf("build event responses: %w", err)
 	}
 
 	return items, total, nil
@@ -339,16 +356,47 @@ func (s *EventService) fetchRegistrationCounts(ctx context.Context, events []db.
 	return counts, rows.Err()
 }
 
+func (s *EventService) fetchVisibilityMap(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil
+	}
+
+	rows, err := s.queries.ListEventVisibilityByIDs(ctx, eventIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list event visibility: %w", err)
+	}
+
+	visibility := make(map[uuid.UUID]string, len(eventIDs))
+	for _, id := range eventIDs {
+		visibility[id] = "public"
+	}
+	for _, row := range rows {
+		visibility[row.EventID] = row.Visibility
+	}
+	return visibility, nil
+}
+
 // EventResponsesWithCounts converts events to responses with active registration counts.
 func (s *EventService) EventResponsesWithCounts(ctx context.Context, events []db.Event) ([]dto.EventResponse, error) {
 	counts, err := s.fetchRegistrationCounts(ctx, events)
 	if err != nil {
 		return nil, fmt.Errorf("fetch registration counts: %w", err)
 	}
+
+	ids := make([]uuid.UUID, len(events))
+	for i, e := range events {
+		ids[i] = e.ID
+	}
+	visibility, err := s.fetchVisibilityMap(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]dto.EventResponse, 0, len(events))
 	for _, e := range events {
 		resp := dto.NewEventResponse(e)
 		resp.RegistrationCount = counts[e.ID]
+		resp.Visibility = visibility[e.ID]
 		items = append(items, resp)
 	}
 	return items, nil
@@ -516,6 +564,16 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		}
 		return db.Event{}, fmt.Errorf("update event: %w", err)
 	}
+
+	if req.Visibility != nil {
+		if _, err := s.queries.UpsertEventVisibility(ctx, db.UpsertEventVisibilityParams{
+			EventID:    id,
+			Visibility: *req.Visibility,
+		}); err != nil {
+			return db.Event{}, fmt.Errorf("update event visibility: %w", err)
+		}
+	}
+
 	return event, nil
 }
 

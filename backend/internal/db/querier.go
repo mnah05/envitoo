@@ -45,11 +45,13 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateVolunteerApplication(ctx context.Context, arg CreateVolunteerApplicationParams) (VolunteerApplication, error)
 	CreateVolunteerRole(ctx context.Context, arg CreateVolunteerRoleParams) (VolunteerRole, error)
+	DeleteEventVisibility(ctx context.Context, eventID uuid.UUID) error
 	DeleteVolunteerRole(ctx context.Context, arg DeleteVolunteerRoleParams) (VolunteerRole, error)
 	GetCalendarByUserID(ctx context.Context, userID uuid.UUID) (Calendar, error)
 	GetEventByID(ctx context.Context, id uuid.UUID) (Event, error)
 	GetEventByIDForUpdate(ctx context.Context, id uuid.UUID) (Event, error)
 	GetEventBySlug(ctx context.Context, slug string) (Event, error)
+	GetEventVisibility(ctx context.Context, eventID uuid.UUID) (EventVisibility, error)
 	GetPublishedEventByID(ctx context.Context, id uuid.UUID) (Event, error)
 	GetPublishedEventBySlug(ctx context.Context, slug string) (Event, error)
 	// Route 2: GET /api/guest-registrations?token=
@@ -75,6 +77,7 @@ type Querier interface {
 	LinkGuestRegistrations(ctx context.Context, arg LinkGuestRegistrationsParams) (int64, error)
 	// Route 8: GET /api/events/:id/registrations
 	ListEventRegistrations(ctx context.Context, arg ListEventRegistrationsParams) ([]ListEventRegistrationsRow, error)
+	ListEventVisibilityByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]EventVisibility, error)
 	ListEventVolunteerApplications(ctx context.Context, arg ListEventVolunteerApplicationsParams) ([]ListEventVolunteerApplicationsRow, error)
 	// Returns confirmed volunteers for an event. Authorization is enforced
 	// in SQL: the organizer or an approved volunteer admin may read.
@@ -96,6 +99,7 @@ type Querier interface {
 	UpdateEventStaffFields(ctx context.Context, arg UpdateEventStaffFieldsParams) (Event, error)
 	// Route 12: PATCH /api/registrations/:id/status
 	UpdateRegistrationStatus(ctx context.Context, arg UpdateRegistrationStatusParams) (Registration, error)
+	UpsertEventVisibility(ctx context.Context, arg UpsertEventVisibilityParams) (EventVisibility, error)
 	UpsertVolunteerSettings(ctx context.Context, arg UpsertVolunteerSettingsParams) (VolunteerSetting, error)
 }
 

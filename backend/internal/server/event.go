@@ -39,7 +39,13 @@ func (s *Server) CreateEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusCreated, dto.NewEventResponse(event))
+	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	if err != nil {
+		log.ErrorContext(c.Request().Context(), "create event response", "organizer_id", u.ID, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusCreated, resp)
 }
 
 // GetEvent handles GET /api/events/:id.
@@ -205,7 +211,13 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewEventResponse(event))
+	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	if err != nil {
+		log.ErrorContext(c.Request().Context(), "update event response", "id", id, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // CancelEvent handles DELETE /api/events/:id.
@@ -231,7 +243,13 @@ func (s *Server) CancelEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewEventResponse(event))
+	resp, err := s.events.EventResponseWithCount(c.Request().Context(), event)
+	if err != nil {
+		log.ErrorContext(c.Request().Context(), "cancel event response", "id", id, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // validationError converts a validator.ValidationErrors into a 400

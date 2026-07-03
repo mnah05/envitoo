@@ -49,6 +49,11 @@ type Event struct {
 	LocationAddress  *string
 }
 
+type EventVisibility struct {
+	EventID    uuid.UUID
+	Visibility string
+}
+
 type KanbanColumn struct {
 	ID        uuid.UUID
 	EventID   uuid.UUID

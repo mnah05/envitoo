@@ -61,6 +61,11 @@ func TestHasDisallowedStaffUpdateFields(t *testing.T) {
 			req:  dto.UpdateEventRequest{PriceInPaise: &price, Currency: &currency},
 			want: true,
 		},
+		{
+			name: "disallowed visibility",
+			req:  dto.UpdateEventRequest{Visibility: strPtr("unlisted")},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {

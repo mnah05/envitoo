@@ -82,8 +82,10 @@ func (q *Queries) CountEventsByOrganizer(ctx context.Context, arg CountEventsByO
 const countPublicEvents = `-- name: CountPublicEvents :one
 SELECT COUNT(*)::int4
 FROM events
+JOIN event_visibility ev ON ev.event_id = events.id
 WHERE
     status = 'published'
+    AND ev.visibility = 'public'
     AND ($1::text = '' OR category = $1)
     AND ($2::int = 0 OR ($2::int = 1 AND is_virtual = true) OR ($2::int = 2 AND is_virtual = false))
     AND ($3::text = '' OR title ILIKE '%' || $3 || '%' OR description ILIKE '%' || $3 || '%')
@@ -479,10 +481,12 @@ func (q *Queries) ListEventsByOrganizer(ctx context.Context, arg ListEventsByOrg
 }
 
 const listPublicEvents = `-- name: ListPublicEvents :many
-SELECT id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
+SELECT events.id, events.organizer_id, events.title, events.description, events.starts_at, events.ends_at, events.capacity, events.price_in_paise, events.currency, events.status, events.created_at, events.updated_at, events.requires_approval, events.cover_image_url, events.calendar_id, events.is_virtual, events.meeting_url, events.venue_name, events.lat, events.lng, events.slug, events.category, events.location_address
 FROM events
+JOIN event_visibility ev ON ev.event_id = events.id
 WHERE
     status = 'published'
+    AND ev.visibility = 'public'
     AND ($1::text = '' OR category = $1)
     AND ($2::int = 0 OR ($2::int = 1 AND is_virtual = true) OR ($2::int = 2 AND is_virtual = false))
     AND ($3::text = '' OR title ILIKE '%' || $3 || '%' OR description ILIKE '%' || $3 || '%')

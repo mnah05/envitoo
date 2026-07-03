@@ -32,6 +32,7 @@ type CreateEventRequest struct {
 	Lat              *float64   `json:"lat" validate:"omitempty,latitude"`
 	Lng              *float64   `json:"lng" validate:"omitempty,longitude"`
 	Category         *string    `json:"category" validate:"omitempty,oneof=technical cultural sports workshop seminar hackathon other"`
+	Visibility       *string    `json:"visibility" validate:"omitempty,oneof=public unlisted"`
 }
 
 // UpdateEventRequest is the request body for PATCH /api/events/:id.
@@ -54,6 +55,7 @@ type UpdateEventRequest struct {
 	Lat              *float64   `json:"lat" validate:"omitempty,latitude"`
 	Lng              *float64   `json:"lng" validate:"omitempty,longitude"`
 	Category         *string    `json:"category" validate:"omitempty,oneof=technical cultural sports workshop seminar hackathon other"`
+	Visibility       *string    `json:"visibility" validate:"omitempty,oneof=public unlisted"`
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,7 @@ type EventResponse struct {
 	PriceInPaise      int64      `json:"price_in_paise"`
 	Currency          string     `json:"currency"`
 	Status            string     `json:"status"`
+	Visibility        string     `json:"visibility"`
 	Slug              string     `json:"slug"`
 	Category          *string    `json:"category,omitempty"`
 	RequiresApproval  bool       `json:"requires_approval"`

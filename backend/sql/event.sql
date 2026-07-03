@@ -69,10 +69,12 @@ WHERE
     AND ($2::boolean = true OR status != 'cancelled');
 
 -- name: ListPublicEvents :many
-SELECT *
+SELECT events.*
 FROM events
+JOIN event_visibility ev ON ev.event_id = events.id
 WHERE
     status = 'published'
+    AND ev.visibility = 'public'
     AND ($1::text = '' OR category = $1)
     AND ($2::int = 0 OR ($2::int = 1 AND is_virtual = true) OR ($2::int = 2 AND is_virtual = false))
     AND ($3::text = '' OR title ILIKE '%' || $3 || '%' OR description ILIKE '%' || $3 || '%')
@@ -84,8 +86,10 @@ LIMIT $6 OFFSET $7;
 -- name: CountPublicEvents :one
 SELECT COUNT(*)::int4
 FROM events
+JOIN event_visibility ev ON ev.event_id = events.id
 WHERE
     status = 'published'
+    AND ev.visibility = 'public'
     AND ($1::text = '' OR category = $1)
     AND ($2::int = 0 OR ($2::int = 1 AND is_virtual = true) OR ($2::int = 2 AND is_virtual = false))
     AND ($3::text = '' OR title ILIKE '%' || $3 || '%' OR description ILIKE '%' || $3 || '%')

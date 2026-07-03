@@ -102,5 +102,6 @@ func HasDisallowedStaffUpdateFields(req dto.UpdateEventRequest) bool {
 		req.Currency != nil ||
 		req.RequiresApproval != nil ||
 		req.IsVirtual != nil ||
-		req.Category != nil
+		req.Category != nil ||
+		req.Visibility != nil
 }
