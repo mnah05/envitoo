@@ -76,6 +76,11 @@ export function EventDetail() {
           <div className="flex flex-wrap items-center gap-2 pb-6">
             {event.category && <CategoryPill category={event.category} />}
             <EventStatusBadge status={event.status} />
+            {event.visibility === "unlisted" && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed bg-card/80 px-2.5 py-0.5 text-xs font-medium text-muted-foreground backdrop-blur">
+                Unlisted — not on Discover
+              </span>
+            )}
             {event.is_virtual && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-medium text-foreground backdrop-blur">
                 <Globe className="size-3.5" /> Virtual

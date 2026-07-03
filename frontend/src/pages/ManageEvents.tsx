@@ -116,6 +116,11 @@ export function ManageEvents() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <EventStatusBadge status={event.status} />
+                    {event.visibility === "unlisted" && (
+                      <span className="text-xs text-muted-foreground border border-dashed rounded-full px-2 py-0.5">
+                        Unlisted
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground">
                       {new Date(event.created_at).getFullYear()}
                     </span>

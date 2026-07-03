@@ -11,6 +11,7 @@ const uuid = z.string().uuid();
 const iso = z.string().datetime({ offset: true }).or(z.string().datetime());
 
 export const eventStatus = z.enum(["published", "cancelled", "completed"]);
+export const eventVisibility = z.enum(["public", "unlisted"]);
 export const regStatus = z.enum(["pending", "approved", "rejected", "cancelled"]);
 export const category = z.enum([
   "technical",
@@ -34,6 +35,7 @@ export const EventSchema = z.object({
   price_in_paise: z.number().int(),
   currency: z.string().length(3),
   status: eventStatus,
+  visibility: eventVisibility,
   slug: z.string(),
   category: category.nullable().optional(),
   requires_approval: z.boolean(),
@@ -114,6 +116,7 @@ export const CreateEventInput = z
     lat: z.number().optional(),
     lng: z.number().optional(),
     category: category.optional(),
+    visibility: eventVisibility.optional(),
   })
   .refine(
     (d) =>
@@ -143,6 +146,7 @@ export const UpdateEventInput = z.object({
   lat: z.number().optional(),
   lng: z.number().optional(),
   category: category.optional(),
+  visibility: eventVisibility.optional(),
 });
 export type UpdateEventValues = z.infer<typeof UpdateEventInput>;
 
