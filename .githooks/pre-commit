@@ -1,0 +1,99 @@
+#!/bin/sh
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+PASS=true
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+check() {
+    local status=$1; shift
+    local label=$1; shift
+    if [ "$status" = "0" ]; then
+        echo -e "  ${GREEN}✓${NC} $label"
+    else
+        echo -e "  ${RED}✗${NC} $label"
+        PASS=false
+    fi
+}
+
+# --- 1. Gitleaks: secrets scanning ---
+echo -e "\n${YELLOW}🔍 Secrets scan (gitleaks)...${NC}"
+if command -v gitleaks &>/dev/null; then
+    gitleaks detect --source="$REPO_ROOT" --no-git -v 2>/dev/null
+    check "$?" "no secrets detected"
+else
+    echo -e "  ${YELLOW}⚠ gitleaks not installed, skipping${NC}"
+fi
+
+# --- 2. Go formatting ---
+echo -e "\n${YELLOW}🎨 Go formatting (gofmt)...${NC}"
+STAGED_GO=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -n "$STAGED_GO" ]; then
+    UNFORMATTED=$(echo "$STAGED_GO" | xargs gofmt -l 2>/dev/null || true)
+    if [ -n "$UNFORMATTED" ]; then
+        echo -e "  ${RED}✗ unformatted files:${NC}"
+        echo "$UNFORMATTED" | sed 's/^/    /'
+        PASS=false
+    else
+        echo -e "  ${GREEN}✓ all Go files are formatted${NC}"
+    fi
+else
+    echo -e "  ${GREEN}✓ no staged Go files${NC}"
+fi
+
+# --- 3. Go vet ---
+echo -e "\n${YELLOW}🔬 Go vet...${NC}"
+if [ -n "$STAGED_GO" ]; then
+    STAGED_DIRS=$(echo "$STAGED_GO" | xargs -I{} dirname {} | sort -u | sed "s|^|$REPO_ROOT/|")
+    VET_FAILED=false
+    for dir in $STAGED_DIRS; do
+        if ! go vet ./"${dir#$REPO_ROOT/}" 2>/dev/null; then
+            VET_FAILED=true
+        fi
+    done
+    if [ "$VET_FAILED" = true ]; then
+        echo -e "  ${RED}✗ go vet found issues${NC}"
+        PASS=false
+    else
+        echo -e "  ${GREEN}✓ go vet passed${NC}"
+    fi
+else
+    echo -e "  ${GREEN}✓ no staged Go files to vet${NC}"
+fi
+
+# --- 4. Prevent binaries ---
+echo -e "\n${YELLOW}📦 Binary check...${NC}"
+BINARIES=$(git diff --cached --name-only --diff-filter=A | file -f - 2>/dev/null | grep -i 'executable\|Mach-O\|ELF\|PE32' || true)
+if [ -n "$BINARIES" ]; then
+    echo -e "  ${RED}✗ staged binaries detected:${NC}"
+    echo "$BINARIES" | sed 's/^/    /'
+    PASS=false
+else
+    echo -e "  ${GREEN}✓ no binaries staged${NC}"
+fi
+
+# --- 5. Prevent .env files ---
+echo -e "\n${YELLOW}🔑 Secret file check...${NC}"
+ENV_FILES=$(git diff --cached --name-only --diff-filter=A | grep -E '\.env$|\.env\.local$|\.env\.production$' || true)
+if [ -n "$ENV_FILES" ]; then
+    echo -e "  ${RED}✗ staged .env files detected:${NC}"
+    echo "$ENV_FILES" | sed 's/^/    /'
+    PASS=false
+else
+    echo -e "  ${GREEN}✓ no .env files staged${NC}"
+fi
+
+# --- Summary ---
+echo ""
+if [ "$PASS" = true ]; then
+    echo -e "${GREEN}✓ All checks passed${NC}"
+    exit 0
+else
+    echo -e "${RED}✗ Some checks failed — commit blocked${NC}"
+    echo -e "  To bypass (not recommended): git commit --no-verify"
+    exit 1
+fi

@@ -1,0 +1,43 @@
+title = "EnviToo gitleaks config"
+
+[extend]
+# useDefault=true would include gitleaks' built-in rules
+
+[[rules]]
+id = "envito-db-url"
+description = "Supabase database URL with credentials"
+regex = '''postgres(?:ql)?://\w+:[^@\s]+@[^\s]+'''
+tags = ["credential", "database"]
+
+[[rules]]
+id = "envito-clerk-secret-key"
+description = "Clerk secret key"
+regex = '''sk_test_[A-Za-z0-9]+'''
+tags = ["credential", "clerk"]
+
+[[rules]]
+id = "envito-clerk-publishable-key"
+description = "Clerk publishable key"
+regex = '''pk_test_[A-Za-z0-9._-]+'''
+tags = ["credential", "clerk"]
+
+[[rules]]
+id = "envito-jwt-secret"
+description = "JWT or API secret"
+regex = '''(?i)(?:jwt|api[_-]?secret|secret[_-]?key|session[_-]?secret)\s*[:=]\s*['"][A-Za-z0-9_/-]{16,}'''
+tags = ["credential", "jwt"]
+
+[[rules]]
+id = "envito-rsa-key"
+description = "RSA private key block"
+regex = '''-----BEGIN\s?(RSA|EC|DSA|OPENSSH|PRIVATE)\s?KEY-----'''
+tags = ["credential", "private-key"]
+
+[allowlist]
+description = "Allowlist for test and example values"
+paths = [
+    '''(?i)\.go\.mod$''',
+    '''(?i)_test\.go$''',
+    '''(?i)test.*\.sql$''',
+    '''(?i)example''',
+]
