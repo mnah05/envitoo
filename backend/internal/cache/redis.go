@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -13,9 +15,10 @@ import (
 // ErrNotFound indicates the key is absent from the cache.
 var ErrNotFound = errors.New("cache: key not found")
 
-// Redis is a Redis-backed cache store.
+// Redis is a Redis-backed cache store with health tracking.
 type Redis struct {
-	client *redis.Client
+	client  *redis.Client
+	healthy atomic.Bool
 }
 
 // Open connects to Redis, verifies the connection with PING, and returns a
@@ -25,6 +28,7 @@ func Open(ctx context.Context, url string) (*Redis, func() error, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse redis url: %w", err)
 	}
+	opts.MaxRetries = 0
 
 	client := redis.NewClient(opts)
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -32,7 +36,44 @@ func Open(ctx context.Context, url string) (*Redis, func() error, error) {
 		return nil, nil, fmt.Errorf("redis ping: %w", err)
 	}
 
-	return &Redis{client: client}, client.Close, nil
+	r := &Redis{client: client}
+	r.healthy.Store(true)
+	return r, client.Close, nil
+}
+
+// IsHealthy reports whether Redis is believed to be reachable.
+func (r *Redis) IsHealthy() bool {
+	return r.healthy.Load()
+}
+
+// StartHealthCheck launches a background goroutine that pings Redis every
+// interval and updates the healthy flag. The goroutine exits when ctx is
+// cancelled. Only one health-check goroutine should run per Redis instance.
+func (r *Redis) StartHealthCheck(ctx context.Context, log *slog.Logger, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				err := r.client.Ping(ctx).Err()
+				if err != nil {
+					if ctx.Err() != nil {
+						return
+					}
+					if r.healthy.CompareAndSwap(true, false) {
+						log.Warn("redis unhealthy, caching disabled")
+					}
+				} else {
+					if r.healthy.CompareAndSwap(false, true) {
+						log.Info("redis healthy, caching resumed")
+					}
+				}
+			}
+		}
+	}()
 }
 
 func (r *Redis) Get(ctx context.Context, key string) ([]byte, error) {

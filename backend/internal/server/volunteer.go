@@ -101,14 +101,18 @@ func (s *Server) CreateVolunteerApplication(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	app, err := s.volunteers.Apply(c.Request().Context(), u, eventID, req)
+	ctx := c.Request().Context()
+	app, err := s.volunteers.Apply(ctx, u, eventID, req)
 	if err != nil {
 		if httpErr := volunteerApplyError(err); httpErr != nil {
 			return httpErr
 		}
-		log.ErrorContext(c.Request().Context(), "create volunteer application", "user_id", u.ID, "event_id", eventID, "error", err)
+		log.ErrorContext(ctx, "create volunteer application", "user_id", u.ID, "event_id", eventID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+
+	s.cache.Delete(ctx, "GET:/api/me/volunteer-applications:user:"+u.ID.String())
+	s.cache.DeletePrefix(ctx, "GET:/api/me/volunteer-applications:user:"+u.ID.String()+"?")
 
 	return c.JSON(http.StatusCreated, app)
 }
@@ -125,21 +129,32 @@ func (s *Server) ListMyEventStaff(c echo.Context) error {
 	limit := parseLimit(c.QueryParam("limit"), 20, 100)
 	offset := parseOffset(c.QueryParam("offset"))
 
-	events, total, err := s.volunteers.ListStaffEventsByUser(c.Request().Context(), u.ID, service.ListParams{
-		Limit:  limit,
-		Offset: offset,
+	ctx := c.Request().Context()
+	key := "GET:/api/me/event-staff:user:" + u.ID.String()
+	if q := c.Request().URL.RawQuery; q != "" {
+		key += "?" + q
+	}
+	resp, err := cache.GetJSON(ctx, s.cache, key, cache.MyEventStaffTTL, func(ctx context.Context) (dto.EventStaffListResponse, error) {
+		events, total, err := s.volunteers.ListStaffEventsByUser(ctx, u.ID, service.ListParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			return dto.EventStaffListResponse{}, err
+		}
+		return dto.EventStaffListResponse{
+			Events: events,
+			Limit:  limit,
+			Offset: offset,
+			Total:  total,
+		}, nil
 	})
 	if err != nil {
-		log.ErrorContext(c.Request().Context(), "list my event staff", "user_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "list my event staff", "user_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.EventStaffListResponse{
-		Events: events,
-		Limit:  limit,
-		Offset: offset,
-		Total:  total,
-	})
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ListMyVolunteerApplications handles GET /api/me/volunteer-applications.
@@ -154,21 +169,32 @@ func (s *Server) ListMyVolunteerApplications(c echo.Context) error {
 	limit := parseLimit(c.QueryParam("limit"), 20, 100)
 	offset := parseOffset(c.QueryParam("offset"))
 
-	apps, total, err := s.volunteers.ListByUser(c.Request().Context(), u.ID, service.ListParams{
-		Limit:  limit,
-		Offset: offset,
+	ctx := c.Request().Context()
+	key := "GET:/api/me/volunteer-applications:user:" + u.ID.String()
+	if q := c.Request().URL.RawQuery; q != "" {
+		key += "?" + q
+	}
+	resp, err := cache.GetJSON(ctx, s.cache, key, cache.MyVolunteerAppsTTL, func(ctx context.Context) (dto.VolunteerApplicationListResponse, error) {
+		apps, total, err := s.volunteers.ListByUser(ctx, u.ID, service.ListParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			return dto.VolunteerApplicationListResponse{}, err
+		}
+		return dto.VolunteerApplicationListResponse{
+			Applications: apps,
+			Limit:        limit,
+			Offset:       offset,
+			Total:        total,
+		}, nil
 	})
 	if err != nil {
-		log.ErrorContext(c.Request().Context(), "list my volunteer applications", "user_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "list my volunteer applications", "user_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.VolunteerApplicationListResponse{
-		Applications: apps,
-		Limit:        limit,
-		Offset:       offset,
-		Total:        total,
-	})
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetMyVolunteerApplication handles GET /api/volunteer-applications/:id.
@@ -211,7 +237,8 @@ func (s *Server) CancelVolunteerApplication(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	app, err := s.volunteers.Cancel(c.Request().Context(), appID, u.ID)
+	ctx := c.Request().Context()
+	app, err := s.volunteers.Cancel(ctx, appID, u.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrVolunteerAppNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "application not found")
@@ -219,9 +246,12 @@ func (s *Server) CancelVolunteerApplication(c echo.Context) error {
 		if errors.Is(err, service.ErrVolunteerInvalidStatus) {
 			return echo.NewHTTPError(http.StatusConflict, "only pending applications can be cancelled")
 		}
-		log.ErrorContext(c.Request().Context(), "cancel volunteer application", "id", appID, "user_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "cancel volunteer application", "id", appID, "user_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+
+	s.cache.Delete(ctx, "GET:/api/me/volunteer-applications:user:"+u.ID.String())
+	s.cache.DeletePrefix(ctx, "GET:/api/me/volunteer-applications:user:"+u.ID.String()+"?")
 
 	return c.JSON(http.StatusOK, app)
 }
@@ -460,7 +490,8 @@ func (s *Server) ApproveVolunteerApplication(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	app, err := s.volunteers.Approve(c.Request().Context(), appID, u.ID)
+	ctx := c.Request().Context()
+	app, err := s.volunteers.Approve(ctx, appID, u.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrVolunteerAppNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "application not found")
@@ -471,9 +502,14 @@ func (s *Server) ApproveVolunteerApplication(c echo.Context) error {
 		if errors.Is(err, service.ErrVolunteerInvalidStatus) {
 			return echo.NewHTTPError(http.StatusConflict, "only pending applications can be approved")
 		}
-		log.ErrorContext(c.Request().Context(), "approve volunteer application", "id", appID, "organizer_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "approve volunteer application", "id", appID, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+
+	s.cache.Delete(ctx, "GET:/api/me/volunteer-applications:user:"+app.UserID.String())
+	s.cache.DeletePrefix(ctx, "GET:/api/me/volunteer-applications:user:"+app.UserID.String()+"?")
+	s.cache.Delete(ctx, "GET:/api/me/event-staff:user:"+app.UserID.String())
+	s.cache.DeletePrefix(ctx, "GET:/api/me/event-staff:user:"+app.UserID.String()+"?")
 
 	return c.JSON(http.StatusOK, app)
 }
@@ -492,7 +528,8 @@ func (s *Server) RejectVolunteerApplication(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
-	app, err := s.volunteers.Reject(c.Request().Context(), appID, u.ID)
+	ctx := c.Request().Context()
+	app, err := s.volunteers.Reject(ctx, appID, u.ID)
 	if err != nil {
 		if errors.Is(err, service.ErrVolunteerAppNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "application not found")
@@ -503,9 +540,12 @@ func (s *Server) RejectVolunteerApplication(c echo.Context) error {
 		if errors.Is(err, service.ErrVolunteerInvalidStatus) {
 			return echo.NewHTTPError(http.StatusConflict, "only pending applications can be rejected")
 		}
-		log.ErrorContext(c.Request().Context(), "reject volunteer application", "id", appID, "organizer_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "reject volunteer application", "id", appID, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+
+	s.cache.Delete(ctx, "GET:/api/me/volunteer-applications:user:"+app.UserID.String())
+	s.cache.DeletePrefix(ctx, "GET:/api/me/volunteer-applications:user:"+app.UserID.String()+"?")
 
 	return c.JSON(http.StatusOK, app)
 }

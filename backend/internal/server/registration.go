@@ -217,16 +217,27 @@ func (s *Server) ListMyRegistrations(c echo.Context) error {
 	limit := parseLimit(c.QueryParam("limit"), 20, 100)
 	offset := parseOffset(c.QueryParam("offset"))
 
-	regs, total, err := s.registrations.ListByUser(c.Request().Context(), u.ID, service.ListParams{
-		Limit:  limit,
-		Offset: offset,
+	ctx := c.Request().Context()
+	key := "GET:/api/me/registrations:user:" + u.ID.String()
+	if q := c.Request().URL.RawQuery; q != "" {
+		key += "?" + q
+	}
+	resp, err := cache.GetJSON(ctx, s.cache, key, cache.MyRegistrationsTTL, func(ctx context.Context) (dto.RegistrationListResponse, error) {
+		regs, total, err := s.registrations.ListByUser(ctx, u.ID, service.ListParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			return dto.RegistrationListResponse{}, err
+		}
+		return dto.NewRegistrationListResponse(regs, limit, offset, total), nil
 	})
 	if err != nil {
-		log.ErrorContext(c.Request().Context(), "list my registrations", "user_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "list my registrations", "user_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewRegistrationListResponse(regs, limit, offset, total))
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ---------------------------------------------------------------------------
@@ -250,19 +261,30 @@ func (s *Server) ListEventRegistrations(c echo.Context) error {
 	limit := parseLimit(c.QueryParam("limit"), 20, 500)
 	offset := parseOffset(c.QueryParam("offset"))
 
-	regs, total, err := s.registrations.ListByEvent(c.Request().Context(), eventID, u.ID, service.ListParams{
-		Limit:  limit,
-		Offset: offset,
+	ctx := c.Request().Context()
+	key := "GET:/api/events/" + eventID.String() + "/registrations"
+	if q := c.Request().URL.RawQuery; q != "" {
+		key += "?" + q
+	}
+	resp, err := cache.GetJSON(ctx, s.cache, key, cache.EventRegistrationsTTL, func(ctx context.Context) (dto.RegistrationListResponse, error) {
+		regs, total, err := s.registrations.ListByEvent(ctx, eventID, u.ID, service.ListParams{
+			Limit:  limit,
+			Offset: offset,
+		})
+		if err != nil {
+			return dto.RegistrationListResponse{}, err
+		}
+		return dto.NewRegistrationListResponse(regs, limit, offset, total), nil
 	})
 	if err != nil {
 		if errors.Is(err, service.ErrEventNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
-		log.ErrorContext(c.Request().Context(), "list event registrations", "event_id", eventID, "organizer_id", u.ID, "error", err)
+		log.ErrorContext(ctx, "list event registrations", "event_id", eventID, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	return c.JSON(http.StatusOK, dto.NewRegistrationListResponse(regs, limit, offset, total))
+	return c.JSON(http.StatusOK, resp)
 }
 
 // GetRegistrationAsAdmin handles GET /api/registrations/:id/admin.
@@ -509,12 +531,22 @@ func (s *Server) forgetRegistration(ctx context.Context, reg db.Registration) {
 	keys := []string{
 		"GET:/api/guest-registrations?token=" + reg.AccessToken.String(),
 		"GET:/api/events/" + reg.EventID.String(),
+		"GET:/api/events/" + reg.EventID.String() + "/registrations",
+	}
+	if reg.UserID.Valid {
+		uid := uuid.UUID(reg.UserID.Bytes)
+		keys = append(keys, "GET:/api/me/registrations:user:"+uid.String())
 	}
 	if slug := s.lookupEventSlug(ctx, reg.EventID); slug != "" {
 		keys = append(keys, "GET:/api/events/slug/"+slug)
 	}
 	s.cache.Delete(ctx, keys...)
 	s.cache.DeletePrefix(ctx, "GET:/api/events?")
+	s.cache.DeletePrefix(ctx, "GET:/api/events/"+reg.EventID.String()+"/registrations?")
+	if reg.UserID.Valid {
+		uid := uuid.UUID(reg.UserID.Bytes)
+		s.cache.DeletePrefix(ctx, "GET:/api/me/registrations:user:"+uid.String()+"?")
+	}
 }
 
 // forgetRegistrationsByEmail looks up every registration for an email
@@ -546,12 +578,14 @@ func (s *Server) forgetRegistrationsByEmail(ctx context.Context, email string) {
 		keys := []string{
 			"GET:/api/guest-registrations?token=" + token.String(),
 			"GET:/api/events/" + eventID.String(),
+			"GET:/api/events/" + eventID.String() + "/registrations",
 		}
 		if slug != "" {
 			keys = append(keys, "GET:/api/events/slug/"+slug)
 		}
 		s.cache.Delete(ctx, keys...)
 		s.cache.DeletePrefix(ctx, "GET:/api/events?")
+		s.cache.DeletePrefix(ctx, "GET:/api/events/"+eventID.String()+"/registrations?")
 	}
 	_ = rows.Err()
 }

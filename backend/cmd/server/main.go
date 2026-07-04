@@ -66,6 +66,7 @@ func main() {
 				}
 			}()
 			appCache = cache.New(redis, log)
+			redis.StartHealthCheck(ctx, log, 10*time.Second)
 			log.Info("redis cache active")
 		}
 	}

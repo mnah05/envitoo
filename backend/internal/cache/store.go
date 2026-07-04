@@ -11,10 +11,14 @@ import (
 )
 
 const (
-	EventTTL       = 5 * time.Minute
-	PublicListTTL  = 2 * time.Minute
-	GuestTicketTTL = 2 * time.Minute
-	VolunteerTTL   = 5 * time.Minute
+	EventTTL              = 5 * time.Minute
+	PublicListTTL         = 2 * time.Minute
+	GuestTicketTTL        = 2 * time.Minute
+	VolunteerTTL          = 5 * time.Minute
+	MyRegistrationsTTL    = 2 * time.Minute
+	MyVolunteerAppsTTL    = 2 * time.Minute
+	EventRegistrationsTTL = 2 * time.Minute
+	MyEventStaffTTL       = 5 * time.Minute
 )
 
 // Store wraps Redis with cache-aside reads and delete helpers.
@@ -37,22 +41,50 @@ func (s *Store) Get(ctx context.Context, key string) ([]byte, error) {
 	if s == nil || s.redis == nil {
 		return nil, ErrNotFound
 	}
-	return s.redis.Get(ctx, key)
+	if !s.redis.IsHealthy() {
+		return nil, ErrNotFound
+	}
+	data, err := s.redis.Get(ctx, key)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+		return nil, ErrNotFound
+	}
+	return data, nil
 }
 
 func (s *Store) Set(ctx context.Context, key string, data []byte, ttl time.Duration) error {
 	if s == nil || s.redis == nil {
 		return nil
 	}
-	return s.redis.Set(ctx, key, data, ttl)
+	if !s.redis.IsHealthy() {
+		return nil
+	}
+	if err := s.redis.Set(ctx, key, data, ttl); err != nil {
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) Delete(ctx context.Context, keys ...string) {
 	if s == nil || s.redis == nil || len(keys) == 0 {
 		return
 	}
+	if !s.redis.IsHealthy() {
+		return
+	}
 	if err := s.redis.Delete(ctx, keys...); err != nil {
-		s.log.WarnContext(ctx, "cache delete failed", "keys", keys, "error", err)
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		} else {
+			s.log.WarnContext(ctx, "cache delete failed", "keys", keys, "error", err)
+		}
 	}
 }
 
@@ -60,14 +92,21 @@ func (s *Store) DeletePrefix(ctx context.Context, prefix string) {
 	if s == nil || s.redis == nil || prefix == "" {
 		return
 	}
+	if !s.redis.IsHealthy() {
+		return
+	}
 	if err := s.redis.DeleteByPrefix(ctx, prefix); err != nil {
-		s.log.WarnContext(ctx, "cache prefix delete failed", "prefix", prefix, "error", err)
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		} else {
+			s.log.WarnContext(ctx, "cache prefix delete failed", "prefix", prefix, "error", err)
+		}
 	}
 }
 
 // GetJSON is a cache-aside read: try cache, on miss call load, cache result.
 func GetJSON[T any](ctx context.Context, s *Store, key string, ttl time.Duration, load func(context.Context) (T, error)) (T, error) {
-	if s == nil || s.redis == nil {
+	if s == nil || s.redis == nil || !s.redis.IsHealthy() {
 		return load(ctx)
 	}
 

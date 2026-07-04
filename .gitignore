@@ -28,3 +28,9 @@ go.work.sum
 Thumbs.db
 .idea/
 .vscode/
+
+# Compiled binary
+server
+
+# Supabase CLI transient state
+supabase/.temp/
