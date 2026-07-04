@@ -105,7 +105,7 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		visibility = "unlisted"
 	}
 
-	for attempt := 0; attempt < maxEventSlugAttempts; attempt++ {
+	for range maxEventSlugAttempts {
 		slug, err := helper.GenerateEventSlug()
 		if err != nil {
 			return db.Event{}, fmt.Errorf("slug generation failed: %w", err)
@@ -228,10 +228,7 @@ func (s *EventService) ListByOrganizer(ctx context.Context, organizerID uuid.UUI
 		limit = 100
 	}
 
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	events, err := s.queries.ListEventsByOrganizer(ctx, db.ListEventsByOrganizerParams{
 		OrganizerID:      organizerID,
@@ -266,10 +263,7 @@ func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) 
 		limit = 100
 	}
 
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	startsAfter := params.StartsAfter
 	if startsAfter.IsZero() {

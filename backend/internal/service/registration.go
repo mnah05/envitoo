@@ -315,10 +315,7 @@ func (s *RegistrationService) ListByUser(ctx context.Context, userID uuid.UUID, 
 	if limit > 100 {
 		limit = 100
 	}
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	rows, err := s.queries.ListMyRegistrations(ctx, db.ListMyRegistrationsParams{
 		UserID: pgtype.UUID{Valid: true, Bytes: userID},
@@ -354,10 +351,7 @@ func (s *RegistrationService) ListByEvent(ctx context.Context, eventID uuid.UUID
 	if limit > 500 {
 		limit = 500
 	}
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	if _, err := s.access.RequireEventStaff(ctx, eventID, actorID); err != nil {
 		return nil, 0, err

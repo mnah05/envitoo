@@ -159,10 +159,7 @@ func (s *VolunteerService) ListStaffEventsByUser(ctx context.Context, userID uui
 	if limit > 100 {
 		limit = 100
 	}
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	rows, err := s.queries.ListMyVolunteerStaffEvents(ctx, db.ListMyVolunteerStaffEventsParams{
 		UserID: userID,
@@ -290,10 +287,7 @@ func (s *VolunteerService) ListByUser(ctx context.Context, userID uuid.UUID, par
 	if limit > 100 {
 		limit = 100
 	}
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	rows, err := s.queries.ListMyVolunteerApplications(ctx, db.ListMyVolunteerApplicationsParams{
 		UserID: userID,
@@ -387,10 +381,7 @@ func (s *VolunteerService) ListByEvent(ctx context.Context, eventID, actorID uui
 	if limit > 100 {
 		limit = 100
 	}
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	if _, err := s.access.RequireEventStaff(ctx, eventID, actorID); err != nil {
 		return nil, 0, err
@@ -440,10 +431,7 @@ func (s *VolunteerService) ListVolunteersByEvent(ctx context.Context, eventID, a
 	if limit > 100 {
 		limit = 100
 	}
-	offset := params.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(params.Offset, 0)
 
 	if _, err := s.access.RequireEventStaff(ctx, eventID, actorID); err != nil {
 		return nil, 0, err

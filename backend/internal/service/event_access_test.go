@@ -24,10 +24,10 @@ func TestHasDisallowedStaffUpdateFields(t *testing.T) {
 		{
 			name: "allowed fields only",
 			req: dto.UpdateEventRequest{
-				Description:   strPtr("updated"),
-				MeetingURL:    strPtr("https://meet.example.com"),
-				CoverImageURL: strPtr("https://img.example.com/a.png"),
-				VenueName:     strPtr("Hall A"),
+				Description:   new("updated"),
+				MeetingURL:    new("https://meet.example.com"),
+				CoverImageURL: new("https://img.example.com/a.png"),
+				VenueName:     new("Hall A"),
 			},
 			want: false,
 		},
@@ -63,7 +63,7 @@ func TestHasDisallowedStaffUpdateFields(t *testing.T) {
 		},
 		{
 			name: "disallowed visibility",
-			req:  dto.UpdateEventRequest{Visibility: strPtr("unlisted")},
+			req:  dto.UpdateEventRequest{Visibility: new("unlisted")},
 			want: true,
 		},
 	}
@@ -77,4 +77,5 @@ func TestHasDisallowedStaffUpdateFields(t *testing.T) {
 	}
 }
 
-func strPtr(s string) *string { return &s }
+//go:fix inline
+func strPtr(s string) *string { return new(s) }
