@@ -43,6 +43,12 @@ frontend: ## Run the Vite frontend on :5173
 	@echo "frontend → http://localhost:$(FRONTEND_PORT)"
 	@cd $(FRONTEND) && $(NPM) run dev -- --port $(FRONTEND_PORT) --strictPort
 
+## Setup
+setup: ## Install git hooks and project dependencies
+	@git config core.hooksPath .githooks
+	@echo "✓ git hooks configured (.githooks/)"
+	@$(MAKE) install
+
 ## Install
 install: install-backend install-frontend ## Install all dependencies
 
