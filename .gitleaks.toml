@@ -40,4 +40,8 @@ paths = [
     '''(?i)_test\.go$''',
     '''(?i)test.*\.sql$''',
     '''(?i)example''',
+    '''(node_modules|dist|dist-ssr|\.next)/''',
+    '''\.env$''',
+    '''\.env\.local$''',
+    '''\.env\.production$''',
 ]

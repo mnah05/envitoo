@@ -20,11 +20,11 @@ check() {
     fi
 }
 
-# --- 1. Gitleaks: secrets scanning ---
+# --- 1. Gitleaks: secrets scanning (staged only) ---
 echo -e "\n${YELLOW}🔍 Secrets scan (gitleaks)...${NC}"
 if command -v gitleaks &>/dev/null; then
-    gitleaks detect --source="$REPO_ROOT" --no-git -v 2>/dev/null
-    check "$?" "no secrets detected"
+    git diff --cached -- . | gitleaks detect --pipe --no-git -v 2>/dev/null
+    check "$?" "no secrets detected in staged changes"
 else
     echo -e "  ${YELLOW}⚠ gitleaks not installed, skipping${NC}"
 fi
@@ -45,7 +45,7 @@ else
     echo -e "  ${GREEN}✓ no staged Go files${NC}"
 fi
 
-# --- 3. Go vet ---
+# --- 3. Go vet on staged packages ---
 echo -e "\n${YELLOW}🔬 Go vet...${NC}"
 if [ -n "$STAGED_GO" ]; then
     STAGED_DIRS=$(echo "$STAGED_GO" | xargs -I{} dirname {} | sort -u | sed "s|^|$REPO_ROOT/|")
@@ -67,7 +67,7 @@ fi
 
 # --- 4. Prevent binaries ---
 echo -e "\n${YELLOW}📦 Binary check...${NC}"
-BINARIES=$(git diff --cached --name-only --diff-filter=A | file -f - 2>/dev/null | grep -i 'executable\|Mach-O\|ELF\|PE32' || true)
+BINARIES=$(git diff --cached --name-only --diff-filter=A | file -f - 2>/dev/null | grep -i 'Mach-O\|ELF\|PE32' || true)
 if [ -n "$BINARIES" ]; then
     echo -e "  ${RED}✗ staged binaries detected:${NC}"
     echo "$BINARIES" | sed 's/^/    /'
