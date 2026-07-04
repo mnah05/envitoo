@@ -49,7 +49,9 @@ function SiteLayout() {
   const { pathname } = useLocation();
   const smoothScroll = pathname === "/" || pathname.startsWith("/discover");
   useSmoothScroll(smoothScroll);
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   return (
     <div className="flex min-h-dvh flex-col">

@@ -48,18 +48,27 @@ fi
 # --- 3. Go vet on staged packages ---
 echo -e "\n${YELLOW}🔬 Go vet...${NC}"
 if [ -n "$STAGED_GO" ]; then
-    STAGED_DIRS=$(echo "$STAGED_GO" | xargs -I{} dirname {} | sort -u | sed "s|^|$REPO_ROOT/|")
-    VET_FAILED=false
-    for dir in $STAGED_DIRS; do
-        if ! go vet ./"${dir#$REPO_ROOT/}" 2>/dev/null; then
-            VET_FAILED=true
+    # Determine the Go module root (directory containing go.mod)
+    MOD_ROOT=$(git -C "$REPO_ROOT" ls-files --full-name "**/go.mod" | head -1 | xargs -I{} dirname "$REPO_ROOT/{}" 2>/dev/null || echo "$REPO_ROOT")
+    if [ -f "$MOD_ROOT/go.mod" ]; then
+        # Get unique directories of staged Go files as absolute paths
+        STAGED_DIRS=$(echo "$STAGED_GO" | xargs -I{} dirname "$REPO_ROOT/{}" | sort -u)
+        VET_FAILED=false
+        for dir in $STAGED_DIRS; do
+            # Convert to module-relative package path
+            PKG="./${dir#$MOD_ROOT/}"
+            if ! go vet -C "$MOD_ROOT" "$PKG" 2>/dev/null; then
+                VET_FAILED=true
+            fi
+        done
+        if [ "$VET_FAILED" = true ]; then
+            echo -e "  ${RED}✗ go vet found issues${NC}"
+            PASS=false
+        else
+            echo -e "  ${GREEN}✓ go vet passed${NC}"
         fi
-    done
-    if [ "$VET_FAILED" = true ]; then
-        echo -e "  ${RED}✗ go vet found issues${NC}"
-        PASS=false
     else
-        echo -e "  ${GREEN}✓ go vet passed${NC}"
+        echo -e "  ${YELLOW}⚠ go.mod not found, skipping go vet${NC}"
     fi
 else
     echo -e "  ${GREEN}✓ no staged Go files to vet${NC}"
