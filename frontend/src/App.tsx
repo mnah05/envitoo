@@ -26,6 +26,9 @@ const SignInPage = lazy(() =>
 const SignUpPage = lazy(() =>
   import("@/pages/SignUp").then((m) => ({ default: m.SignUpPage })),
 );
+const Welcome = lazy(() =>
+  import("@/pages/Welcome").then((m) => ({ default: m.Welcome })),
+);
 const MyTickets = lazy(() =>
   import("@/pages/MyTickets").then((m) => ({ default: m.MyTickets })),
 );
@@ -72,6 +75,10 @@ export function App() {
     <ErrorBoundary>
       <Suspense fallback={<Loading />}>
         <Routes>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/welcome" element={<Welcome />} />
+          </Route>
+
           <Route element={<SiteLayout />}>
             <Route path="/" element={<Landing />} />
             <Route path="/discover" element={<Discover />} />

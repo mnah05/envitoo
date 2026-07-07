@@ -31,7 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       signInUrl="/signin"
       signUpUrl="/signup"
       afterSignInUrl="/home"
-      afterSignUpUrl="/home"
+      afterSignUpUrl="/welcome"
       appearance={clerkAppearance}
     >
       <QueryClientProvider client={client}>

@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 export function SignUpPage() {
   const location = useLocation();
   const redirect =
-    (location.state as { from?: string } | null)?.from ?? "/home";
+    (location.state as { from?: string } | null)?.from ?? "/welcome";
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-16">
