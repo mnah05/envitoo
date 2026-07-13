@@ -44,8 +44,8 @@ export function ManageEvents() {
       <PageContainer className="py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">My events</h1>
-            <p className="mt-2 text-muted-foreground">Events you're hosting.</p>
+            <h1 className="display-title text-3xl sm:text-4xl">My events</h1>
+            <p className="text-lede mt-3 text-[1.0625rem]">Events you're hosting.</p>
           </div>
           <Button asChild>
             <Link to="/create">
@@ -125,7 +125,7 @@ export function ManageEvents() {
                       {new Date(event.created_at).getFullYear()}
                     </span>
                   </div>
-                  <h2 className="mt-1 truncate text-lg font-semibold">{event.title}</h2>
+                  <h2 className="display-headline mt-1 truncate text-lg">{event.title}</h2>
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1.5">
                       <CalendarDays className="size-4" />
@@ -193,7 +193,7 @@ function CancelEventDialog({
                 You are about to cancel <span className="font-medium text-foreground">"{eventTitle}"</span>.
               </p>
               <div className="rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-foreground">
-                <p className="font-semibold text-destructive">This action cannot be undone.</p>
+                <p className="display-headline text-[1.0625rem] text-destructive">This action cannot be undone.</p>
                 <p className="mt-1 text-muted-foreground">
                   Once cancelled, the event cannot be republished or restored.
                 </p>

@@ -47,7 +47,7 @@ export function VolunteerSettingsPanel({
     <div className="rounded-2xl border bg-card p-6 shadow-sm">
       <div className="flex items-center gap-2">
         <Settings2 className="size-5 text-muted-foreground" />
-        <h3 className="font-semibold">Volunteer settings</h3>
+        <h3 className="display-headline text-[1.0625rem]">Volunteer settings</h3>
       </div>
 
       <FieldGroup className="mt-4">

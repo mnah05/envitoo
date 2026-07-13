@@ -32,7 +32,7 @@ export function AccountSetupScreen() {
       <div className="relative flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-16">
         <div className="bg-grid pointer-events-none absolute inset-0 opacity-60" />
         <div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-lg">
-          <h1 className="text-xl font-semibold tracking-tight">Setup interrupted</h1>
+          <h1 className="display-title text-xl">Setup interrupted</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             We couldn&apos;t finish setting up your account. Please try again.
           </p>
@@ -61,22 +61,22 @@ export function AccountSetupScreen() {
           <div className="relative flex size-16 items-center justify-center">
             {!reducedMotion && (
               <motion.div
-                className="absolute inset-0 rounded-full border border-primary/30"
+                className="absolute inset-0 rounded-full border border-border"
                 animate={{ scale: [1, 1.08, 1], opacity: [0.5, 0.9, 0.5] }}
                 transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
               />
             )}
-            <div className="glow-gold flex size-14 items-center justify-center rounded-full bg-primary/10">
+            <div className="flex size-14 items-center justify-center rounded-full border border-border/80 bg-muted">
               {isPending ? (
-                <Spinner className="size-7 text-primary" />
+                <Spinner className="size-7 text-foreground" />
               ) : (
-                <Check className="size-7 text-primary" aria-hidden />
+                <Check className="size-7 text-foreground" aria-hidden />
               )}
             </div>
           </div>
 
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Setting up your account</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h1 className="display-title mt-6 text-2xl">Setting up your account</h1>
+          <p className="text-lede mt-2 text-[1.0625rem]">
             Hang tight — we&apos;re getting everything ready for you.
           </p>
         </div>

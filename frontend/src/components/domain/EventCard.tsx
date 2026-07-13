@@ -9,33 +9,33 @@ export function EventCard({ event, index = 0 }: { event: Event; index?: number }
   return (
     <Link
       to={href}
-      className="group flex flex-col overflow-hidden rounded-xl border bg-card transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex flex-col overflow-hidden rounded-xl border border-border/80 bg-card transition-colors hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       style={{ animationDelay: `${index * 40}ms` }}
     >
-      <EventCover event={event} />
+      <EventCover event={event} rounded="rounded-none" />
       <div className="flex flex-1 flex-col gap-2 p-4">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-eyebrow text-[12px]">
           {formatCardDate(event.starts_at)}
         </span>
-        <h3 className="line-clamp-2 text-base font-medium leading-snug text-foreground group-hover:text-primary">
+        <h3 className="display-headline line-clamp-2 text-[1.0625rem] leading-snug text-foreground transition-colors group-hover:text-foreground/90">
           {event.title}
         </h3>
-        <div className="mt-auto flex items-center gap-1.5 pt-2 text-sm text-muted-foreground">
+        <div className="mt-auto flex items-center gap-1.5 pt-2 text-[13px] tracking-[-0.01em] text-muted-foreground">
           {event.is_virtual ? (
-            <Monitor className="size-4 shrink-0" />
+            <Monitor className="size-3.5 shrink-0" />
           ) : (
-            <MapPin className="size-4 shrink-0" />
+            <MapPin className="size-3.5 shrink-0" />
           )}
           <span className="truncate">
             {event.is_virtual ? "Virtual event" : event.venue_name || "Location"}
           </span>
         </div>
         <div className="flex items-center justify-between pt-1">
-          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Calendar className="size-4 shrink-0" />
+          <span className="flex items-center gap-1.5 text-[13px] tracking-[-0.01em] text-muted-foreground">
+            <Calendar className="size-3.5 shrink-0" />
             {formatCardTime(event.starts_at)}
           </span>
-          <span className="text-sm font-semibold text-foreground">
+          <span className="text-ui text-[13px] font-semibold tabular-nums text-foreground">
             {formatPrice(event.price_in_paise, event.currency)}
           </span>
         </div>
@@ -77,12 +77,12 @@ export function EventCover({
 }
 
 const GRADIENTS = [
-  "bg-gradient-to-br from-yellow-500 via-amber-600 to-orange-700",
-  "bg-gradient-to-br from-pink-500 via-rose-600 to-purple-700",
-  "bg-gradient-to-br from-yellow-400 via-yellow-600 to-amber-800",
-  "bg-gradient-to-br from-pink-500 via-fuchsia-600 to-violet-700",
-  "bg-gradient-to-br from-amber-500 via-yellow-600 to-yellow-800",
-  "bg-gradient-to-br from-purple-500 via-pink-600 to-rose-700",
+  "bg-gradient-to-br from-teal-500 via-teal-800 to-zinc-950",
+  "bg-gradient-to-br from-cyan-500 via-sky-900 to-zinc-950",
+  "bg-gradient-to-br from-rose-500 via-rose-900 to-zinc-950",
+  "bg-gradient-to-br from-emerald-500 via-emerald-900 to-zinc-950",
+  "bg-gradient-to-br from-amber-500 via-orange-800 to-zinc-950",
+  "bg-gradient-to-br from-sky-500 via-blue-900 to-zinc-950",
 ];
 
 function gradientFor(id: string): string {

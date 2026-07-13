@@ -73,7 +73,7 @@ export function RegisterForm({ event }: { event: Event }) {
   if (isFull) {
     return (
       <div className="rounded-xl bg-muted p-6 text-center">
-        <p className="font-semibold">This event is full</p>
+        <p className="display-headline text-[1.0625rem]">This event is full</p>
         <p className="mt-1 text-sm text-muted-foreground">
           All seats are currently reserved. Check back later for cancellations.
         </p>
@@ -86,7 +86,7 @@ export function RegisterForm({ event }: { event: Event }) {
       <div className="flex flex-col items-center gap-3 rounded-2xl border bg-emerald-50/60 p-6 text-center">
         <CheckCircle2 className="size-8 text-emerald-600" />
         <div>
-          <p className="font-semibold text-foreground">You're registered!</p>
+          <p className="display-headline text-[1.0625rem] text-foreground">You're registered!</p>
           <p className="mt-1 text-sm text-muted-foreground">
             {event.requires_approval
               ? "We'll review your registration and confirm by email."

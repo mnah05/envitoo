@@ -2,62 +2,55 @@ import type { Appearance } from "@clerk/shared/types";
 
 export const clerkAppearance: Appearance = {
   variables: {
-    colorPrimary: "#f5c518",
-    colorText: "#e4e4f0",
-    colorTextSecondary: "#6e6e8a",
-    colorBackground: "#0f0f1e",
-    colorInputBackground: "#1a1a35",
-    colorInputText: "#e4e4f0",
-    colorDanger: "#ff2255",
-    borderRadius: "10px",
-    fontFamily: '"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    colorPrimary: "#14b8a6",
+    colorText: "#f4f4f8",
+    colorTextSecondary: "#9b9bb0",
+    colorBackground: "#0c0c12",
+    colorInputBackground: "#16161f",
+    colorInputText: "#f4f4f8",
+    colorDanger: "#f43f5e",
+    borderRadius: "8px",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", Inter, ui-sans-serif, system-ui, sans-serif',
   },
   elements: {
     rootBox: "mx-auto w-full",
-    // `!` (important) suffix needed on text/bg colors: Clerk's runtime CSS
-    // sets these with higher specificity than Tailwind utilities, leaving
-    // text black on the dark background without it.
-    card: "rounded-2xl border border-[#252545] bg-[#0f0f1e]! shadow-lg shadow-yellow-500/5",
-    headerTitle: "text-2xl font-bold tracking-tight text-[#e4e4f0]!",
-    headerSubtitle: "text-[#6e6e8a]!",
+    card: "rounded-xl border border-[#24243a] bg-[#0c0c12]! shadow-lg shadow-teal-500/10",
+    headerTitle: "font-display text-2xl font-semibold tracking-[-0.028em] text-[#f4f4f8]!",
+    headerSubtitle: "text-[0.9375rem] tracking-[-0.01em] text-[#9b9bb0]!",
     socialButtonsBlockButton:
-      "border border-[#252545] bg-[#07070d]! text-[#e4e4f0]! shadow-xs hover:bg-[#1a1a30]",
+      "border border-[#24243a] bg-[#07070b]! text-[#f4f4f8]! shadow-xs hover:bg-[#16161f]",
     formButtonPrimary:
-      "bg-[#f5c518]! text-[#07070d]! shadow-sm shadow-yellow-500/20 hover:bg-[#f5c518]/90 focus:shadow-[0_0_0_3px_rgba(245,197,24,0.3)]",
+      "bg-[#14b8a6]! text-[#042f2e]! shadow-sm shadow-teal-500/25 hover:bg-[#0d9488] focus:shadow-[0_0_0_3px_rgba(20,184,166,0.35)]",
     formFieldInput:
-      "border-[#252545] bg-[#1a1a35]! text-[#e4e4f0]! shadow-xs focus:border-[#f5c518] focus:ring-[3px] focus:ring-[#f5c518]/30",
-    footerActionLink: "text-[#f5c518]! hover:text-[#f5c518]/80",
-    identityPreviewEditButton: "text-[#f5c518]! hover:text-[#f5c518]/80",
-    formFieldAction: "text-[#f5c518]! hover:text-[#f5c518]/80",
-    dividerLine: "bg-[#252545]!",
-    dividerText: "text-[#6e6e8a]!",
+      "border-[#24243a] bg-[#16161f]! text-[#f4f4f8]! shadow-xs focus:border-[#14b8a6] focus:ring-[3px] focus:ring-[#14b8a6]/30",
+    footerActionLink: "text-[#5eead4]! hover:text-[#99f6e4]!",
+    identityPreviewEditButton: "text-[#5eead4]! hover:text-[#99f6e4]!",
+    formFieldAction: "text-[#5eead4]! hover:text-[#99f6e4]!",
+    dividerLine: "bg-[#24243a]!",
+    dividerText: "text-[#9b9bb0]!",
 
-    // --- UserButton popover (dark mode) ---
-    // `!` (important) suffix needed on text colors: Clerk's runtime CSS sets
-    // these with higher specificity than Tailwind utilities, leaving text
-    // black on the dark background without it.
     userButtonPopoverRootBox: "bg-transparent!",
     userButtonPopoverCard:
-      "rounded-xl border border-[#252545] bg-[#0f0f1e]! shadow-xl",
-    userButtonPopoverMain: "bg-[#0f0f1e]!",
-    userButtonPopoverActions: "bg-[#0f0f1e]!",
-    userButtonPopoverActionButton: "text-[#e4e4f0]! hover:bg-[#1a1a30]",
+      "rounded-xl border border-[#24243a] bg-[#0c0c12]! shadow-xl",
+    userButtonPopoverMain: "bg-[#0c0c12]!",
+    userButtonPopoverActions: "bg-[#0c0c12]!",
+    userButtonPopoverActionButton: "text-[#f4f4f8]! hover:bg-[#16161f]",
     userButtonPopoverActionButton__signOut:
-      "text-[#ff2255]! hover:bg-[#1a1a30]",
+      "text-[#f43f5e]! hover:bg-[#16161f]",
     userButtonPopoverActionButtonIconBox: "bg-transparent!",
-    userButtonPopoverActionButtonIcon: "text-[#6e6e8a]!",
-    userButtonPopoverFooter: "border-t border-[#252545] bg-[#0f0f1e]!",
+    userButtonPopoverActionButtonIcon: "text-[#9b9bb0]!",
+    userButtonPopoverFooter: "border-t border-[#24243a] bg-[#0c0c12]!",
     userButtonPopoverFooterPagesLink:
-      "text-[#6e6e8a]! hover:text-[#e4e4f0]!",
+      "text-[#9b9bb0]! hover:text-[#f4f4f8]!",
     userButtonPopoverFooterPagesLink__terms:
-      "text-[#6e6e8a]! hover:text-[#e4e4f0]!",
+      "text-[#9b9bb0]! hover:text-[#f4f4f8]!",
     userButtonPopoverFooterPagesLink__privacy:
-      "text-[#6e6e8a]! hover:text-[#e4e4f0]!",
-    userPreview__userButton: "bg-[#0f0f1e]!",
+      "text-[#9b9bb0]! hover:text-[#f4f4f8]!",
+    userPreview__userButton: "bg-[#0c0c12]!",
     userPreviewAvatarBox__userButton: "bg-transparent!",
-    userPreviewTextContainer__userButton: "bg-[#0f0f1e]!",
-    userPreviewMainIdentifier__userButton: "text-[#e4e4f0]!",
-    userPreviewMainIdentifierText__userButton: "text-[#e4e4f0]!",
-    userPreviewSecondaryIdentifier__userButton: "text-[#6e6e8a]!",
+    userPreviewTextContainer__userButton: "bg-[#0c0c12]!",
+    userPreviewMainIdentifier__userButton: "text-[#f4f4f8]!",
+    userPreviewMainIdentifierText__userButton: "text-[#f4f4f8]!",
+    userPreviewSecondaryIdentifier__userButton: "text-[#9b9bb0]!",
   },
 };

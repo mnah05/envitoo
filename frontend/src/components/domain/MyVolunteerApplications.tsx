@@ -89,7 +89,7 @@ function ApplicationRow({ app }: { app: VolunteerApplication }) {
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 to={`/e/${event.slug}`}
-                className="truncate text-lg font-semibold hover:text-primary"
+                className="display-headline truncate text-lg hover:text-primary"
               >
                 {event.title}
               </Link>

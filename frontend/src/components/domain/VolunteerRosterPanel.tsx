@@ -30,7 +30,7 @@ export function VolunteerRosterPanel({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <HeartHandshake className="size-5 text-muted-foreground" />
-          <h3 className="font-semibold">Confirmed volunteers</h3>
+          <h3 className="display-headline text-[1.0625rem]">Confirmed volunteers</h3>
         </div>
         {total > 0 && (
           <span className="text-sm text-muted-foreground">{total} volunteers</span>

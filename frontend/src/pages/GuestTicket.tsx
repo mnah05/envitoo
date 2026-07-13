@@ -54,8 +54,8 @@ export function GuestTicket() {
       <div className="pt-16">
         <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <Ticket className="size-10 text-muted-foreground" />
-          <h1 className="text-2xl font-bold">No ticket provided</h1>
-          <p className="text-muted-foreground">Check your email for the ticket link.</p>
+          <h1 className="display-title text-2xl">No ticket provided</h1>
+          <p className="text-lede text-[1.0625rem]">Check your email for the ticket link.</p>
           <Button asChild variant="outline">
             <Link to="/discover">Discover events</Link>
           </Button>
@@ -111,8 +111,8 @@ export function GuestTicket() {
     return (
       <div className="pt-16">
         <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-          <h1 className="text-2xl font-bold">Ticket not found</h1>
-          <p className="text-muted-foreground">
+          <h1 className="display-title text-2xl">Ticket not found</h1>
+          <p className="text-lede max-w-sm text-[1.0625rem]">
             This ticket link is invalid or has expired.
           </p>
           <Button asChild variant="outline">
@@ -137,16 +137,18 @@ export function GuestTicket() {
           <div className="relative bg-foreground p-6 text-background">
             <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-primary/30 blur-2xl" />
             <div className="relative flex items-center justify-between">
-              <span className="inline-flex items-center gap-2 text-sm font-medium">
+              <span className="text-ui inline-flex items-center gap-2 text-[13px]">
                 <Ticket className="size-4" /> EnviToo Ticket
               </span>
               <RegStatusBadge status={reg.status} />
             </div>
-            <h1 className="relative mt-4 text-2xl font-bold tracking-tight">
+            <h1 className="display-title relative mt-4 text-2xl">
               {event?.title ?? "Your event"}
             </h1>
             {event && (
-              <p className="relative mt-1 text-background/80">{formatFullDate(event.starts_at)}</p>
+              <p className="relative mt-1 text-[0.9375rem] tracking-[-0.01em] text-background/80">
+                {formatFullDate(event.starts_at)}
+              </p>
             )}
           </div>
 
@@ -163,12 +165,14 @@ export function GuestTicket() {
           <div className="grid gap-6 p-6 sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-3">
-                <span className="grid size-11 place-items-center rounded-full bg-primary/10 font-semibold text-primary">
+                <span className="text-ui grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
                   {initials(reg.name)}
                 </span>
                 <div>
-                  <p className="font-semibold">{reg.name}</p>
-                  <p className="text-sm text-muted-foreground">{reg.email}</p>
+                  <p className="display-headline text-[1.0625rem]">{reg.name}</p>
+                  <p className="text-[0.9375rem] tracking-[-0.01em] text-muted-foreground">
+                    {reg.email}
+                  </p>
                 </div>
               </div>
 

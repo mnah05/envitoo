@@ -6,7 +6,7 @@ export function Loading({ label = "Loading" }: { label?: string }) {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-muted-foreground">
       <Spinner className="size-6" />
-      <span className="text-sm">{label}…</span>
+      <span className="text-eyebrow">{label}…</span>
     </div>
   );
 }

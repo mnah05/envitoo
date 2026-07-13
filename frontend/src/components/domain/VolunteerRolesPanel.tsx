@@ -68,7 +68,7 @@ export function VolunteerRolesPanel({ eventId }: { eventId: string }) {
     <div className="rounded-2xl border bg-card p-6 shadow-sm">
       <div className="flex items-center gap-2">
         <Shield className="size-5 text-muted-foreground" />
-        <h3 className="font-semibold">Roles</h3>
+        <h3 className="display-headline text-[1.0625rem]">Roles</h3>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
         Define the roles volunteers can apply for.

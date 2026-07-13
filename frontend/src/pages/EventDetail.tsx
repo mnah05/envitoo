@@ -52,8 +52,8 @@ export function EventDetail() {
     return (
       <div className="pt-16">
         <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-          <h1 className="text-2xl font-bold">Event not found</h1>
-          <p className="text-muted-foreground">
+          <h1 className="display-title text-2xl">Event not found</h1>
+          <p className="text-lede max-w-sm text-[1.0625rem]">
             This event may have been cancelled or doesn't exist.
           </p>
           <Button asChild variant="outline">
@@ -115,8 +115,8 @@ export function EventDetail() {
           {/* Main */}
           <div className="flex flex-col gap-6">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{event.title}</h1>
-              <p className="mt-3 text-muted-foreground">{formatFullDate(event.starts_at)}</p>
+              <h1 className="display-title text-3xl sm:text-4xl">{event.title}</h1>
+              <p className="text-lede mt-3 text-[1.0625rem]">{formatFullDate(event.starts_at)}</p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -168,7 +168,7 @@ export function EventDetail() {
             <div className="rounded-2xl border bg-card p-6 shadow-sm">
               {cancelled ? (
                 <div className="rounded-xl bg-muted p-6 text-center">
-                  <p className="font-semibold">This event has been cancelled.</p>
+                  <p className="display-headline text-[1.0625rem]">This event has been cancelled.</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Registrations are closed.
                   </p>
@@ -176,7 +176,7 @@ export function EventDetail() {
               ) : (
                 <>
                   <div className="mb-4 flex items-baseline justify-between">
-                    <span className="text-2xl font-bold">
+                    <span className="text-stat text-2xl">
                       {formatPrice(event.price_in_paise, event.currency)}
                     </span>
                     {event.requires_approval && (
@@ -198,7 +198,7 @@ export function EventDetail() {
           {/* Map — physical events with coordinates */}
           {!event.is_virtual && event.lat != null && event.lng != null && (
             <div className="lg:col-start-1 lg:row-start-3">
-              <h2 className="mb-3 text-lg font-semibold">Where to find it</h2>
+              <h2 className="display-headline mb-3 text-lg">Where to find it</h2>
               <EventMap lat={event.lat} lng={event.lng} label={event.venue_name ?? event.title} />
             </div>
           )}
@@ -206,7 +206,7 @@ export function EventDetail() {
           {/* Description — below register card on mobile, below info on desktop */}
           {event.description && (
             <div className="flex flex-col gap-3 lg:col-start-1 lg:row-start-2">
-              <h2 className="text-lg font-semibold">About this event</h2>
+              <h2 className="display-headline text-lg">About this event</h2>
               <Separator />
               <p className="whitespace-pre-line text-pretty leading-relaxed text-muted-foreground">
                 {event.description}
@@ -232,10 +232,10 @@ function InfoRow({
     <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
       <span className="mt-0.5 text-muted-foreground">{icon}</span>
       <div className="min-w-0">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-eyebrow text-[12px]">
           {label}
         </p>
-        <p className="mt-0.5 font-medium">{children}</p>
+        <p className="display-headline mt-0.5 text-[1.0625rem] font-medium">{children}</p>
       </div>
     </div>
   );

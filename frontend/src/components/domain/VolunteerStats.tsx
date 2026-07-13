@@ -35,9 +35,9 @@ function Stat({
     <div className="rounded-2xl border bg-card p-5">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
-        <span className="text-sm font-medium">{label}</span>
+        <span className="text-eyebrow">{label}</span>
       </div>
-      <p className="mt-2 text-2xl font-bold">{value}</p>
+      <p className="text-stat mt-2 text-2xl">{value}</p>
     </div>
   );
 }

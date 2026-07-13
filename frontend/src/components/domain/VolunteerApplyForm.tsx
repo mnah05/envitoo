@@ -60,7 +60,7 @@ export function VolunteerApplyForm({
             <HeartHandshake className="size-5" />
           </div>
           <div>
-            <p className="font-semibold">Volunteer at this event</p>
+            <p className="display-headline text-[1.0625rem]">Volunteer at this event</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Help the team and get behind the scenes.
             </p>
@@ -85,7 +85,7 @@ export function VolunteerApplyForm({
         <div className="flex flex-col items-center gap-3 rounded-xl bg-emerald-50/60 p-6 text-center">
           <CheckCircle2 className="size-8 text-emerald-600" />
           <div>
-            <p className="font-semibold text-foreground">Application submitted!</p>
+            <p className="display-headline text-[1.0625rem] text-foreground">Application submitted!</p>
             <p className="mt-1 text-sm text-muted-foreground">
               We'll review your application and notify you.
             </p>
@@ -140,7 +140,7 @@ export function VolunteerApplyForm({
     <div className="rounded-2xl border bg-card p-6 shadow-sm">
       <div className="flex items-center gap-2">
         <HeartHandshake className="size-5 text-primary" />
-        <h3 className="font-semibold">Volunteer at this event</h3>
+        <h3 className="display-headline text-[1.0625rem]">Volunteer at this event</h3>
       </div>
 
       {settings.description && (

@@ -64,17 +64,16 @@ export function Discover() {
 
   return (
     <div className="pt-16">
-      {/* Header */}
       <PageContainer className="py-14 sm:py-20">
-        <h1 className="display-hero text-balance text-4xl tracking-tight sm:text-5xl">
+        <p className="text-eyebrow text-primary/90">Browse</p>
+        <h1 className="display-hero mt-3 text-4xl sm:text-5xl">
           Discover events
         </h1>
-        <p className="mt-3 text-muted-foreground">
-          Browse what's happening — find your next experience.
+        <p className="text-lede mt-4 max-w-lg text-[1.0625rem]">
+          What's happening next — find your next experience.
         </p>
       </PageContainer>
 
-      {/* Browse by category */}
       <PageContainer className="pb-6">
         <h2 className="label-muted mb-4">Browse by category</h2>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-4">
@@ -84,7 +83,10 @@ export function Discover() {
               <Link
                 key={c}
                 to={`/discover?category=${c}`}
-                className="group flex min-w-[14rem] flex-shrink-0 items-center justify-between gap-2 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-muted/40 sm:min-w-0"
+                className={
+                  "group flex min-w-[14rem] flex-shrink-0 items-center justify-between gap-2 rounded-xl border border-border/80 bg-card p-4 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:min-w-0" +
+                  (isActive ? " border-primary/40 bg-primary/10" : "")
+                }
               >
                 <div>
                   <p className="text-sm font-medium">{CATEGORY_LABELS[c]}</p>
@@ -92,8 +94,8 @@ export function Discover() {
                 </div>
                 <ArrowRight
                   className={
-                    "size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" +
-                    (isActive ? " text-primary" : "")
+                    "size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" +
+                    (isActive ? " text-foreground" : "")
                   }
                 />
               </Link>
@@ -189,7 +191,7 @@ function CategorySection({
 }) {
   return (
     <section>
-      <h2 className="mb-4 text-xl font-semibold">{label}</h2>
+      <h2 className="display-headline mb-4 text-xl">{label}</h2>
       <div className="relative">
         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none">
           {events.map((event, i) => (

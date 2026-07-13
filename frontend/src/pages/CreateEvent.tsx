@@ -197,8 +197,8 @@ export function CreateEvent() {
         </Button>
 
         <div className="mb-10">
-          <h1 className="display-hero text-3xl tracking-tight sm:text-4xl">Create event</h1>
-          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+          <h1 className="display-title text-3xl sm:text-4xl">Create event</h1>
+          <p className="text-lede mt-3 text-[1.0625rem]">
             Set the basics — you can fine-tune details later.
           </p>
         </div>
@@ -216,7 +216,7 @@ export function CreateEvent() {
               placeholder="What's happening?"
               aria-invalid={!!fieldErrors.title}
               className={cn(
-                "w-full border-0 bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/40 sm:text-3xl",
+                "font-display w-full border-0 bg-transparent text-2xl font-semibold tracking-[-0.028em] outline-none placeholder:text-muted-foreground/40 sm:text-3xl",
                 fieldErrors.title && "text-destructive placeholder:text-destructive/40",
               )}
             />
@@ -503,7 +503,7 @@ export function CreateEvent() {
               Event published!
             </DialogTitle>
             <DialogDescription className="pt-1 text-base">
-              Your event <span className="font-semibold text-foreground">{createdEvent?.title}</span> is now live.
+              Your event <span className="display-headline text-foreground">{createdEvent?.title}</span> is now live.
             </DialogDescription>
           </DialogHeader>
 

@@ -15,7 +15,7 @@ export function BottomNav() {
   return (
     <nav
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 backdrop-blur-md sm:hidden",
+        "fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/90 backdrop-blur-xl sm:hidden",
         "pb-[env(safe-area-inset-bottom)]",
       )}
       aria-label="Primary"
@@ -23,7 +23,6 @@ export function BottomNav() {
       <div className="mx-auto flex h-16 max-w-md items-stretch justify-around">
         <NavItem to="/discover" label="Discover" icon={<Compass className="size-5" />} />
 
-        {/* Center create button — elevated */}
         <NavLink
           to="/create"
           className="flex flex-col items-center justify-center px-3"
@@ -33,8 +32,8 @@ export function BottomNav() {
             <>
               <span
                 className={cn(
-                  "grid size-11 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95",
-                  isActive && "ring-2 ring-primary/40 ring-offset-2 ring-offset-background",
+                  "grid size-11 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40 transition-transform active:scale-95",
+                  isActive && "ring-2 ring-primary/50 ring-offset-2 ring-offset-background",
                 )}
               >
                 <Plus className="size-5" />
@@ -51,7 +50,7 @@ export function BottomNav() {
         <SignedOut>
           <SignInButton mode="redirect" forceRedirectUrl="/home">
             <button
-              className="flex flex-1 flex-col items-center justify-center gap-1 text-primary"
+              className="flex flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
               aria-label="Sign in"
             >
               <UserRound className="size-5" />

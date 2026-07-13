@@ -14,7 +14,7 @@ export function RoleBadge({
     <Badge
       variant="outline"
       className={cn(
-        "bg-primary/10 text-primary ring-1 ring-primary/20",
+        "bg-primary/15 text-primary ring-1 ring-primary/30",
         className,
       )}
     >

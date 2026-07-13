@@ -70,7 +70,7 @@ export function MyEventStaffList() {
                 <EventStatusBadge status={item.event_status} />
                 {item.is_admin && <RoleBadge isAdmin />}
               </div>
-              <h2 className="mt-1 truncate text-lg font-semibold">{item.title}</h2>
+              <h2 className="display-headline mt-1 truncate text-lg">{item.title}</h2>
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <CalendarDays className="size-4" />

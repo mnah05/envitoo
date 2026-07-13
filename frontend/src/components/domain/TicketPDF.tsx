@@ -8,10 +8,10 @@ export type TicketPdfInput = {
   token: string;
 };
 
-const GOLD = "#f5c518";
-const INK = "#07070d";
-const MUTE = "#6e6e8a";
-const LINE = "#d4d4e0";
+const ACCENT = "#14b8a6";
+const INK = "#09090b";
+const MUTE = "#71717a";
+const LINE = "#e4e4e7";
 
 const styles = StyleSheet.create({
   page: {
@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 10,
-    backgroundColor: GOLD,
+    backgroundColor: ACCENT,
   },
   goldBottom: {
     position: "absolute",
@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 10,
-    backgroundColor: GOLD,
+    backgroundColor: ACCENT,
   },
   header: {
     flexDirection: "row",
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 6,
-    backgroundColor: GOLD,
+    backgroundColor: ACCENT,
   },
   brandName: {
     fontFamily: "Helvetica-Bold",

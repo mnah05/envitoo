@@ -201,8 +201,8 @@ export function EditEvent() {
     return (
       <div className="pt-16">
         <PageContainer className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center">
-          <h1 className="text-2xl font-bold">Event not found</h1>
-          <p className="text-muted-foreground">You may not have access to this event.</p>
+          <h1 className="display-title text-2xl">Event not found</h1>
+          <p className="text-lede text-[1.0625rem]">You may not have access to this event.</p>
           <Button asChild variant="outline">
             <Link to="/manage">Back to my events</Link>
           </Button>
@@ -229,8 +229,8 @@ export function EditEvent() {
         </Button>
 
         <div className="mb-10">
-          <h1 className="display-hero text-3xl tracking-tight sm:text-4xl">Update event</h1>
-          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+          <h1 className="display-title text-3xl sm:text-4xl">Update event</h1>
+          <p className="text-lede mt-3 text-[1.0625rem]">
             Fine-tune details, location, and settings.
           </p>
         </div>
@@ -252,7 +252,7 @@ export function EditEvent() {
             <p className="label-muted mb-2">
               Event name
             </p>
-            <p className="text-2xl font-semibold tracking-tight sm:text-3xl">{event.title}</p>
+            <p className="display-title text-2xl sm:text-3xl">{event.title}</p>
           </div>
 
           {/* Meta card */}

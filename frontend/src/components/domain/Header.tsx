@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
-import { Activity, CalendarDays, Compass, Menu, Ticket } from "lucide-react";
+import { CalendarDays, Compass, Menu, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -11,13 +11,26 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
+function BrandMark({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "grid size-6 place-items-center rounded-md bg-gradient-to-br from-primary via-teal-400 to-sky-400 text-primary-foreground text-[11px] font-bold tracking-tight shadow-sm shadow-primary/30",
+        className,
+      )}
+    >
+      E
+    </span>
+  );
+}
+
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user } = useUser();
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -31,16 +44,16 @@ export function Header() {
 
           <Link
             to="/"
-            className="flex items-center gap-2 font-semibold tracking-tight text-foreground"
+            className="flex items-center gap-2 text-foreground"
           >
-            <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground">
-              <Activity className="size-3.5" strokeWidth={2.5} />
+            <BrandMark />
+            <span className="font-display text-[15px] font-semibold tracking-[-0.02em] sm:text-[16px]">
+              EnviToo
             </span>
-            <span className="text-base">EnviToo</span>
           </Link>
         </div>
 
-        <nav className="hidden items-center gap-1 sm:flex">
+        <nav className="hidden items-center gap-0.5 sm:flex">
           <HeaderLink to="/discover">Discover</HeaderLink>
           <SignedIn>
             <HeaderLink to="/home">My tickets</HeaderLink>
@@ -66,7 +79,7 @@ export function Header() {
 
           <SignedOut>
             <SignInButton mode="redirect" forceRedirectUrl="/home">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                 Sign in
               </Button>
             </SignInButton>
@@ -77,7 +90,6 @@ export function Header() {
         </div>
       </div>
 
-      {/* Mobile navigation sheet */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="bottom" className="sm:hidden">
           <SheetHeader>
@@ -106,7 +118,7 @@ export function Header() {
               <MobileLink
                 to="/create"
                 label="Create event"
-                icon={<Activity className="size-5" />}
+                icon={<BrandMark className="size-5 rounded" />}
                 onClick={() => setMobileOpen(false)}
               />
             </SignedIn>
@@ -114,12 +126,12 @@ export function Header() {
               <MobileLink
                 to="/create"
                 label="Create event"
-                icon={<Activity className="size-5" />}
+                icon={<BrandMark className="size-5 rounded" />}
                 onClick={() => setMobileOpen(false)}
               />
               <div className="mt-2 px-3">
                 <SignInButton mode="redirect" forceRedirectUrl="/home">
-                  <Button className="w-full">Sign in</Button>
+                  <Button className="w-full rounded-full">Sign in</Button>
                 </SignInButton>
               </div>
             </SignedOut>
@@ -136,8 +148,8 @@ function HeaderLink({ to, children }: { to: string; children: React.ReactNode })
       to={to}
       className={({ isActive }) =>
         cn(
-          "rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-          isActive && "text-foreground",
+          "text-ui rounded-full px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground",
+          isActive && "bg-primary/15 text-primary",
         )
       }
     >
@@ -165,8 +177,8 @@ function MobileLink({
         cn(
           "flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-base font-medium transition-colors",
           isActive
-            ? "bg-primary/10 text-primary"
-            : "text-foreground hover:bg-muted",
+            ? "bg-primary/15 text-primary"
+            : "text-foreground hover:bg-muted/60",
         )
       }
     >

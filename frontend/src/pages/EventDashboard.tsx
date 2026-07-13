@@ -127,8 +127,8 @@ export function EventDashboard() {
     return (
       <div className="pt-16">
         <PageContainer className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center">
-          <h1 className="text-2xl font-bold">Event not found</h1>
-          <p className="text-muted-foreground">You may not have access to this event.</p>
+          <h1 className="display-title text-2xl">Event not found</h1>
+          <p className="text-lede text-[1.0625rem]">You may not have access to this event.</p>
           <Button asChild variant="outline">
             <Link to="/manage">Back to my events</Link>
           </Button>
@@ -159,15 +159,15 @@ export function EventDashboard() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold tracking-tight">{event.title}</h1>
+              <h1 className="display-title text-3xl sm:text-4xl">{event.title}</h1>
               <EventStatusBadge status={event.status} />
               {event.visibility === "unlisted" && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                <span className="text-ui inline-flex items-center gap-1.5 rounded-full border border-dashed px-2.5 py-0.5 text-[12px] text-muted-foreground">
                   Unlisted
                 </span>
               )}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.9375rem] tracking-[-0.01em] text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <CalendarDays className="size-4" />
                 {formatEventDate(event.starts_at, event.ends_at)}
@@ -230,7 +230,7 @@ export function EventDashboard() {
               <div className="mt-8">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-xl font-semibold">Registrations</h2>
+                    <h2 className="display-headline text-xl">Registrations</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {regTotal} total
                       {regPageCount > 1 && (
@@ -391,12 +391,12 @@ function Stat({
   value: number;
 }) {
   return (
-    <div className="rounded-2xl border bg-card p-5">
+    <div className="rounded-2xl border border-border/80 bg-card p-5">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
-        <span className="text-sm font-medium">{label}</span>
+        <span className="text-eyebrow">{label}</span>
       </div>
-      <p className="mt-2 text-2xl font-bold">{value}</p>
+      <p className="text-stat mt-2 text-2xl">{value}</p>
     </div>
   );
 }
