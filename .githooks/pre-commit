@@ -22,9 +22,17 @@ check() {
 
 # --- 1. Gitleaks: secrets scanning (staged only) ---
 echo -e "\n${YELLOW}🔍 Secrets scan (gitleaks)...${NC}"
-if command -v gitleaks &>/dev/null; then
-    git diff --cached -- . | gitleaks detect --pipe --no-git -v 2>/dev/null
-    check "$?" "no secrets detected in staged changes"
+if command -v gitleaks >/dev/null 2>&1; then
+    # Use a temp file instead of a pipe: with `set -o pipefail`, `git diff | gitleaks`
+    # can exit 141 (SIGPIPE) after a clean scan and abort before check().
+    TMPDIFF=$(mktemp)
+    git diff --cached -- . >"$TMPDIFF" || true
+    set +e
+    gitleaks detect --pipe --no-git <"$TMPDIFF" >/dev/null 2>&1
+    GL_STATUS=$?
+    set -e
+    rm -f "$TMPDIFF"
+    check "$GL_STATUS" "no secrets detected in staged changes"
 else
     echo -e "  ${YELLOW}⚠ gitleaks not installed, skipping${NC}"
 fi
