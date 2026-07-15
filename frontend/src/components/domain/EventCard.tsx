@@ -67,7 +67,7 @@ export function EventCover({
           src={event.cover_image_url}
           alt=""
           loading="lazy"
-          className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className="size-full object-cover"
         />
       ) : (
         <div className={cn("size-full", gradientFor(event.id))} />

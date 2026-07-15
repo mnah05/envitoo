@@ -63,18 +63,24 @@ export function Discover() {
   }
 
   return (
-    <div className="pt-16">
-      <PageContainer className="py-14 sm:py-20">
-        <p className="text-eyebrow text-primary/90">Browse</p>
-        <h1 className="display-hero mt-3 text-4xl sm:text-5xl">
-          Discover events
-        </h1>
+    <div className="relative pt-16">
+      <div
+        className="pointer-events-none absolute inset-0 bg-radial-fade opacity-80"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 bg-grain opacity-[0.03]"
+        aria-hidden
+      />
+
+      <PageContainer className="relative py-14 sm:py-20">
+        <h1 className="display-hero text-4xl sm:text-5xl">Discover events</h1>
         <p className="text-lede mt-4 max-w-lg text-[1.0625rem]">
           What's happening next — find your next experience.
         </p>
       </PageContainer>
 
-      <PageContainer className="pb-6">
+      <PageContainer className="relative pb-6">
         <h2 className="label-muted mb-4">Browse by category</h2>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-4">
           {CATEGORIES.map((c) => {
@@ -88,13 +94,10 @@ export function Discover() {
                   (isActive ? " border-primary/40 bg-primary/10" : "")
                 }
               >
-                <div>
-                  <p className="text-sm font-medium">{CATEGORY_LABELS[c]}</p>
-                  <p className="text-xs text-muted-foreground">Explore</p>
-                </div>
+                <p className="text-sm font-medium">{CATEGORY_LABELS[c]}</p>
                 <ArrowRight
                   className={
-                    "size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" +
+                    "size-4 text-muted-foreground transition-colors group-hover:text-foreground" +
                     (isActive ? " text-foreground" : "")
                   }
                 />
@@ -105,7 +108,7 @@ export function Discover() {
       </PageContainer>
 
       {/* Content */}
-      <PageContainer className="pb-28 sm:pb-20">
+      <PageContainer className="relative pb-28 sm:pb-20">
         {selectedCategory && (
           <div className="mb-8 flex items-center justify-between gap-3">
             <p className="text-muted-foreground">

@@ -291,7 +291,7 @@ export function CreateEvent() {
                     className={cn(
                       "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                       !form.is_virtual
-                        ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                        ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -311,7 +311,7 @@ export function CreateEvent() {
                     className={cn(
                       "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                       form.is_virtual
-                        ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                        ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >

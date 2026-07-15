@@ -15,7 +15,7 @@ function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "grid size-6 place-items-center rounded-md bg-gradient-to-br from-primary via-teal-400 to-sky-400 text-primary-foreground text-[11px] font-bold tracking-tight shadow-sm shadow-primary/30",
+        "grid size-6 place-items-center rounded-md bg-gradient-to-br from-primary via-teal-400 to-sky-400 text-primary-foreground text-[11px] font-bold tracking-tight shadow-sm",
         className,
       )}
     >

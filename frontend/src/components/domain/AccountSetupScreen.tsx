@@ -30,7 +30,7 @@ export function AccountSetupScreen() {
   if (isError) {
     return (
       <div className="relative flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-16">
-        <div className="bg-grid pointer-events-none absolute inset-0 opacity-60" />
+        <div className="pointer-events-none absolute inset-0 bg-radial-fade opacity-70" aria-hidden />
         <div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-lg">
           <h1 className="display-title text-xl">Setup interrupted</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -49,7 +49,7 @@ export function AccountSetupScreen() {
 
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-16">
-      <div className="bg-grid pointer-events-none absolute inset-0 opacity-60" />
+      <div className="pointer-events-none absolute inset-0 bg-radial-fade opacity-70" aria-hidden />
 
       <motion.div
         initial={reducedMotion ? false : { opacity: 0, y: 12 }}

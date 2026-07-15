@@ -9,7 +9,6 @@ import {
   Users,
   Compass,
   Ticket,
-  Shield,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,7 @@ export function Landing() {
     <div className="overflow-x-hidden">
       <Hero transition={transition} />
       <StatsStrip />
-      <CategoryMarquee />
+      <CategorySection />
       <Features transition={transition} />
       <HowItWorks transition={transition} />
       <FeaturedEvents transition={transition} />
@@ -50,83 +49,86 @@ function Hero({
   transition: { duration: number; ease?: readonly [number, number, number, number] };
 }) {
   return (
-    <section className="relative border-b border-border/40 bg-radial-fade pt-16">
-      <div className="pointer-events-none absolute inset-0 bg-grid opacity-40" aria-hidden />
-      <PageContainer className="relative flex min-h-[78dvh] flex-col items-center justify-center py-20 text-center sm:py-28">
-        <motion.p
-          className="text-ui mb-6 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3.5 py-1.5 text-[13px] text-primary"
-          initial="hidden"
-          animate="visible"
-          variants={fadeUp}
-          transition={transition}
-        >
-          <span className="size-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-          Event pages · registrations · check-in
-        </motion.p>
+    <section className="relative min-h-dvh border-b border-border/40 bg-radial-fade pt-16">
+      <div
+        className="pointer-events-none absolute inset-0 bg-grain opacity-[0.035]"
+        aria-hidden
+      />
+      <PageContainer className="relative flex min-h-[calc(100dvh-4rem)] flex-col justify-center py-20 sm:py-28">
+        <div className="max-w-3xl">
+          <motion.h1
+            className="display-hero text-[2.75rem] sm:text-6xl lg:text-7xl"
+            initial="hidden"
+            animate="visible"
+            variants={fadeUp}
+            transition={transition}
+          >
+            Host events people
+            <br />
+            <span className="text-primary">actually</span> show up for.
+          </motion.h1>
 
-        <motion.h1
-          className="display-hero max-w-[18ch] text-[2.75rem] sm:max-w-3xl sm:text-6xl lg:text-7xl"
-          initial="hidden"
-          animate="visible"
-          variants={fadeUp}
-          transition={{ ...transition, delay: reduceDelay(transition, 0.05) }}
-        >
-          Host events people
-          <br />
-          <span className="text-gradient">actually show up for.</span>
-        </motion.h1>
+          <motion.p
+            className="text-lede mt-7 max-w-[34rem]"
+            initial="hidden"
+            animate="visible"
+            variants={fadeUp}
+            transition={{ ...transition, delay: reduceDelay(transition, 0.08) }}
+          >
+            Better discovery, cleaner tickets, no subscriptions. Publish a page in
+            minutes and open registrations today.
+          </motion.p>
 
-        <motion.p
-          className="text-lede mt-7 max-w-[34rem]"
-          initial="hidden"
-          animate="visible"
-          variants={fadeUp}
-          transition={{ ...transition, delay: reduceDelay(transition, 0.1) }}
-        >
-          Better discovery, cleaner tickets, no subscriptions. Publish a page in
-          minutes and open registrations today.
-        </motion.p>
-
-        <motion.div
-          className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
-          initial="hidden"
-          animate="visible"
-          variants={fadeUp}
-          transition={{ ...transition, delay: reduceDelay(transition, 0.15) }}
-        >
-          <Button asChild size="lg" className="text-ui rounded-full px-8 text-[15px]">
-            <Link to="/create">
-              Create event
-              <ArrowRight data-icon="inline-end" />
+          <motion.div
+            className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center"
+            initial="hidden"
+            animate="visible"
+            variants={fadeUp}
+            transition={{ ...transition, delay: reduceDelay(transition, 0.14) }}
+          >
+            <Button asChild size="lg" className="text-ui rounded-full px-8 text-[15px]">
+              <Link to="/create">
+                Create event
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+            <Link
+              to="/discover"
+              className="text-ui text-[15px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Explore events
+              <ArrowRight className="ml-1 inline size-4" />
             </Link>
-          </Button>
-          <Button asChild variant="outline" size="lg" className="text-ui rounded-full px-8 text-[15px]">
-            <Link to="/discover">Explore events</Link>
-          </Button>
-        </motion.div>
+          </motion.div>
+        </div>
       </PageContainer>
     </section>
   );
 }
 
 const STATS = [
-  { value: "7+", label: "Categories", color: "text-teal-300" },
-  { value: "QR", label: "Check-in", color: "text-sky-300" },
-  { value: "Free", label: "To start", color: "text-emerald-300" },
-  { value: "0", label: "Subscriptions", color: "text-amber-300" },
+  { value: "Free", label: "To start" },
+  { value: "QR", label: "Check-in" },
+  { value: "0", label: "Subscriptions" },
 ];
 
 function StatsStrip() {
   return (
     <section className="border-b border-border/40">
       <PageContainer className="py-10 sm:py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
-          {STATS.map((s) => (
-            <div key={s.label} className="text-center sm:text-left">
-              <p className={cn("text-stat text-[2rem] sm:text-[2.5rem]", s.color)}>
+        <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between sm:gap-12">
+          {STATS.map((s, i) => (
+            <div
+              key={s.label}
+              className={cn(
+                "flex items-baseline gap-3 sm:flex-col sm:items-start sm:gap-2",
+                i > 0 && "sm:border-l sm:border-border/50 sm:pl-12",
+              )}
+            >
+              <p className="text-stat text-[2rem] text-foreground/90 sm:text-[2.5rem]">
                 {s.value}
               </p>
-              <p className="text-eyebrow mt-2">{s.label}</p>
+              <p className="text-eyebrow">{s.label}</p>
             </div>
           ))}
         </div>
@@ -135,42 +137,24 @@ function StatsStrip() {
   );
 }
 
-const CATEGORY_DOTS: Record<string, string> = {
-  technical: "bg-sky-400",
-  cultural: "bg-rose-400",
-  sports: "bg-emerald-400",
-  workshop: "bg-amber-400",
-  seminar: "bg-teal-400",
-  hackathon: "bg-orange-400",
-  other: "bg-zinc-400",
-};
-
-function CategoryMarquee() {
-  const items = [...CATEGORIES, ...CATEGORIES];
-
+function CategorySection() {
   return (
-    <section className="border-b border-border/40 py-8" aria-label="Event categories">
-      <div className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-background to-transparent sm:w-24" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-background to-transparent sm:w-24" />
-        <div className="marquee-track flex w-max gap-3 px-4">
-          {items.map((cat, i) => (
+    <section className="border-b border-border/40 py-12 sm:py-16" aria-label="Event categories">
+      <PageContainer>
+        <h2 className="display-title text-2xl sm:text-3xl">Browse by category</h2>
+        <div className="mt-8 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-4">
+          {CATEGORIES.map((cat) => (
             <Link
-              key={`${cat}-${i}`}
+              key={cat}
               to={`/discover?category=${cat}`}
-              className="text-ui inline-flex shrink-0 items-center gap-2 rounded-full border border-border/80 bg-card px-4 py-2 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+              className="text-ui flex min-w-[10rem] shrink-0 items-center justify-between rounded-xl border border-border/80 bg-card px-4 py-4 text-[14px] text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-foreground sm:min-w-0"
             >
-              <span
-                className={cn(
-                  "size-1.5 rounded-full shadow-[0_0_8px_currentColor]",
-                  CATEGORY_DOTS[cat] ?? CATEGORY_DOTS.other,
-                )}
-              />
               {CATEGORY_LABELS[cat]}
+              <ArrowRight className="size-3.5 opacity-50" />
             </Link>
           ))}
         </div>
-      </div>
+      </PageContainer>
     </section>
   );
 }
@@ -180,27 +164,23 @@ const FEATURES = [
     icon: CalendarPlus,
     title: "Create & publish in minutes",
     body: "Title, schedule, capacity, cover — ship a polished event page without the busywork.",
-    className: "sm:col-span-2",
-    iconClass: "border-teal-500/30 bg-teal-500/10 text-teal-300",
+    className: "sm:col-span-2 sm:row-span-1",
+    large: true,
   },
   {
     icon: Ticket,
     title: "Tickets & QR check-in",
     body: "Guests get QR tickets. You scan at the door. Approvals and cancellations stay simple.",
-    iconClass: "border-sky-500/30 bg-sky-500/10 text-sky-300",
   },
   {
     icon: Users,
     title: "Volunteers & roster",
     body: "Open roles, review applications, and keep staff aligned from one dashboard.",
-    iconClass: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   },
   {
     icon: Compass,
     title: "Discover or stay unlisted",
     body: "Feature public events on Discover, or share a private link for invite-only nights.",
-    className: "sm:col-span-2",
-    iconClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   },
 ];
 
@@ -211,7 +191,6 @@ function Features({
 }) {
   return (
     <section className="relative border-b border-border/40 py-20 sm:py-24">
-      <div className="pointer-events-none absolute inset-0 bg-mesh opacity-60" aria-hidden />
       <PageContainer className="relative">
         <motion.div
           initial="hidden"
@@ -220,8 +199,7 @@ function Features({
           variants={fadeUp}
           transition={transition}
         >
-          <p className="text-eyebrow text-primary/90">Everything you need</p>
-          <h2 className="display-title mt-3 max-w-xl text-3xl sm:text-4xl">
+          <h2 className="display-title max-w-xl text-3xl sm:text-4xl">
             One place for hosts, guests, and volunteers
           </h2>
           <p className="text-lede mt-4 max-w-lg text-[1.0625rem]">
@@ -234,8 +212,9 @@ function Features({
             <motion.div
               key={f.title}
               className={cn(
-                "group rounded-xl border border-border/80 bg-card/80 p-6 backdrop-blur-sm transition-colors hover:border-primary/30 hover:bg-card",
+                "group rounded-xl border border-border/80 bg-card/80 p-6 transition-colors hover:border-primary/30 hover:bg-card",
                 f.className,
+                f.large && "flex flex-col justify-between sm:min-h-[14rem]",
               )}
               initial="hidden"
               whileInView="visible"
@@ -243,18 +222,28 @@ function Features({
               variants={fadeUp}
               transition={{ ...transition, delay: reduceDelay(transition, i * 0.05) }}
             >
-              <div
+              <f.icon
                 className={cn(
-                  "mb-4 grid size-9 place-items-center rounded-lg border",
-                  f.iconClass,
+                  "text-muted-foreground",
+                  f.large ? "mb-6 size-6" : "mb-4 size-5",
                 )}
-              >
-                <f.icon className="size-4" strokeWidth={1.75} />
-              </div>
-              <h3 className="display-headline text-[1.0625rem]">{f.title}</h3>
-              <p className="mt-2 text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
-                {f.body}
-              </p>
+                strokeWidth={1.5}
+              />
+              {f.large ? (
+                <>
+                  <h3 className="display-headline text-xl sm:text-2xl">{f.title}</h3>
+                  <p className="mt-3 max-w-md text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
+                    {f.body}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="display-headline text-[1.0625rem]">{f.title}</h3>
+                  <p className="mt-2 text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
+                    {f.body}
+                  </p>
+                </>
+              )}
             </motion.div>
           ))}
         </div>
@@ -265,28 +254,22 @@ function Features({
 
 const STEPS = [
   {
-    n: "1",
+    n: "01",
     title: "Create your page",
     body: "Add details, set capacity, choose public or unlisted. Publish when you're ready.",
     icon: Zap,
-    accent: "text-teal-300 border-teal-500/25 bg-teal-500/10",
-    stepColor: "text-teal-300",
   },
   {
-    n: "2",
+    n: "02",
     title: "Share the link",
     body: "Send one URL. Guests register in seconds — signed-in or as a guest.",
     icon: Share2,
-    accent: "text-sky-300 border-sky-500/25 bg-sky-500/10",
-    stepColor: "text-sky-300",
   },
   {
-    n: "3",
+    n: "03",
     title: "Manage the day",
     body: "Approve registrations, scan QR tickets, and coordinate volunteers from the dashboard.",
     icon: QrCode,
-    accent: "text-amber-300 border-amber-500/25 bg-amber-500/10",
-    stepColor: "text-amber-300",
   },
 ];
 
@@ -307,10 +290,10 @@ function HowItWorks({
           transition={transition}
         >
           <div>
-            <p className="text-eyebrow text-sky-300/90">How it works</p>
-            <h2 className="display-title mt-3 text-3xl sm:text-4xl">
-              Live in three steps
-            </h2>
+            <h2 className="display-title text-3xl sm:text-4xl">Live in three steps</h2>
+            <p className="text-lede mt-3 max-w-md text-[1.0625rem]">
+              From blank page to door check-in without the busywork.
+            </p>
           </div>
           <Link
             to="/create"
@@ -321,36 +304,36 @@ function HowItWorks({
           </Link>
         </motion.div>
 
-        <div className="mt-12 grid gap-4 md:grid-cols-3">
-          {STEPS.map((step, i) => (
-            <motion.div
-              key={step.n}
-              className="relative rounded-xl border border-border/80 bg-card p-6 transition-colors hover:border-primary/25"
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-40px" }}
-              variants={fadeUp}
-              transition={{ ...transition, delay: reduceDelay(transition, i * 0.06) }}
-            >
-              <div className="flex items-center justify-between">
-                <span className={cn("text-ui text-[12px] tabular-nums", step.stepColor)}>
-                  Step {step.n}
+        {/* Horizontal flow with connecting line */}
+        <div className="relative mt-14">
+          <div
+            className="pointer-events-none absolute top-5 right-[16.67%] left-[16.67%] hidden h-px bg-border md:block"
+            aria-hidden
+          />
+          <div className="grid gap-10 md:grid-cols-3 md:gap-6">
+            {STEPS.map((step, i) => (
+              <motion.div
+                key={step.n}
+                className="relative flex flex-col items-start"
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: "-40px" }}
+                variants={fadeUp}
+                transition={{ ...transition, delay: reduceDelay(transition, i * 0.06) }}
+              >
+                <div className="relative z-10 flex size-10 items-center justify-center rounded-full border border-border bg-background">
+                  <step.icon className="size-4 text-muted-foreground" strokeWidth={1.5} />
+                </div>
+                <span className="text-ui mt-5 text-[12px] tabular-nums text-muted-foreground">
+                  {step.n}
                 </span>
-                <span
-                  className={cn(
-                    "grid size-8 place-items-center rounded-lg border",
-                    step.accent,
-                  )}
-                >
-                  <step.icon className="size-4" strokeWidth={1.75} />
-                </span>
-              </div>
-              <h3 className="display-headline mt-6 text-xl">{step.title}</h3>
-              <p className="mt-2 text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
-                {step.body}
-              </p>
-            </motion.div>
-          ))}
+                <h3 className="display-headline mt-2 text-xl">{step.title}</h3>
+                <p className="mt-2 text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
+                  {step.body}
+                </p>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </PageContainer>
     </section>
@@ -370,9 +353,9 @@ function FeaturedEvents({
 
   const events = useMemo(
     () =>
-      (data?.events ?? []).filter(
-        (e) => e.status === "published" && e.registration_count < e.capacity,
-      ).slice(0, 6),
+      (data?.events ?? [])
+        .filter((e) => e.status === "published" && e.registration_count < e.capacity)
+        .slice(0, 6),
     [data?.events],
   );
 
@@ -390,10 +373,10 @@ function FeaturedEvents({
           transition={transition}
         >
           <div>
-            <p className="text-eyebrow text-amber-300/90">Happening soon</p>
-            <h2 className="display-title mt-3 text-3xl sm:text-4xl">
-              Featured events
-            </h2>
+            <h2 className="display-title text-3xl sm:text-4xl">Featured events</h2>
+            <p className="text-lede mt-3 max-w-md text-[1.0625rem]">
+              What&apos;s open next — real events, ready to join.
+            </p>
           </div>
           <Link
             to="/discover"
@@ -422,44 +405,37 @@ function BottomCta({
   transition: { duration: number; ease?: readonly [number, number, number, number] };
 }) {
   return (
-    <section className="py-20 sm:py-28">
-      <PageContainer>
+    <section className="relative overflow-hidden py-20 sm:py-28">
+      <div
+        className="pointer-events-none absolute inset-0 bg-grain opacity-[0.03]"
+        aria-hidden
+      />
+      <PageContainer className="relative">
         <motion.div
-          className="border-gradient relative overflow-hidden rounded-2xl bg-card px-6 py-14 text-center sm:px-12"
+          className="flex flex-col items-start gap-6 sm:items-center sm:text-center"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-60px" }}
           variants={fadeUp}
           transition={transition}
         >
-          <div
-            className="pointer-events-none absolute inset-0 bg-radial-fade opacity-90"
-            aria-hidden
-          />
-          <div className="pointer-events-none absolute inset-0 bg-mesh opacity-50" aria-hidden />
-          <div className="relative">
-            <div className="mx-auto mb-5 grid size-10 place-items-center rounded-full border border-primary/30 bg-primary/10">
-              <Shield className="size-4 text-primary" strokeWidth={1.75} />
-            </div>
-            <h2 className="display-hero mx-auto max-w-lg text-3xl sm:text-5xl">
-              Ready to <span className="text-gradient">host?</span>
-            </h2>
-            <p className="text-lede mx-auto mt-4 max-w-md">
-              Set up your first event page now. Free to start — no subscriptions.
-            </p>
-            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" className="text-ui rounded-full px-8 text-[15px]">
-                <Link to="/create">
-                  Create your first event
-                  <ArrowRight data-icon="inline-end" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="text-ui rounded-full px-8 text-[15px]">
-                <Link to="/discover">Browse Discover</Link>
-              </Button>
-            </div>
-          </div>
+          <p className="text-lede max-w-md">
+            Set up your first event page now. Free to start — no subscriptions.
+          </p>
+          <Button asChild size="lg" className="text-ui rounded-full px-8 text-[15px]">
+            <Link to="/create">
+              Create your first event
+              <ArrowRight data-icon="inline-end" />
+            </Link>
+          </Button>
         </motion.div>
+
+        <p
+          className="display-hero pointer-events-none mt-16 select-none text-center text-[clamp(4rem,18vw,12rem)] leading-none tracking-[-0.04em] text-foreground/[0.06]"
+          aria-hidden
+        >
+          EnviToo
+        </p>
       </PageContainer>
     </section>
   );

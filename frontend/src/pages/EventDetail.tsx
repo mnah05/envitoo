@@ -67,7 +67,11 @@ export function EventDetail() {
   const cancelled = event.status === "cancelled";
 
   return (
-    <div className="pt-16">
+    <div className="relative pt-16">
+      <div
+        className="pointer-events-none absolute inset-0 bg-radial-fade opacity-50"
+        aria-hidden
+      />
       {/* Cover */}
       <div className="relative h-[28vh] min-h-[14rem] w-full overflow-hidden sm:h-[40vh] sm:min-h-[20rem]">
         <EventCover event={event} rounded="rounded-none" className="h-full" />

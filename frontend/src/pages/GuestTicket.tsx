@@ -135,7 +135,7 @@ export function GuestTicket() {
         <div className="mx-auto overflow-hidden rounded-3xl border bg-card shadow-sm">
           {/* Ticket header */}
           <div className="relative bg-foreground p-6 text-background">
-            <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-primary/30 blur-2xl" />
+            <div className="pointer-events-none absolute -right-8 -top-8 size-32 rounded-full bg-primary/15 blur-3xl" />
             <div className="relative flex items-center justify-between">
               <span className="text-ui inline-flex items-center gap-2 text-[13px]">
                 <Ticket className="size-4" /> EnviToo Ticket
