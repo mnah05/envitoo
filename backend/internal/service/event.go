@@ -74,6 +74,17 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 	}
 
 	if req.CalendarID != nil {
+		// Calendars are 1:1 with users; only the organizer's own calendar is allowed.
+		cal, err := s.queries.GetCalendarByUserID(ctx, organizerID)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return db.Event{}, fmt.Errorf("%w: calendar not found", ErrInvalidEvent)
+			}
+			return db.Event{}, fmt.Errorf("get calendar: %w", err)
+		}
+		if cal.ID != *req.CalendarID {
+			return db.Event{}, fmt.Errorf("%w: calendar not found", ErrInvalidEvent)
+		}
 		event.CalendarID = pgtype.UUID{Valid: true, Bytes: *req.CalendarID}
 	}
 	if req.Lat != nil {
@@ -125,6 +136,10 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		}
 		if err != nil {
 			_ = tx.Rollback(ctx)
+			if helper.IsForeignKeyViolation(err) {
+				// Most likely invalid calendar_id (organizer_id is from auth).
+				return db.Event{}, fmt.Errorf("%w: invalid calendar_id", ErrInvalidEvent)
+			}
 			return db.Event{}, fmt.Errorf("create event: %w", err)
 		}
 
@@ -300,12 +315,9 @@ func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) 
 		return nil, 0, fmt.Errorf("count public events: %w", err)
 	}
 
-	items, err := s.EventResponsesWithCounts(ctx, events)
-	if err != nil {
-		return nil, 0, fmt.Errorf("build event responses: %w", err)
-	}
-
-	return items, total, nil
+	// Best-effort enrichment: never fail a successful list because counts
+	// or visibility enrichment is degraded.
+	return s.EventResponsesBestEffort(ctx, events), total, nil
 }
 
 // fetchRegistrationCounts returns a map of event_id -> active registration count
@@ -406,6 +418,63 @@ func (s *EventService) EventResponseWithCount(ctx context.Context, event db.Even
 		return dto.EventResponse{}, err
 	}
 	return items[0], nil
+}
+
+// EventResponseBestEffort enriches an event for API responses. If count or
+// visibility queries fail, it still returns the core event fields so a
+// successful create/update/cancel is never reported as HTTP 500.
+func (s *EventService) EventResponseBestEffort(ctx context.Context, event db.Event) dto.EventResponse {
+	items := s.EventResponsesBestEffort(ctx, []db.Event{event})
+	if len(items) == 0 {
+		out := dto.NewEventResponse(event)
+		out.Visibility = "public"
+		return out
+	}
+	return items[0]
+}
+
+// EventResponsesBestEffort enriches a list of events. Prefer a single batched
+// enrichment; if that fails, fall back to bare event fields so list endpoints
+// still succeed when count/visibility queries are degraded.
+func (s *EventService) EventResponsesBestEffort(ctx context.Context, events []db.Event) []dto.EventResponse {
+	if len(events) == 0 {
+		return []dto.EventResponse{}
+	}
+	items, err := s.EventResponsesWithCounts(ctx, events)
+	if err == nil {
+		return items
+	}
+	if s.log != nil {
+		s.log.WarnContext(ctx, "event list enrichment failed", "error", err, "n", len(events))
+	}
+
+	counts, countErr := s.fetchRegistrationCounts(ctx, events)
+	if countErr != nil && s.log != nil {
+		s.log.WarnContext(ctx, "event registration counts failed", "error", countErr)
+	}
+	ids := make([]uuid.UUID, len(events))
+	for i, e := range events {
+		ids[i] = e.ID
+	}
+	vis, visErr := s.fetchVisibilityMap(ctx, ids)
+	if visErr != nil && s.log != nil {
+		s.log.WarnContext(ctx, "event visibility map failed", "error", visErr)
+	}
+
+	out := make([]dto.EventResponse, 0, len(events))
+	for _, e := range events {
+		resp := dto.NewEventResponse(e)
+		if counts != nil {
+			resp.RegistrationCount = counts[e.ID]
+		}
+		if vis != nil {
+			resp.Visibility = vis[e.ID]
+		} else {
+			resp.Visibility = "public"
+		}
+		out = append(out, resp)
+	}
+	return out
 }
 
 // Update applies a partial patch to an existing event. Ownership is

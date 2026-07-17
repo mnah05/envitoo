@@ -37,19 +37,17 @@ func (s *Server) CreateEvent(c echo.Context) error {
 	ctx := c.Request().Context()
 	event, err := s.events.Create(ctx, u.ID, req)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidEvent) {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
 		log.ErrorContext(ctx, "create event", "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
-	resp, err := s.events.EventResponseWithCount(ctx, event)
-	if err != nil {
-		log.ErrorContext(c.Request().Context(), "create event response", "organizer_id", u.ID, "error", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-
-	return c.JSON(http.StatusCreated, resp)
+	return c.JSON(http.StatusCreated, s.events.EventResponseBestEffort(ctx, event))
 }
+
 // GetEvent handles GET /api/events/:id.
 func (s *Server) GetEvent(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
@@ -183,12 +181,7 @@ func (s *Server) ListMyEvents(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	items, err := s.events.EventResponsesWithCounts(c.Request().Context(), events)
-	if err != nil {
-		log.ErrorContext(c.Request().Context(), "list my events registration counts", "organizer_id", u.ID, "error", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-
+	items := s.events.EventResponsesBestEffort(c.Request().Context(), events)
 	return c.JSON(http.StatusOK, dto.NewEventListResponse(items, limit, offset, total))
 }
 
@@ -240,13 +233,7 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 	s.cache.Delete(ctx, keys...)
 	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
-	resp, err := s.events.EventResponseWithCount(ctx, event)
-	if err != nil {
-		log.ErrorContext(c.Request().Context(), "update event response", "id", id, "error", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, s.events.EventResponseBestEffort(ctx, event))
 }
 
 // CancelEvent handles DELETE /api/events/:id.
@@ -272,16 +259,17 @@ func (s *Server) CancelEvent(c echo.Context) error {
 		log.ErrorContext(ctx, "cancel event", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
-	s.cache.Delete(ctx, "GET:/api/events/"+id.String(), "GET:/api/events/slug/"+event.Slug)
+	s.cache.Delete(ctx,
+		"GET:/api/events/"+id.String(),
+		"GET:/api/events/slug/"+event.Slug,
+		"GET:/api/events/"+id.String()+"/registrations",
+		"GET:/api/events/"+id.String()+"/volunteer/settings",
+		"GET:/api/events/"+id.String()+"/volunteer/roles",
+	)
 	s.cache.DeletePrefix(ctx, "GET:/api/events?")
+	s.cache.DeletePrefix(ctx, "GET:/api/events/"+id.String()+"/registrations?")
 
-	resp, err := s.events.EventResponseWithCount(ctx, event)
-	if err != nil {
-		log.ErrorContext(c.Request().Context(), "cancel event response", "id", id, "error", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, s.events.EventResponseBestEffort(ctx, event))
 }
 
 // validationError converts a validator.ValidationErrors into a 400

@@ -3,8 +3,8 @@ package helper
 import (
 	"errors"
 
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // IsUniqueViolation returns true if err is a Postgres unique violation
@@ -13,6 +13,10 @@ import (
 // Note: When using ON CONFLICT DO NOTHING with RETURNING *, a collision
 // produces pgx.ErrNoRows rather than a unique violation error. In that
 // case check for pgx.ErrNoRows directly.
+//
+// Must use github.com/jackc/pgx/v5/pgconn.PgError — the legacy
+// github.com/jackc/pgconn.PgError type is a different type, so
+// errors.As never matches errors returned by pgx/v5.
 func IsUniqueViolation(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
 	if err == nil {

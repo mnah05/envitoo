@@ -248,9 +248,12 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 	}
 
 	name := resolveName(user, req.Name)
-	email := user.Email
-	if req.Email != nil && *req.Email != "" {
-		email = *req.Email
+	// Normalize; ignore blank/whitespace overrides (email is NOT NULL).
+	email := normalizeGuestEmail(user.Email)
+	if req.Email != nil {
+		if n := normalizeGuestEmail(*req.Email); n != "" {
+			email = n
+		}
 	}
 
 	app, err := qtx.CreateVolunteerApplication(ctx, db.CreateVolunteerApplicationParams{
@@ -274,8 +277,7 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("commit tx: %w", err)
 	}
 
-	// Fetch full response with role data
-	return s.getApplicationWithRole(ctx, app.ID)
+	return volunteerAppResponse(app, role.Name, role.IsAdmin), nil
 }
 
 // ListByUser returns paginated volunteer applications for the given user.
@@ -365,7 +367,7 @@ func (s *VolunteerService) Cancel(ctx context.Context, appID, userID uuid.UUID) 
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("cancel application: %w", err)
 	}
 
-	return s.getApplicationWithRole(ctx, app.ID)
+	return s.responseForApplication(ctx, app), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -540,7 +542,9 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("commit tx: %w", err)
 	}
 
-	return s.getApplicationWithRole(ctx, app.ID)
+	// Build response from data already loaded — never fail the success path
+	// with a post-commit re-fetch error after the state change committed.
+	return volunteerAppResponse(app, role.Name, role.IsAdmin), nil
 }
 
 // Reject sets a pending application status to "rejected".
@@ -556,12 +560,43 @@ func (s *VolunteerService) Reject(ctx context.Context, appID, actorID uuid.UUID)
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("reject application: %w", err)
 	}
 
-	return s.getApplicationWithRole(ctx, app.ID)
+	return s.responseForApplication(ctx, app), nil
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+func volunteerAppResponse(app db.VolunteerApplication, roleName string, isAdmin bool) dto.VolunteerApplicationResponse {
+	return dto.VolunteerApplicationResponse{
+		ID:          app.ID,
+		EventID:     app.EventID,
+		UserID:      app.UserID,
+		RoleID:      app.RoleID,
+		RoleName:    roleName,
+		IsAdmin:     isAdmin,
+		Name:        app.Name,
+		Email:       app.Email,
+		Phone:       app.Phone,
+		Description: app.Description,
+		Status:      app.Status,
+		CreatedAt:   app.CreatedAt,
+		UpdatedAt:   app.UpdatedAt,
+	}
+}
+
+// responseForApplication attaches role fields after a successful mutation.
+// Role lookup failure is degraded (empty role metadata) so clients never
+// see 500 after the application row already changed.
+func (s *VolunteerService) responseForApplication(ctx context.Context, app db.VolunteerApplication) dto.VolunteerApplicationResponse {
+	roleName, isAdmin := "", false
+	if role, err := s.queries.GetVolunteerRoleByID(ctx, app.RoleID); err == nil {
+		roleName, isAdmin = role.Name, role.IsAdmin
+	} else {
+		s.log.WarnContext(ctx, "load role for application response", "app_id", app.ID, "role_id", app.RoleID, "error", err)
+	}
+	return volunteerAppResponse(app, roleName, isAdmin)
+}
 
 func (s *VolunteerService) getApplicationWithRole(ctx context.Context, appID uuid.UUID) (dto.VolunteerApplicationResponse, error) {
 	row, err := s.queries.GetVolunteerApplicationWithRole(ctx, appID)

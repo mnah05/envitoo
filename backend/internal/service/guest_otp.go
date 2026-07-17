@@ -20,6 +20,7 @@ import (
 	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/helper"
 )
 
 const (
@@ -230,7 +231,7 @@ func mapCacheErr(err error) error {
 }
 
 func normalizeGuestEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
+	return helper.NormalizeEmail(email)
 }
 
 func guestOTPKey(eventID uuid.UUID, email string) string {

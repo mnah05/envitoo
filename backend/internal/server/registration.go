@@ -339,6 +339,17 @@ func (s *Server) ListEventRegistrations(c echo.Context) error {
 	offset := parseOffset(c.QueryParam("offset"))
 
 	ctx := c.Request().Context()
+	// Authorize before any cache hit. The shared key intentionally serves
+	// the same staff payload to organizer and volunteer admins; without a
+	// pre-check, a non-staff caller would receive a cached staff response.
+	if err := s.registrations.EnsureEventStaff(ctx, eventID, u.ID); err != nil {
+		if errors.Is(err, service.ErrEventNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "event not found")
+		}
+		log.ErrorContext(ctx, "list event registrations auth", "event_id", eventID, "actor_id", u.ID, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
 	key := "GET:/api/events/" + eventID.String() + "/registrations"
 	if q := c.Request().URL.RawQuery; q != "" {
 		key += "?" + q
@@ -409,6 +420,9 @@ func (s *Server) ApproveRegistration(c echo.Context) error {
 	if err != nil {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
+		}
+		if errors.Is(err, service.ErrEventNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
 		if errors.Is(err, service.ErrEventStaffForbidden) {
 			return echo.NewHTTPError(http.StatusForbidden, "registration approval is not allowed for this event")
@@ -486,6 +500,9 @@ func (s *Server) UpdateRegistrationStatus(c echo.Context) error {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
 		}
+		if errors.Is(err, service.ErrEventNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "event not found")
+		}
 		if errors.Is(err, service.ErrEventFull) {
 			return echo.NewHTTPError(http.StatusConflict, "event is full")
 		}
@@ -528,6 +545,9 @@ func (s *Server) CheckInAttendee(c echo.Context) error {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
 		}
+		if errors.Is(err, service.ErrEventNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "event not found")
+		}
 		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
 			return echo.NewHTTPError(http.StatusConflict, "only approved registrations can be checked in")
 		}
@@ -569,6 +589,9 @@ func (s *Server) CheckInByEventToken(c echo.Context) error {
 	if err != nil {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
+		}
+		if errors.Is(err, service.ErrEventNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "event not found")
 		}
 		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
 			return echo.NewHTTPError(http.StatusConflict, "only approved registrations can be checked in")
@@ -635,7 +658,9 @@ func (s *Server) forgetRegistration(ctx context.Context, reg db.Registration) {
 
 // forgetRegistrationsByEmail looks up every registration for an email
 // and invalidates each one. Called during auth-based guest linking.
-func (s *Server) forgetRegistrationsByEmail(ctx context.Context, email string) {
+// userID is the local user who received the linked rows; their
+// me/registrations cache must be dropped so newly linked tickets appear.
+func (s *Server) forgetRegistrationsByEmail(ctx context.Context, userID uuid.UUID, email string) {
 	if s.cache == nil || email == "" {
 		return
 	}
@@ -672,6 +697,11 @@ func (s *Server) forgetRegistrationsByEmail(ctx context.Context, email string) {
 		s.cache.DeletePrefix(ctx, "GET:/api/events/"+eventID.String()+"/registrations?")
 	}
 	_ = rows.Err()
+
+	if userID != uuid.Nil {
+		s.cache.Delete(ctx, "GET:/api/me/registrations:user:"+userID.String())
+		s.cache.DeletePrefix(ctx, "GET:/api/me/registrations:user:"+userID.String()+"?")
+	}
 }
 
 func (s *Server) lookupEventSlug(ctx context.Context, eventID uuid.UUID) string {

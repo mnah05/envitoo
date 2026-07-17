@@ -154,5 +154,5 @@ func (s *Server) Me(c echo.Context) error {
 	if !ok {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
-	return c.JSON(http.StatusOK, u)
+	return c.JSON(http.StatusOK, dto.NewUserResponse(u))
 }

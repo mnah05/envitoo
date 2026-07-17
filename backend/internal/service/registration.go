@@ -180,10 +180,13 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 	}
 
 	name := resolveName(user, req.Name)
-
-	email := user.Email
-	if req.Email != nil && *req.Email != "" {
-		email = *req.Email
+	// Normalize so (event_id, email) uniqueness matches guest OTP path.
+	// Ignore blank overrides (including whitespace-only) and fall back to profile email.
+	email := normalizeGuestEmail(user.Email)
+	if req.Email != nil {
+		if n := normalizeGuestEmail(*req.Email); n != "" {
+			email = n
+		}
 	}
 
 	params := db.CreateRegistrationUserParams{
@@ -314,11 +317,15 @@ func mapRegistrationInsertError(err error, action string) error {
 }
 
 func resolveName(user *db.User, override *string) string {
-	if override != nil && *override != "" {
-		return *override
+	if override != nil {
+		if n := strings.TrimSpace(*override); n != "" {
+			return n
+		}
 	}
-	if user.Username != nil && *user.Username != "" {
-		return *user.Username
+	if user.Username != nil {
+		if n := strings.TrimSpace(*user.Username); n != "" {
+			return n
+		}
 	}
 	// Fallback: email local-part
 	parts := strings.Split(user.Email, "@")
@@ -390,6 +397,14 @@ func (s *RegistrationService) ListByUser(ctx context.Context, userID uuid.UUID, 
 // Admin (Organizer)
 // ---------------------------------------------------------------------------
 
+// EnsureEventStaff returns ErrEventNotFound when actor is not organizer
+// or volunteer admin for the event. Callers that cache staff-only
+// payloads must invoke this before serving a shared cache entry.
+func (s *RegistrationService) EnsureEventStaff(ctx context.Context, eventID, actorID uuid.UUID) error {
+	_, err := s.access.RequireEventStaff(ctx, eventID, actorID)
+	return err
+}
+
 // ListByEvent returns a paginated list of registrations for the given
 // event, verifying that the requester is event staff. The second return
 // value is the total count.
@@ -403,7 +418,7 @@ func (s *RegistrationService) ListByEvent(ctx context.Context, eventID uuid.UUID
 	}
 	offset := max(params.Offset, 0)
 
-	if _, err := s.access.RequireEventStaff(ctx, eventID, actorID); err != nil {
+	if err := s.EnsureEventStaff(ctx, eventID, actorID); err != nil {
 		return nil, 0, err
 	}
 
@@ -581,6 +596,7 @@ func registrationStatusTransitionAllowed(from, to string) bool {
 }
 
 // UpdateStatus sets a registration's status when the transition is legal.
+// Organizer-only: volunteer admins must use the approve/reject endpoints.
 func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID, status string) (db.Registration, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -590,6 +606,8 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 
 	qtx := s.queries.WithTx(tx)
 
+	// Staff-scoped fetch first (404 when no access at all), then require
+	// organizer so volunteer admins cannot no-op or mutate via this path.
 	reg, err := qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 		ID:          registrationID,
 		OrganizerID: organizerID,
@@ -599,6 +617,16 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
 		}
 		return db.Registration{}, fmt.Errorf("get registration: %w", err)
+	}
+	isOrg, err := qtx.IsEventOrganizer(ctx, db.IsEventOrganizerParams{
+		ID:          reg.EventID,
+		OrganizerID: organizerID,
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("check event organizer: %w", err)
+	}
+	if !isOrg {
+		return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
 	}
 	if reg.Status == status {
 		if err := tx.Commit(ctx); err != nil {
@@ -654,8 +682,8 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 		AccessToken: accessToken,
 	})
 	if err == pgx.ErrNoRows {
-		// Either: (a) already checked in, or (b) not found/wrong token
-		// Distinguish by fetching the registration
+		// Disambiguate: already checked in, wrong token, invalid status,
+		// event not open, concurrent race, or not found.
 		existing, fetchErr := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 			ID:          registrationID,
 			OrganizerID: actorID,
@@ -670,17 +698,30 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
 		}
 		if existing.CheckedInAt.Valid {
-			// Already checked in — return existing (idempotent 2xx)
 			return existing, nil
 		}
 		if existing.Status != "approved" {
 			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationInvalidStatus)
 		}
 		event, eventErr := s.queries.GetEventByID(ctx, existing.EventID)
-		if eventErr == nil && event.Status != "published" {
+		if eventErr != nil {
+			if eventErr == pgx.ErrNoRows {
+				return db.Registration{}, fmt.Errorf("event %s: %w", existing.EventID, ErrEventNotFound)
+			}
+			return db.Registration{}, fmt.Errorf("get event for check-in: %w", eventErr)
+		}
+		if event.Status != "published" {
 			return db.Registration{}, fmt.Errorf("event %s: %w", existing.EventID, ErrEventNotOpen)
 		}
-		return db.Registration{}, fmt.Errorf("check-in failed: %w", err)
+		// Concurrent check-in likely won — re-fetch for idempotent success.
+		existing, fetchErr = s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+			ID:          registrationID,
+			OrganizerID: actorID,
+		})
+		if fetchErr == nil && existing.CheckedInAt.Valid {
+			return existing, nil
+		}
+		return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
 	}
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("check in attendee: %w", err)
@@ -716,10 +757,24 @@ func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, 
 			return db.Registration{}, fmt.Errorf("registration %s: %w", existing.ID, ErrRegistrationInvalidStatus)
 		}
 		event, eventErr := s.queries.GetEventByID(ctx, eventID)
-		if eventErr == nil && event.Status != "published" {
+		if eventErr != nil {
+			if eventErr == pgx.ErrNoRows {
+				return db.Registration{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotFound)
+			}
+			return db.Registration{}, fmt.Errorf("get event for check-in: %w", eventErr)
+		}
+		if event.Status != "published" {
 			return db.Registration{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotOpen)
 		}
-		return db.Registration{}, fmt.Errorf("check-in by token failed: %w", err)
+		existing, fetchErr = s.queries.GetRegistrationByEventTokenAdmin(ctx, db.GetRegistrationByEventTokenAdminParams{
+			EventID:     eventID,
+			AccessToken: accessToken,
+			OrganizerID: actorID,
+		})
+		if fetchErr == nil && existing.CheckedInAt.Valid {
+			return existing, nil
+		}
+		return db.Registration{}, fmt.Errorf("registration with token %s: %w", accessToken, ErrRegistrationNotFound)
 	}
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("check in by event token: %w", err)

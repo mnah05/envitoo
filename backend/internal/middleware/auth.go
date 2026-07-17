@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/helper"
 )
 
 const userContextKey = "user"
@@ -60,8 +61,9 @@ func Auth() echo.MiddlewareFunc {
 // a logger-injecting middleware must run before this one.
 //
 // GuestRegistrationInvalidator is invoked after guest registrations are
-// linked or cancelled during auth. Used to invalidate affected cache keys.
-type GuestRegistrationInvalidator func(ctx context.Context, email string)
+// linked or cancelled during auth. Used to invalidate affected cache keys
+// for the email and the local user who received the links.
+type GuestRegistrationInvalidator func(ctx context.Context, userID uuid.UUID, email string)
 
 // Auth must run before LoadUser so that SessionClaims are available in
 // the request context.
@@ -79,7 +81,8 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 			localUser, err := queries.GetUserByAuthUserID(ctx, claims.Subject)
 			switch {
 			case err == nil:
-				linkGuestRegistrations(ctx, queries, log, localUser.ID, localUser.Email, onGuestRegsChanged)
+				// Normalize for guest-link matching (guest emails are stored lowercase).
+				linkGuestRegistrations(ctx, queries, log, localUser.ID, helper.NormalizeEmail(localUser.Email), onGuestRegsChanged)
 				c.Set(userContextKey, &localUser)
 				return next(c)
 			case !errors.Is(err, pgx.ErrNoRows):
@@ -93,7 +96,7 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 				return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 			}
 
-			email := primaryEmail(clerkUser)
+			email := helper.NormalizeEmail(primaryEmail(clerkUser))
 			if email == "" {
 				return echo.NewHTTPError(http.StatusForbidden, "no verified email address")
 			}
@@ -182,7 +185,7 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 				log.InfoContext(ctx, "linked guest registrations on onboarding",
 					"user_id", created.ID, "linked", linked, "cancelled_superseded", cancelled)
 				if onGuestRegsChanged != nil {
-					onGuestRegsChanged(ctx, email)
+					onGuestRegsChanged(ctx, created.ID, email)
 				}
 			}
 			log.InfoContext(ctx, "user onboarded", "user_id", created.ID, "calendar_slug", slug)
@@ -232,7 +235,7 @@ func linkGuestRegistrations(ctx context.Context, queries *db.Queries, log *slog.
 		log.InfoContext(ctx, "linked guest registrations",
 			"user_id", userID, "linked", linked, "cancelled_superseded", cancelled)
 		if onGuestRegsChanged != nil {
-			onGuestRegsChanged(ctx, email)
+			onGuestRegsChanged(ctx, userID, email)
 		}
 	}
 }
@@ -293,22 +296,28 @@ func sanitizeSlug(s string) string {
 	return s
 }
 
-// primaryEmail returns the user's primary email address, or the first
-// email listed if no primary is set. Returns "" if the user has no
-// email addresses.
+// primaryEmail returns a verified email for the user. Prefers the primary
+// address when it is verified; otherwise the first verified address.
+// Returns "" when no verified email exists (caller maps this to 403).
 func primaryEmail(u *clerk.User) string {
 	if u == nil {
 		return ""
 	}
 	if u.PrimaryEmailAddressID != nil {
 		for _, e := range u.EmailAddresses {
-			if e.ID == *u.PrimaryEmailAddressID {
+			if e != nil && e.ID == *u.PrimaryEmailAddressID && emailVerified(e) {
 				return e.EmailAddress
 			}
 		}
 	}
-	if len(u.EmailAddresses) > 0 {
-		return u.EmailAddresses[0].EmailAddress
+	for _, e := range u.EmailAddresses {
+		if e != nil && emailVerified(e) {
+			return e.EmailAddress
+		}
 	}
 	return ""
+}
+
+func emailVerified(e *clerk.EmailAddress) bool {
+	return e.Verification != nil && e.Verification.Status == "verified"
 }
