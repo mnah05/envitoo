@@ -21,4 +21,10 @@ var (
 	ErrVolunteerRoleInUse           = errors.New("volunteer role has applications")
 	ErrEventStaffForbidden          = errors.New("event staff permission denied")
 	ErrVolunteerAdminRoleRestricted = errors.New("only the organizer can moderate admin-role applications")
+
+	// Guest email OTP
+	ErrOTPInvalid            = errors.New("invalid or expired otp")
+	ErrOTPRateLimited        = errors.New("otp resend rate limited")
+	ErrDependencyUnavailable = errors.New("required dependency unavailable")
+	ErrGuestEmailNotVerified = errors.New("guest email not verified")
 )

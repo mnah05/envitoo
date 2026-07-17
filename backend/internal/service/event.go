@@ -325,13 +325,16 @@ func (s *EventService) fetchRegistrationCounts(ctx context.Context, events []db.
 		Count   int32
 	}
 
-	rows, _ := s.pool.Query(ctx, `
+	rows, err := s.pool.Query(ctx, `
 		SELECT event_id, COUNT(*)::int4
 		FROM registrations
 		WHERE event_id = ANY($1::uuid[])
 		  AND status NOT IN ('cancelled', 'rejected')
 		GROUP BY event_id
 	`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("query registration counts: %w", err)
+	}
 	defer rows.Close()
 
 	counts := make(map[uuid.UUID]int32, len(events))

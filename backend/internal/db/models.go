@@ -5,11 +5,56 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type EmailOutboxStatus string
+
+const (
+	EmailOutboxStatusPENDING   EmailOutboxStatus = "PENDING"
+	EmailOutboxStatusPUBLISHED EmailOutboxStatus = "PUBLISHED"
+	EmailOutboxStatusFAILED    EmailOutboxStatus = "FAILED"
+)
+
+func (e *EmailOutboxStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EmailOutboxStatus(s)
+	case string:
+		*e = EmailOutboxStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EmailOutboxStatus: %T", src)
+	}
+	return nil
+}
+
+type NullEmailOutboxStatus struct {
+	EmailOutboxStatus EmailOutboxStatus
+	Valid             bool // Valid is true if EmailOutboxStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEmailOutboxStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.EmailOutboxStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EmailOutboxStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEmailOutboxStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EmailOutboxStatus), nil
+}
 
 type Calendar struct {
 	ID        uuid.UUID
@@ -21,6 +66,20 @@ type Calendar struct {
 	BannerUrl *string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type EmailOutbox struct {
+	ID           uuid.UUID
+	Recipient    string
+	Template     string
+	TemplateData []byte
+	Status       EmailOutboxStatus
+	Retries      int32
+	LastError    *string
+	CreatedAt    pgtype.Timestamp
+	PublishedAt  pgtype.Timestamp
+	Topic        string
+	FailedAt     pgtype.Timestamp
 }
 
 type Event struct {
@@ -54,25 +113,27 @@ type EventVisibility struct {
 	Visibility string
 }
 
-type KanbanColumn struct {
-	ID        uuid.UUID
-	EventID   uuid.UUID
-	Name      string
-	Position  int32
-	CreatedAt time.Time
-}
-
 type KanbanTask struct {
 	ID          uuid.UUID
 	EventID     uuid.UUID
-	ColumnID    uuid.UUID
 	AssignedTo  pgtype.UUID
 	Title       string
 	Description *string
 	Deadline    pgtype.Timestamptz
-	Position    int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	Status      string
+	AssignedBy  pgtype.UUID
+	CreatedBy   pgtype.UUID
+}
+
+type KanbanTaskStatusLog struct {
+	ID        uuid.UUID
+	TaskID    uuid.UUID
+	ChangedBy pgtype.UUID
+	OldStatus *string
+	NewStatus string
+	ChangedAt time.Time
 }
 
 type Payment struct {

@@ -260,9 +260,51 @@ Soft-cancels an event (`status='cancelled'`). Preserves all registrations, volun
 
 # Guest Registration (Public, Token-Based)
 
+## POST /api/events/:id/register/guest/otp
+
+Requests a 6-digit email OTP for guest registration. Validates the event is published, stores an HMAC of the OTP in Redis (10m TTL), and inserts an `email_outbox` row (`template=otp`, `topic=emails.otp`). Does **not** create a registration. Resend cooldown is 60s per event+email. Requires Redis and `OTP_SECRET`.
+
+| | |
+|---|---|
+| **Auth** | Public |
+| **Path params** | `id` — event UUID |
+| **Body** | `RequestGuestOTPRequest` |
+| **Response 200** | `{"status":"otp_sent","expires_in_seconds":600}` |
+| **Errors** | 400 — invalid id / validation; 404 — event not found; 409 — event not open; 429 — resend rate limited; 503 — Redis or OTP secret unavailable |
+
+### RequestGuestOTPRequest
+
+```json
+{
+  "name": "string (required, 1-200)",
+  "email": "string (required, email format)"
+}
+```
+
+## POST /api/events/:id/register/guest/otp/verify
+
+Verifies a guest OTP. On success, deletes the OTP (single-use) and stores a short-lived verified marker in Redis (`guest:verified:{event_id}:{email}`, 15m) with email, name, and `verified_at`. Does **not** create a registration. Max 5 attempts per OTP (atomic Redis `INCR` with explicit TTL).
+
+| | |
+|---|---|
+| **Auth** | Public |
+| **Path params** | `id` — event UUID |
+| **Body** | `VerifyGuestOTPRequest` |
+| **Response 200** | `{"status":"verified","expires_in_seconds":900}` |
+| **Errors** | 400 — invalid id / validation / invalid or expired otp; 503 — Redis or OTP secret unavailable |
+
+### VerifyGuestOTPRequest
+
+```json
+{
+  "email": "string (required, email format)",
+  "otp": "string (required, 6 digits)"
+}
+```
+
 ## POST /api/events/:id/register/guest
 
-Registers a guest (no user account) for an event. Opens a transaction, locks the event row, checks capacity, generates an access token with 30-day expiry. Status is `approved` (or `pending` if `requires_approval`). On access token collision, regenerates and retries once.
+Registers a guest (no user account) for an event. Requires a prior successful `.../register/guest/otp/verify` for the same event + email (Redis `guest:verified:{event_id}:{email}`, ~15m). Opens a transaction, locks the event row, checks capacity, generates an access token with 30-day expiry. Status is `approved` (or `pending` if `requires_approval`). On success, consumes the verified marker (one-time). On access token collision, regenerates and retries once.
 
 | | |
 |---|---|
@@ -270,7 +312,7 @@ Registers a guest (no user account) for an event. Opens a transaction, locks the
 | **Path params** | `id` — event UUID |
 | **Body** | `CreateGuestRegistrationRequest` |
 | **Response 201** | `RegistrationResponse` |
-| **Errors** | 400 — invalid event id / validation; 404 — event not found; 409 — event full / not open / duplicate registration |
+| **Errors** | 400 — invalid event id / validation; 403 — email not verified; 404 — event not found; 409 — event full / not open / duplicate registration; 503 — Redis unavailable |
 
 ### CreateGuestRegistrationRequest
 

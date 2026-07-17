@@ -24,6 +24,30 @@ type CreateGuestRegistrationRequest struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
+// RequestGuestOTPRequest is the body for POST /api/events/:id/register/guest/otp.
+type RequestGuestOTPRequest struct {
+	Name  string `json:"name" validate:"required,min=1,max=200"`
+	Email string `json:"email" validate:"required,email"`
+}
+
+// RequestGuestOTPResponse is returned after an OTP email is queued.
+type RequestGuestOTPResponse struct {
+	Status           string `json:"status"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
+}
+
+// VerifyGuestOTPRequest is the body for POST /api/events/:id/register/guest/otp/verify.
+type VerifyGuestOTPRequest struct {
+	Email string `json:"email" validate:"required,email"`
+	OTP   string `json:"otp" validate:"required,len=6,numeric"`
+}
+
+// VerifyGuestOTPResponse is returned after successful email ownership verification.
+type VerifyGuestOTPResponse struct {
+	Status           string `json:"status"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
+}
+
 // UpdateRegistrationStatusRequest is the request body for PATCH /api/registrations/:id/status.
 type UpdateRegistrationStatusRequest struct {
 	Status string `json:"status" validate:"required,oneof=pending approved rejected cancelled"`

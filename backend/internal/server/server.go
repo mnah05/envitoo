@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -30,7 +31,8 @@ type Server struct {
 }
 
 // New creates a Server with all services initialized.
-func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, log *slog.Logger) *Server {
+// otpSecret is the HMAC key for guest email OTP (OTP_SECRET env).
+func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret string, log *slog.Logger) *Server {
 	validate := dto.NewValidator()
 	access := service.NewEventAccessService(queries)
 	return &Server{
@@ -40,13 +42,14 @@ func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, log *slog.Logg
 		log:           log,
 		validate:      validate,
 		events:        service.NewEventService(pool, queries, access, log),
-		registrations: service.NewRegistrationService(pool, queries, access, log),
+		registrations: service.NewRegistrationService(pool, queries, access, c, otpSecret, log),
 		volunteers:    service.NewVolunteerService(pool, queries, access, log),
 	}
 }
 
 // Register wires all routes onto the given Echo instance.
-func (s *Server) Register(e *echo.Echo) {
+// ctx is used to stop rate-limiter cleanup goroutines on shutdown.
+func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustLoopback(true))
 	e.Use(echoMiddleware.Recover())
 	e.Use(echoMiddleware.RequestID())
@@ -77,14 +80,16 @@ func (s *Server) Register(e *echo.Echo) {
 
 	e.GET("/healthz", s.Health)
 
-	public := e.Group("/api", middleware.PublicRateLimiter(middleware.DefaultPublicConfig))
+	public := e.Group("/api", middleware.PublicRateLimiter(ctx, middleware.DefaultPublicConfig))
 
 	// Public event discovery
 	public.GET("/events/slug/:slug", s.GetEventBySlug)
 	public.GET("/events/:id", s.GetEvent)
 	public.GET("/events", s.ListPublicEvents)
 
-	// Public guest registration
+	// Public guest registration + email OTP
+	public.POST("/events/:id/register/guest/otp", s.RequestGuestOTP)
+	public.POST("/events/:id/register/guest/otp/verify", s.VerifyGuestOTP)
 	public.POST("/events/:id/register/guest", s.CreateGuestRegistration)
 	public.GET("/guest-registrations", s.GetGuestRegistration)
 	public.DELETE("/guest-registrations", s.CancelGuestRegistration)
@@ -93,7 +98,7 @@ func (s *Server) Register(e *echo.Echo) {
 	public.GET("/events/:id/volunteer/settings", s.GetVolunteerSettings)
 	public.GET("/events/:id/volunteer/roles", s.ListVolunteerRoles)
 
-	protected := e.Group("/api", middleware.Auth(), middleware.LoadUser(s.pool, s.queries, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(middleware.DefaultAuthConfig))
+	protected := e.Group("/api", middleware.Auth(), middleware.LoadUser(s.pool, s.queries, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(ctx, middleware.DefaultAuthConfig))
 	protected.GET("/me", s.Me)
 
 	// Host-only event management

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
@@ -9,11 +10,16 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// defaultMaxVisitors caps distinct rate-limit keys to prevent unbounded map growth.
+const defaultMaxVisitors = 100_000
+
 type RateLimitConfig struct {
 	Rate            float64
 	Burst           int
 	CleanupInterval time.Duration
 	CleanupIdleTime time.Duration
+	// MaxVisitors is the hard cap on tracked keys. Zero uses defaultMaxVisitors.
+	MaxVisitors int
 }
 
 var (
@@ -22,12 +28,14 @@ var (
 		Burst:           20,
 		CleanupInterval: time.Minute,
 		CleanupIdleTime: 3 * time.Minute,
+		MaxVisitors:     defaultMaxVisitors,
 	}
 	DefaultAuthConfig = RateLimitConfig{
 		Rate:            30,
 		Burst:           60,
 		CleanupInterval: time.Minute,
 		CleanupIdleTime: 3 * time.Minute,
+		MaxVisitors:     defaultMaxVisitors,
 	}
 )
 
@@ -37,60 +45,64 @@ type visitor struct {
 }
 
 type ipRateLimiter struct {
-	mu       sync.RWMutex
+	mu       sync.Mutex
 	visitors map[string]*visitor
 	config   RateLimitConfig
 }
 
-func newIPRateLimiter(config RateLimitConfig) *ipRateLimiter {
+func newIPRateLimiter(ctx context.Context, config RateLimitConfig) *ipRateLimiter {
+	if config.MaxVisitors <= 0 {
+		config.MaxVisitors = defaultMaxVisitors
+	}
 	l := &ipRateLimiter{
 		visitors: make(map[string]*visitor),
 		config:   config,
 	}
-	go l.cleanupLoop()
+	go l.cleanupLoop(ctx)
 	return l
 }
 
-func (l *ipRateLimiter) cleanupLoop() {
+func (l *ipRateLimiter) cleanupLoop(ctx context.Context) {
 	ticker := time.NewTicker(l.config.CleanupInterval)
 	defer ticker.Stop()
-	for range ticker.C {
-		l.mu.Lock()
-		now := time.Now()
-		for ip, v := range l.visitors {
-			if now.Sub(v.lastSeen) > l.config.CleanupIdleTime {
-				delete(l.visitors, ip)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			l.mu.Lock()
+			now := time.Now()
+			for ip, v := range l.visitors {
+				if now.Sub(v.lastSeen) > l.config.CleanupIdleTime {
+					delete(l.visitors, ip)
+				}
 			}
+			l.mu.Unlock()
 		}
-		l.mu.Unlock()
 	}
 }
 
 func (l *ipRateLimiter) getVisitor(key string) *rate.Limiter {
-	l.mu.RLock()
-	v, exists := l.visitors[key]
-	if exists {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if v, exists := l.visitors[key]; exists {
 		v.lastSeen = time.Now()
-		l.mu.RUnlock()
 		return v.limiter
 	}
-	l.mu.RUnlock()
 
-	l.mu.Lock()
-	if v, exists = l.visitors[key]; exists {
-		v.lastSeen = time.Now()
-		l.mu.Unlock()
-		return v.limiter
+	// At capacity: do not grow the map; deny new keys until idle entries are cleaned up.
+	if len(l.visitors) >= l.config.MaxVisitors {
+		return rate.NewLimiter(0, 0)
 	}
 
 	limiter := rate.NewLimiter(rate.Limit(l.config.Rate), l.config.Burst)
 	l.visitors[key] = &visitor{limiter: limiter, lastSeen: time.Now()}
-	l.mu.Unlock()
 	return limiter
 }
 
-func rateLimit(config RateLimitConfig, keyFunc func(c echo.Context) string) echo.MiddlewareFunc {
-	limiter := newIPRateLimiter(config)
+func rateLimit(ctx context.Context, config RateLimitConfig, keyFunc func(c echo.Context) string) echo.MiddlewareFunc {
+	limiter := newIPRateLimiter(ctx, config)
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			key := keyFunc(c)
@@ -103,14 +115,17 @@ func rateLimit(config RateLimitConfig, keyFunc func(c echo.Context) string) echo
 	}
 }
 
-func PublicRateLimiter(config RateLimitConfig) echo.MiddlewareFunc {
-	return rateLimit(config, func(c echo.Context) string {
+// PublicRateLimiter limits requests by client IP. The cleanup goroutine stops when ctx is cancelled.
+func PublicRateLimiter(ctx context.Context, config RateLimitConfig) echo.MiddlewareFunc {
+	return rateLimit(ctx, config, func(c echo.Context) string {
 		return c.RealIP()
 	})
 }
 
-func AuthRateLimiter(config RateLimitConfig) echo.MiddlewareFunc {
-	return rateLimit(config, func(c echo.Context) string {
+// AuthRateLimiter limits requests by authenticated user ID (falls back to IP).
+// The cleanup goroutine stops when ctx is cancelled.
+func AuthRateLimiter(ctx context.Context, config RateLimitConfig) echo.MiddlewareFunc {
+	return rateLimit(ctx, config, func(c echo.Context) string {
 		if u, ok := UserFromContext(c); ok {
 			return u.ID.String()
 		}

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
 	"github.com/mnah05/envitoo/internal/helper"
@@ -19,24 +22,65 @@ import (
 
 // RegistrationService provides business logic for registration operations.
 type RegistrationService struct {
-	pool    *pgxpool.Pool
-	queries *db.Queries
-	access  *EventAccessService
-	log     *slog.Logger
+	pool      *pgxpool.Pool
+	queries   *db.Queries
+	access    *EventAccessService
+	cache     *cache.Store
+	otpSecret []byte
+	log       *slog.Logger
 }
 
 // NewRegistrationService creates a RegistrationService with the given dependencies.
-func NewRegistrationService(pool *pgxpool.Pool, queries *db.Queries, access *EventAccessService, log *slog.Logger) *RegistrationService {
-	return &RegistrationService{pool: pool, queries: queries, access: access, log: log}
+// otpSecret is the HMAC key for guest email OTP; empty disables OTP endpoints (503).
+func NewRegistrationService(pool *pgxpool.Pool, queries *db.Queries, access *EventAccessService, c *cache.Store, otpSecret string, log *slog.Logger) *RegistrationService {
+	return &RegistrationService{
+		pool:      pool,
+		queries:   queries,
+		access:    access,
+		cache:     c,
+		otpSecret: []byte(otpSecret),
+		log:       log,
+	}
 }
 
 // ---------------------------------------------------------------------------
 // Guest
 // ---------------------------------------------------------------------------
 
-// CreateGuest registers a guest for the given event. The registration
-// status defaults to "approved" unless the event requires approval.
+// CreateGuest registers a guest for the given event after email OTP verification.
+// Requires a short-lived Redis marker from VerifyGuestOTP
+// (guest:verified:{event_id}:{email}). Status defaults to "approved" unless
+// the event requires approval.
 func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID, req dto.CreateGuestRegistrationRequest) (db.Registration, error) {
+	if !s.cache.Available() {
+		return db.Registration{}, ErrDependencyUnavailable
+	}
+
+	email := normalizeGuestEmail(req.Email)
+	name := strings.TrimSpace(req.Name)
+	verifiedKey := guestVerifiedKey(eventID, email)
+
+	raw, err := s.cache.GetBytes(ctx, verifiedKey)
+	if err != nil {
+		if errors.Is(err, cache.ErrNotFound) {
+			return db.Registration{}, ErrGuestEmailNotVerified
+		}
+		return db.Registration{}, fmt.Errorf("get guest verified: %w", mapCacheErr(err))
+	}
+
+	var verified guestVerifiedState
+	if err := json.Unmarshal(raw, &verified); err != nil {
+		_ = s.cache.DeleteKeys(ctx, verifiedKey)
+		return db.Registration{}, ErrGuestEmailNotVerified
+	}
+	if normalizeGuestEmail(verified.Email) != email {
+		return db.Registration{}, ErrGuestEmailNotVerified
+	}
+	// Prefer the name captured at OTP request/verify time.
+	if n := strings.TrimSpace(verified.Name); n != "" {
+		name = n
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -62,8 +106,8 @@ func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID
 
 	params := db.CreateRegistrationGuestParams{
 		EventID:        eventID,
-		Name:           req.Name,
-		Email:          req.Email,
+		Name:           name,
+		Email:          email,
 		Status:         status,
 		AccessToken:    helper.GenerateAccessToken(),
 		TokenExpiresAt: tokenExpires,
@@ -77,6 +121,12 @@ func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID
 	if err := tx.Commit(ctx); err != nil {
 		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 	}
+
+	// One-time use: consume verification after a successful create.
+	if err := s.cache.DeleteKeys(ctx, verifiedKey); err != nil {
+		s.log.WarnContext(ctx, "delete guest verified marker", "event_id", eventID, "error", err)
+	}
+
 	return reg, nil
 }
 
@@ -499,7 +549,38 @@ func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UU
 	return reg, nil
 }
 
-// UpdateStatus sets a registration's status to an arbitrary value.
+// allowedRegistrationStatusTransitions is the organizer status state machine.
+// Cancelled is terminal via this endpoint (re-register instead of resurrecting).
+// Rejected may be re-approved to match ApproveRegistration.
+var allowedRegistrationStatusTransitions = map[string]map[string]struct{}{
+	"pending": {
+		"approved":  {},
+		"rejected":  {},
+		"cancelled": {},
+	},
+	"approved": {
+		"cancelled": {},
+		"rejected":  {},
+	},
+	"rejected": {
+		"approved": {},
+	},
+	"cancelled": {},
+}
+
+func registrationStatusTransitionAllowed(from, to string) bool {
+	if from == to {
+		return true
+	}
+	allowed, ok := allowedRegistrationStatusTransitions[from]
+	if !ok {
+		return false
+	}
+	_, ok = allowed[to]
+	return ok
+}
+
+// UpdateStatus sets a registration's status when the transition is legal.
 func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID, status string) (db.Registration, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -524,6 +605,9 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 			return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 		}
 		return reg, nil
+	}
+	if !registrationStatusTransitionAllowed(reg.Status, status) {
+		return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationInvalidStatus)
 	}
 
 	if status == "approved" {

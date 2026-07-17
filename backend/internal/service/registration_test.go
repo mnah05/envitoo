@@ -28,3 +28,33 @@ func TestValidateCapacityForApproval(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistrationStatusTransitionAllowed(t *testing.T) {
+	tests := []struct {
+		from string
+		to   string
+		want bool
+	}{
+		{"pending", "approved", true},
+		{"pending", "rejected", true},
+		{"pending", "cancelled", true},
+		{"approved", "cancelled", true},
+		{"approved", "rejected", true},
+		{"approved", "pending", false},
+		{"rejected", "approved", true},
+		{"rejected", "pending", false},
+		{"cancelled", "approved", false},
+		{"cancelled", "pending", false},
+		{"pending", "pending", true},
+		{"unknown", "approved", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.from+"->"+tt.to, func(t *testing.T) {
+			got := registrationStatusTransitionAllowed(tt.from, tt.to)
+			if got != tt.want {
+				t.Fatalf("registrationStatusTransitionAllowed(%q, %q) = %v, want %v", tt.from, tt.to, got, tt.want)
+			}
+		})
+	}
+}

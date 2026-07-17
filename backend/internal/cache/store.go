@@ -88,6 +88,117 @@ func (s *Store) Delete(ctx context.Context, keys ...string) {
 	}
 }
 
+// Available reports whether Redis is present and believed healthy.
+// Use for features that require Redis (OTP), not optional HTTP caching.
+func (s *Store) Available() bool {
+	return s != nil && s.redis != nil && s.redis.IsHealthy()
+}
+
+func (s *Store) requireRedis() error {
+	if !s.Available() {
+		return ErrUnavailable
+	}
+	return nil
+}
+
+// GetBytes returns the value for key. Unlike Get, it returns real Redis errors
+// and ErrUnavailable when Redis is down (not a soft miss).
+func (s *Store) GetBytes(ctx context.Context, key string) ([]byte, error) {
+	if err := s.requireRedis(); err != nil {
+		return nil, err
+	}
+	data, err := s.redis.Get(ctx, key)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+		return nil, err
+	}
+	return data, nil
+}
+
+// SetBytes stores value with TTL. Fails hard if Redis is unavailable.
+func (s *Store) SetBytes(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	if err := s.requireRedis(); err != nil {
+		return err
+	}
+	if err := s.redis.Set(ctx, key, value, ttl); err != nil {
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+		return err
+	}
+	return nil
+}
+
+// SetNX sets key only if absent. Fails hard if Redis is unavailable.
+func (s *Store) SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
+	if err := s.requireRedis(); err != nil {
+		return false, err
+	}
+	ok, err := s.redis.SetNX(ctx, key, value, ttl)
+	if err != nil {
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+		return false, err
+	}
+	return ok, nil
+}
+
+// DeleteKeys deletes keys and returns any Redis error (unlike soft Delete).
+func (s *Store) DeleteKeys(ctx context.Context, keys ...string) error {
+	if err := s.requireRedis(); err != nil {
+		return err
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	if err := s.redis.Delete(ctx, keys...); err != nil {
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+		return err
+	}
+	return nil
+}
+
+// Incr increments key by 1. Call Expire when the returned count is 1 so the key
+// is not permanent (INCR does not set TTL).
+func (s *Store) Incr(ctx context.Context, key string) (int64, error) {
+	if err := s.requireRedis(); err != nil {
+		return 0, err
+	}
+	n, err := s.redis.Incr(ctx, key)
+	if err != nil {
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+		return 0, err
+	}
+	return n, nil
+}
+
+// Expire sets a TTL on key. Fails hard if Redis is unavailable.
+func (s *Store) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	if err := s.requireRedis(); err != nil {
+		return err
+	}
+	if err := s.redis.Expire(ctx, key, ttl); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrNotFound
+		}
+		if s.redis.healthy.CompareAndSwap(true, false) {
+			s.log.WarnContext(ctx, "redis unhealthy, caching disabled", "error", err)
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *Store) DeletePrefix(ctx context.Context, prefix string) {
 	if s == nil || s.redis == nil || prefix == "" {
 		return

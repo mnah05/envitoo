@@ -43,6 +43,45 @@ func TestRedis_GetSetDelete(t *testing.T) {
 	}
 }
 
+func TestRedis_SetNXIncrExpire(t *testing.T) {
+	ctx := context.Background()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	c, closeRedis, err := Open(ctx, "redis://"+mr.Addr())
+	if err != nil {
+		t.Fatalf("open redis: %v", err)
+	}
+	defer closeRedis()
+
+	ok, err := c.SetNX(ctx, "cooldown", []byte("1"), time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("setnx first: ok=%v err=%v", ok, err)
+	}
+	ok, err = c.SetNX(ctx, "cooldown", []byte("1"), time.Minute)
+	if err != nil || ok {
+		t.Fatalf("setnx second: ok=%v err=%v", ok, err)
+	}
+
+	n, err := c.Incr(ctx, "attempts")
+	if err != nil || n != 1 {
+		t.Fatalf("incr: n=%d err=%v", n, err)
+	}
+	if err := c.Expire(ctx, "attempts", time.Minute); err != nil {
+		t.Fatalf("expire: %v", err)
+	}
+	if !mr.Exists("attempts") {
+		t.Fatal("attempts missing after expire")
+	}
+	n, err = c.Incr(ctx, "attempts")
+	if err != nil || n != 2 {
+		t.Fatalf("incr2: n=%d err=%v", n, err)
+	}
+}
+
 func TestRedis_DeleteByPrefix(t *testing.T) {
 	ctx := context.Background()
 	mr, err := miniredis.Run()

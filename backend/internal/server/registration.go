@@ -19,6 +19,83 @@ import (
 // Guest Routes (Public)
 // ---------------------------------------------------------------------------
 
+// RequestGuestOTP handles POST /api/events/:id/register/guest/otp.
+func (s *Server) RequestGuestOTP(c echo.Context) error {
+	log := middleware.LoggerFromContext(c.Request().Context())
+
+	eventID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid event id")
+	}
+
+	var req dto.RequestGuestOTPRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if err := s.validate.Struct(req); err != nil {
+		return validationError(c, err)
+	}
+
+	ctx := c.Request().Context()
+	resp, err := s.registrations.RequestGuestOTP(ctx, eventID, req)
+	if err != nil {
+		if httpErr := guestOTPError(err); httpErr != nil {
+			return httpErr
+		}
+		log.ErrorContext(ctx, "request guest otp", "event_id", eventID, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+// VerifyGuestOTP handles POST /api/events/:id/register/guest/otp/verify.
+func (s *Server) VerifyGuestOTP(c echo.Context) error {
+	log := middleware.LoggerFromContext(c.Request().Context())
+
+	eventID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid event id")
+	}
+
+	var req dto.VerifyGuestOTPRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if err := s.validate.Struct(req); err != nil {
+		return validationError(c, err)
+	}
+
+	ctx := c.Request().Context()
+	resp, err := s.registrations.VerifyGuestOTP(ctx, eventID, req)
+	if err != nil {
+		if httpErr := guestOTPError(err); httpErr != nil {
+			return httpErr
+		}
+		log.ErrorContext(ctx, "verify guest otp", "event_id", eventID, "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
+func guestOTPError(err error) *echo.HTTPError {
+	switch {
+	case errors.Is(err, service.ErrEventNotFound):
+		return echo.NewHTTPError(http.StatusNotFound, "event not found")
+	case errors.Is(err, service.ErrEventNotOpen):
+		return echo.NewHTTPError(http.StatusConflict, "event is not open for registration")
+	case errors.Is(err, service.ErrOTPRateLimited):
+		return echo.NewHTTPError(http.StatusTooManyRequests, "otp resend rate limited")
+	case errors.Is(err, service.ErrOTPInvalid):
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid or expired otp")
+	case errors.Is(err, service.ErrDependencyUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "service temporarily unavailable")
+	default:
+		return nil
+	}
+}
+
 // CreateGuestRegistration handles POST /api/events/:id/register/guest.
 func (s *Server) CreateGuestRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
@@ -412,6 +489,9 @@ func (s *Server) UpdateRegistrationStatus(c echo.Context) error {
 		if errors.Is(err, service.ErrEventFull) {
 			return echo.NewHTTPError(http.StatusConflict, "event is full")
 		}
+		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
+			return echo.NewHTTPError(http.StatusConflict, "registration status transition not allowed")
+		}
 		log.ErrorContext(ctx, "update registration status", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
@@ -514,6 +594,10 @@ func registrationCreateError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusConflict, "event is full")
 	case errors.Is(err, service.ErrEventNotOpen):
 		return echo.NewHTTPError(http.StatusConflict, "event is not open for registration")
+	case errors.Is(err, service.ErrGuestEmailNotVerified):
+		return echo.NewHTTPError(http.StatusForbidden, "email not verified")
+	case errors.Is(err, service.ErrDependencyUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "service temporarily unavailable")
 	default:
 		return nil
 	}

@@ -15,6 +15,9 @@ import (
 // ErrNotFound indicates the key is absent from the cache.
 var ErrNotFound = errors.New("cache: key not found")
 
+// ErrUnavailable indicates Redis is required but missing or unhealthy.
+var ErrUnavailable = errors.New("cache: redis unavailable")
+
 // Redis is a Redis-backed cache store with health tracking.
 type Redis struct {
 	client  *redis.Client
@@ -89,6 +92,29 @@ func (r *Redis) Get(ctx context.Context, key string) ([]byte, error) {
 
 func (r *Redis) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	return r.client.Set(ctx, key, value, ttl).Err()
+}
+
+// SetNX sets key only if it does not already exist. Returns true if the key was set.
+func (r *Redis) SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
+	return r.client.SetNX(ctx, key, value, ttl).Result()
+}
+
+// Incr increments key by 1 and returns the new value. Creates the key at 0 if missing.
+// Note: INCR does not attach a TTL; callers must Expire on first creation (count == 1).
+func (r *Redis) Incr(ctx context.Context, key string) (int64, error) {
+	return r.client.Incr(ctx, key).Result()
+}
+
+// Expire sets a TTL on key. Returns ErrNotFound if the key does not exist.
+func (r *Redis) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	ok, err := r.client.Expire(ctx, key, ttl).Result()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *Redis) Delete(ctx context.Context, keys ...string) error {

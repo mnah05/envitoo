@@ -32,6 +32,7 @@ type Querier interface {
 	CountPublicEvents(ctx context.Context, arg CountPublicEventsParams) (int32, error)
 	CountVolunteerApplicationsByEvent(ctx context.Context, eventID uuid.UUID) (int32, error)
 	CreateCalendar(ctx context.Context, arg CreateCalendarParams) (Calendar, error)
+	CreateEmailOutbox(ctx context.Context, arg CreateEmailOutboxParams) (EmailOutbox, error)
 	CreateEvent(ctx context.Context, arg CreateEventParams) (Event, error)
 	// Route 1: POST /api/events/:id/register/guest
 	CreateRegistrationGuest(ctx context.Context, arg CreateRegistrationGuestParams) (Registration, error)
