@@ -142,17 +142,16 @@ function TicketCard({ reg }: { reg: Registration }) {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border bg-card shadow-lg">
+    <div className="relative overflow-hidden rounded-2xl border border-self-strong bg-card">
       {/* Top: hero area */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/40 via-primary/10 to-card" />
-        <div className="relative z-10 flex flex-col gap-3 p-5 pb-8">
+      <div className="relative bg-primary/[0.04]">
+        <div className="flex flex-col gap-3 p-5 pb-8">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <h3 className="display-headline text-xl text-white drop-shadow-sm">
+              <h3 className="display-headline-sans text-xl font-semibold">
                 {event.title}
               </h3>
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/80">
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <CalendarDays className="size-4" />
                   {formatEventDate(event.starts_at, event.ends_at)}
@@ -177,7 +176,7 @@ function TicketCard({ reg }: { reg: Registration }) {
 
       {/* Bottom: QR + details */}
       <div className="flex items-center gap-5 p-5 pt-6">
-        <div className="flex-shrink-0 rounded-xl bg-white p-2 shadow-sm">
+        <div className="flex-shrink-0 rounded-xl bg-white p-2">
           {ticketUrl ? (
             <QRCodeSVG value={ticketUrl} size={100} level="M" />
           ) : (

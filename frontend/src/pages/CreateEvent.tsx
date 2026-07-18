@@ -204,7 +204,6 @@ export function CreateEvent() {
         </div>
 
         <form onSubmit={onSubmit} className="space-y-8">
-          {/* Title */}
           <div>
             <label htmlFor="title" className="label-muted mb-2 block">
               Event name
@@ -225,16 +224,14 @@ export function CreateEvent() {
             )}
           </div>
 
-          {/* Meta rows */}
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-            {/* Date & time */}
+          <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-self-strong bg-card">
             <div className="flex items-start gap-4 px-4 py-4">
               <Calendar className="mt-2.5 size-5 shrink-0 text-primary/80" />
               <div className="grid flex-1 gap-3 sm:grid-cols-2">
                 <div>
-<label htmlFor="starts_at" className="label-muted mb-1 block">
-                      Start
-                    </label>
+                  <label htmlFor="starts_at" className="label-muted mb-1 block">
+                    Start
+                  </label>
                   <DateTimePicker
                     id="starts_at"
                     value={form.starts_at}
@@ -247,9 +244,9 @@ export function CreateEvent() {
                   )}
                 </div>
                 <div>
-<label htmlFor="ends_at" className="label-muted mb-1 block">
-                      End
-                    </label>
+                  <label htmlFor="ends_at" className="label-muted mb-1 block">
+                    End
+                  </label>
                   <DateTimePicker
                     id="ends_at"
                     value={form.ends_at}
@@ -264,7 +261,6 @@ export function CreateEvent() {
               </div>
             </div>
 
-            {/* Location */}
             <div className="px-4 py-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -277,7 +273,7 @@ export function CreateEvent() {
                     {form.is_virtual ? "Online event" : "In-person"}
                   </span>
                 </div>
-                <div className="flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs">
+                <div className="flex rounded-lg border border-border/50 bg-muted/30 p-0.5 text-xs">
                   <button
                     type="button"
                     onClick={() => {
@@ -289,9 +285,9 @@ export function CreateEvent() {
                       });
                     }}
                     className={cn(
-                      "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
+                      "min-h-[34px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                       !form.is_virtual
-                        ? "bg-primary text-primary-foreground shadow-sm"
+                        ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -309,9 +305,9 @@ export function CreateEvent() {
                       });
                     }}
                     className={cn(
-                      "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
+                      "min-h-[34px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                       form.is_virtual
-                        ? "bg-primary text-primary-foreground shadow-sm"
+                        ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -341,7 +337,6 @@ export function CreateEvent() {
               )}
             </div>
 
-            {/* Free ticket */}
             <div className="flex items-center gap-4 px-4 py-4">
               <Ticket className="size-5 shrink-0 text-primary/80" />
               <div className="flex flex-1 items-center justify-between gap-3">
@@ -355,7 +350,6 @@ export function CreateEvent() {
               </div>
             </div>
 
-            {/* Capacity */}
             <div className="flex items-center gap-4 px-4 py-4">
               <Users className="size-5 shrink-0 text-primary/80" />
               <div className="flex flex-1 items-center justify-between gap-3">
@@ -377,7 +371,6 @@ export function CreateEvent() {
               )}
             </div>
 
-            {/* Description */}
             <div className="px-4 py-4">
               <label htmlFor="description" className="label-muted mb-2 block">
                 Description
@@ -392,7 +385,6 @@ export function CreateEvent() {
               />
             </div>
 
-            {/* Cover image URL */}
             <div className="px-4 py-4">
               <label htmlFor="cover_image_url" className="label-muted mb-1.5 block">
                 Cover image URL <span className="text-muted-foreground/70">(optional)</span>
@@ -411,7 +403,6 @@ export function CreateEvent() {
               )}
             </div>
 
-            {/* Require approval */}
             <div className="flex items-center justify-between gap-4 px-4 py-4">
               <div>
                 <p className="text-sm font-medium">Require approval to register</p>
@@ -423,7 +414,6 @@ export function CreateEvent() {
               />
             </div>
 
-            {/* Visibility */}
             <div className="flex items-center justify-between gap-4 px-4 py-4">
               <div>
                 <p className="text-sm font-medium">List on Discover page</p>
@@ -438,7 +428,6 @@ export function CreateEvent() {
             </div>
           </div>
 
-          {/* Category */}
           <div>
             <p className="label-muted mb-3">Category</p>
             <div className="flex flex-wrap gap-2">
@@ -460,10 +449,8 @@ export function CreateEvent() {
             </div>
           </div>
 
-          {/* Spacer so sticky footer / bottom nav doesn't cover content */}
           <div className="h-32 sm:h-24" aria-hidden />
 
-          {/* Sticky action footer (inside form so submit associates natively) */}
           <div className="fixed inset-x-0 bottom-16 z-30 border-t bg-background/90 backdrop-blur-md sm:bottom-0 sm:pb-[env(safe-area-inset-bottom)]">
             <PageContainer width="narrow" className="flex items-center justify-between gap-3 py-3">
               <Button
@@ -478,7 +465,7 @@ export function CreateEvent() {
                 type="submit"
                 size="sm"
                 disabled={createMut.isPending}
-                className="ml-auto rounded-full px-6 sm:min-w-[10rem]"
+                className="ml-auto px-6 sm:min-w-[10rem]"
               >
                 {createMut.isPending && <Spinner data-icon="inline-start" />}
                 Create event
@@ -488,7 +475,6 @@ export function CreateEvent() {
         </form>
       </PageContainer>
 
-      {/* Post-creation share dialog */}
       <Dialog open={!!createdEvent} onOpenChange={(open) => {
         if (!open && createdEvent) {
           navigate(`/manage/${createdEvent.id}`);

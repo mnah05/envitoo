@@ -1,7 +1,18 @@
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import {
+  BookOpen,
+  Briefcase,
+  Dumbbell,
+  Globe,
+  Heart,
+  Monitor,
+  Music,
+  Palette,
+  Users,
+  UtensilsCrossed,
+} from "lucide-react";
 import { PageContainer } from "@/components/domain/Layout";
 import { EventCard } from "@/components/domain/EventCard";
 import { EventCardSkeleton } from "@/components/domain/EventCardSkeleton";
@@ -10,6 +21,19 @@ import { usePublicEvents } from "@/hooks/use-events";
 import { CATEGORIES, CATEGORY_LABELS, type Event } from "@/lib/api";
 
 const PAGE_SIZE = 100;
+
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+  music: Music,
+  tech: Monitor,
+  food: UtensilsCrossed,
+  sports: Dumbbell,
+  arts: Palette,
+  education: BookOpen,
+  social: Users,
+  charity: Heart,
+  business: Briefcase,
+  other: Globe,
+};
 
 export function Discover() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,7 +59,6 @@ export function Discover() {
     [allEvents, selectedCategory],
   );
 
-  // Group non-full published events by category
   const grouped = useMemo(() => {
     const map = new Map<string, typeof allEvents>();
     for (const e of allEvents) {
@@ -48,7 +71,6 @@ export function Discover() {
     return map;
   }, [allEvents]);
 
-  // Ordered categories that have events
   const activeCategories = CATEGORIES.filter((c) => (grouped.get(c)?.length ?? 0) > 0);
 
   useEffect(() => {
@@ -64,25 +86,17 @@ export function Discover() {
 
   return (
     <div className="relative pt-16">
-      <div
-        className="pointer-events-none absolute inset-0 bg-radial-fade opacity-80"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 bg-grain opacity-[0.03]"
-        aria-hidden
-      />
+      <div className="pointer-events-none absolute inset-0 bg-light-teal" aria-hidden />
 
       <PageContainer className="relative py-14 sm:py-20">
         <h1 className="display-hero text-4xl sm:text-5xl">Discover events</h1>
-        <p className="text-lede mt-4 max-w-lg text-[1.0625rem]">
-          What's happening next — find your next experience.
+        <p className="mt-4 max-w-lg text-lg leading-relaxed text-muted-foreground">
+          What&apos;s happening next — find your next experience.
         </p>
       </PageContainer>
 
       <PageContainer className="relative pb-6">
-        <h2 className="label-muted mb-4">Browse by category</h2>
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {CATEGORIES.map((c) => {
             const isActive = selectedCategory === c;
             return (
@@ -90,28 +104,29 @@ export function Discover() {
                 key={c}
                 to={`/discover?category=${c}`}
                 className={
-                  "group flex min-w-[14rem] flex-shrink-0 items-center justify-between gap-2 rounded-xl border border-border/80 bg-card p-4 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:min-w-0" +
-                  (isActive ? " border-primary/40 bg-primary/10" : "")
+                  "group flex items-center gap-3 rounded-xl border p-4 text-sm font-medium transition-all" +
+                  (isActive
+                    ? " border-primary/40 bg-primary/10 text-foreground"
+                    : " border-border/40 bg-card/50 text-muted-foreground hover:border-primary/30 hover:bg-card hover:text-foreground")
                 }
               >
-                <p className="text-sm font-medium">{CATEGORY_LABELS[c]}</p>
-                <ArrowRight
-                  className={
-                    "size-4 text-muted-foreground transition-colors group-hover:text-foreground" +
-                    (isActive ? " text-foreground" : "")
-                  }
-                />
+                <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden>
+                  {(() => {
+                    const Icon = CATEGORY_ICONS[c] ?? Globe;
+                    return <Icon className="size-4" strokeWidth={1.5} />;
+                  })()}
+                </span>
+                <span>{CATEGORY_LABELS[c]}</span>
               </Link>
             );
           })}
         </div>
       </PageContainer>
 
-      {/* Content */}
       <PageContainer className="relative pb-28 sm:pb-20">
         {selectedCategory && (
           <div className="mb-8 flex items-center justify-between gap-3">
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Showing{" "}
               <span className="font-medium text-foreground">
                 {CATEGORY_LABELS[selectedCategory as keyof typeof CATEGORY_LABELS] ?? selectedCategory}
@@ -123,14 +138,14 @@ export function Discover() {
               onClick={clearCategory}
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
-              All categories →
+              All categories &rarr;
             </button>
           </div>
         )}
 
         {isError ? (
-          <Empty className="min-h-[40vh] border">
-            <EmptyTitle>Couldn't load events</EmptyTitle>
+          <Empty className="min-h-[40vh]">
+            <EmptyTitle>Couldn&apos;t load events</EmptyTitle>
             <EmptyDescription>
               Check your connection and try again.
             </EmptyDescription>
@@ -152,7 +167,7 @@ export function Discover() {
               ))}
             </div>
           ) : (
-            <Empty className="min-h-[40vh] border">
+            <Empty className="min-h-[40vh]">
               <EmptyTitle>No events in this category</EmptyTitle>
               <EmptyDescription>
                 Check back soon — new events are being added every day.
@@ -163,7 +178,7 @@ export function Discover() {
             </Empty>
           )
         ) : activeCategories.length === 0 ? (
-          <Empty className="min-h-[40vh] border">
+          <Empty className="min-h-[40vh]">
             <EmptyTitle>No events yet</EmptyTitle>
             <EmptyDescription>
               Check back soon — new events are being added every day.
@@ -194,7 +209,7 @@ function CategorySection({
 }) {
   return (
     <section>
-      <h2 className="display-headline mb-4 text-xl">{label}</h2>
+      <h2 className="display-headline-sans mb-4 text-lg font-semibold">{label}</h2>
       <div className="relative">
         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none">
           {events.map((event, i) => (

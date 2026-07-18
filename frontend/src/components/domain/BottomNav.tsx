@@ -29,16 +29,14 @@ export function BottomNav() {
           aria-label="Create event"
         >
           {({ isActive }) => (
-            <>
-              <span
-                className={cn(
-                  "grid size-11 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors active:bg-primary/90",
-                  isActive && "ring-2 ring-primary/50 ring-offset-2 ring-offset-background",
-                )}
-              >
-                <Plus className="size-5" />
-              </span>
-            </>
+            <span
+              className={cn(
+                "grid size-11 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground transition-colors active:bg-primary/90",
+                isActive && "border-2 border-primary/30",
+              )}
+            >
+              <Plus className="size-5" />
+            </span>
           )}
         </NavLink>
 

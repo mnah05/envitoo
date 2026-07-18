@@ -198,7 +198,6 @@ export function EventDashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="mt-8">
           <Tabs defaultValue="registrations">
             <TabsList>
@@ -215,7 +214,6 @@ export function EventDashboard() {
             </TabsList>
 
             <TabsContent value="registrations">
-              {/* Stats */}
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Stat icon={<Users className="size-5" />} label="Capacity" value={event.capacity} />
                 <Stat icon={<CheckCircle2 className="size-5" />} label="Approved" value={approved} />
@@ -226,7 +224,6 @@ export function EventDashboard() {
                 <p className="mt-3 text-sm text-muted-foreground">{seatsLeft} seats remaining.</p>
               )}
 
-              {/* Registrations */}
               <div className="mt-8">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -278,7 +275,6 @@ export function EventDashboard() {
                   </Empty>
                 ) : (
                   <>
-                    {/* Desktop: table */}
                     <div className="mt-6 hidden overflow-x-auto rounded-2xl border md:block">
                       <Table>
                         <TableHeader>
@@ -313,7 +309,6 @@ export function EventDashboard() {
                       </Table>
                     </div>
 
-                    {/* Mobile: stacked cards */}
                     <div className="mt-6 flex flex-col gap-3 md:hidden">
                       {regs.map((reg) => (
                         <RegistrationCard
@@ -391,10 +386,10 @@ function Stat({
   value: number;
 }) {
   return (
-    <div className="rounded-2xl border border-border/80 bg-card p-5">
+    <div className="rounded-xl border border-self-strong bg-card p-5">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
-        <span className="text-eyebrow">{label}</span>
+        <span className="text-sm font-medium tracking-[-0.01em]">{label}</span>
       </div>
       <p className="text-stat mt-2 text-2xl">{value}</p>
     </div>

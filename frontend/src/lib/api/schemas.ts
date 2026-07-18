@@ -83,15 +83,15 @@ export const RegistrationListSchema = z.object({
 });
 export type RegistrationList = z.infer<typeof RegistrationListSchema>;
 
-/** /api/me returns the raw db.User (PascalCase, no json tags). */
+/** /api/me returns the UserResponse DTO (snake_case json tags). */
 export const UserSchema = z.object({
-  ID: uuid,
-  AuthUserID: z.string(),
-  Email: z.string(),
-  Username: z.string().nullable().optional(),
-  AvatarUrl: z.string().nullable().optional(),
-  CreatedAt: iso,
-  UpdatedAt: iso,
+  id: uuid,
+  auth_user_id: z.string(),
+  email: z.string(),
+  username: z.string().nullable().optional(),
+  avatar_url: z.string().nullable().optional(),
+  created_at: iso,
+  updated_at: iso,
 });
 export type User = z.infer<typeof UserSchema>;
 

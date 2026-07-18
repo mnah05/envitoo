@@ -1,14 +1,23 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import {
-  ArrowRight,
+  ArrowUpRight,
+  BookOpen,
+  Briefcase,
   CalendarPlus,
+  Compass,
+  Dumbbell,
+  Globe,
+  Heart,
+  Monitor,
+  Music,
+  Palette,
   QrCode,
   Share2,
-  Users,
-  Compass,
   Ticket,
+  Users,
+  UtensilsCrossed,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,11 +28,6 @@ import { usePublicEvents } from "@/hooks/use-events";
 import { CATEGORIES, CATEGORY_LABELS } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0 },
-};
-
 export function Landing() {
   const reduceMotion = useReducedMotion();
   const transition = reduceMotion
@@ -32,214 +36,313 @@ export function Landing() {
 
   return (
     <div className="overflow-x-hidden">
-      <Hero transition={transition} />
-      <StatsStrip />
+      <HeroSection />
       <CategorySection />
-      <Features transition={transition} />
-      <HowItWorks transition={transition} />
-      <FeaturedEvents transition={transition} />
-      <BottomCta transition={transition} />
+      <FeaturesSection transition={transition} />
+      <HowItWorksSection />
+      <FeaturedEventsSection />
+      <CtaSection />
     </div>
   );
 }
 
-function Hero({
-  transition,
-}: {
-  transition: { duration: number; ease?: readonly [number, number, number, number] };
-}) {
+// ── Hero ──────────────────────────────────────────────
+
+function HeroSection() {
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
+  const bgY = useTransform(scrollYProgress, [0, 1], ["0%", "25%"]);
+  const reduceMotion = useReducedMotion();
+
   return (
-    <section className="relative min-h-dvh border-b border-border/40 bg-radial-fade pt-16">
-      <div
-        className="pointer-events-none absolute inset-0 bg-grain opacity-[0.035]"
+    <section
+      ref={heroRef}
+      className="relative min-h-dvh overflow-hidden border-b border-border/30 pt-16"
+    >
+      <motion.div
+        className="pointer-events-none absolute inset-0 bg-light-teal"
+        style={reduceMotion ? {} : { y: bgY }}
         aria-hidden
       />
-      <PageContainer className="relative flex min-h-[calc(100dvh-4rem)] flex-col justify-center py-20 sm:py-28">
-        <div className="max-w-3xl">
-          <motion.h1
-            className="display-hero text-[2.75rem] sm:text-6xl lg:text-7xl"
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            transition={transition}
-          >
-            Host events people
-            <br />
-            <span className="text-primary">actually</span> show up for.
-          </motion.h1>
+      <div className="pointer-events-none absolute inset-0 bg-grain opacity-[0.025]" aria-hidden />
 
-          <motion.p
-            className="text-lede mt-7 max-w-[34rem]"
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            transition={{ ...transition, delay: reduceDelay(transition, 0.08) }}
-          >
-            Better discovery, cleaner tickets, no subscriptions. Publish a page in
-            minutes and open registrations today.
-          </motion.p>
+      <PageContainer className="relative flex min-h-[calc(100dvh-4rem)] items-center py-20 sm:py-28">
+        <div className="flex w-full flex-col items-start gap-12 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-xl">
+            <h1 className="animate-fade-up display-hero stagger-1 text-[clamp(2.5rem,5vw,4.5rem)] leading-[0.95] tracking-[-0.035em]">
+              Host events people
+              <br />
+              <span className="text-primary">actually</span> show up for.
+            </h1>
+            <p className="animate-fade-up stagger-2 mt-6 max-w-[32rem] text-lg leading-relaxed tracking-[-0.014em] text-muted-foreground">
+              Better discovery, cleaner tickets, no subscriptions. Publish a page
+              in minutes and open registrations today.
+            </p>
+            <div className="animate-fade-up stagger-3 mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Button asChild size="lg">
+                <Link to="/create">
+                  Create your first event
+                  <ArrowUpRight className="size-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
 
           <motion.div
-            className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center"
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            transition={{ ...transition, delay: reduceDelay(transition, 0.14) }}
+            className="hidden w-full max-w-sm shrink-0 lg:block"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
           >
-            <Button asChild size="lg" className="text-ui rounded-full px-8 text-[15px]">
-              <Link to="/create">
-                Create event
-                <ArrowRight data-icon="inline-end" />
-              </Link>
-            </Button>
-            <Link
-              to="/discover"
-              className="text-ui text-[15px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Explore events
-              <ArrowRight className="ml-1 inline size-4" />
-            </Link>
+            <EventCardMockup />
           </motion.div>
         </div>
       </PageContainer>
-    </section>
-  );
-}
 
-const STATS = [
-  { value: "Free", label: "To start" },
-  { value: "QR", label: "Check-in" },
-  { value: "0", label: "Subscriptions" },
-];
-
-function StatsStrip() {
-  return (
-    <section className="border-b border-border/40">
-      <PageContainer className="py-10 sm:py-12">
-        <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between sm:gap-12">
-          {STATS.map((s, i) => (
-            <div
-              key={s.label}
-              className={cn(
-                "flex items-baseline gap-3 sm:flex-col sm:items-start sm:gap-2",
-                i > 0 && "sm:border-l sm:border-border/50 sm:pl-12",
-              )}
-            >
-              <p className="text-stat text-[2rem] text-foreground/90 sm:text-[2.5rem]">
-                {s.value}
-              </p>
-              <p className="text-eyebrow">{s.label}</p>
-            </div>
-          ))}
+      <div className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 sm:block">
+        <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground/50">
+          <span className="block size-1 rounded-full bg-muted-foreground/30" />
+          <span className="block size-1 rounded-full bg-muted-foreground/20" />
+          <span className="block size-1 rounded-full bg-muted-foreground/10" />
         </div>
-      </PageContainer>
+      </div>
     </section>
   );
 }
+
+function EventCardMockup() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <motion.div
+      className="relative"
+      animate={
+        reduceMotion ? {} : { y: [0, -6, 0] }
+      }
+      transition={{
+        duration: 5,
+        ease: "easeInOut",
+        repeat: Infinity,
+      }}
+    >
+      <div className="absolute -inset-8 rounded-[2rem] bg-primary/5 blur-2xl" aria-hidden />
+
+      <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-card shadow-2xl">
+        <div className="bg-gradient-to-br from-primary/30 via-primary/10 to-card p-5 pb-8">
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-black/20 px-2 py-1 text-[11px] font-medium tracking-wide text-white/80 backdrop-blur">
+              <Ticket className="size-3" />
+              Ticket
+            </span>
+            <span className="rounded-md bg-emerald-400/20 px-2 py-1 text-[11px] font-medium text-emerald-300">
+              Free
+            </span>
+          </div>
+          <h3 className="mt-4 font-serif text-xl font-semibold leading-tight text-white">
+            Summer Design Meetup
+          </h3>
+          <p className="mt-1.5 text-sm text-white/70">August 15, 2026 · 6:00 PM</p>
+        </div>
+
+        <div className="flex items-center gap-4 p-5">
+          <div className="grid size-16 shrink-0 place-items-center rounded-xl bg-white p-1.5">
+            <svg viewBox="0 0 100 100" className="size-full">
+              <rect x="10" y="10" width="80" height="80" rx="8" fill="#14b8a6" opacity="0.15" />
+              <rect x="20" y="20" width="60" height="60" rx="4" fill="#14b8a6" opacity="0.3" />
+              <rect x="30" y="30" width="40" height="40" rx="2" fill="#14b8a6" opacity="0.5" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">Alex Rivera</p>
+            <p className="text-xs text-muted-foreground">Registered · Seat 42 of 100</p>
+          </div>
+        </div>
+
+        <div className="relative flex items-center px-5">
+          <div className="absolute -left-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full bg-background" />
+          <div className="h-px flex-1 border-t border-dashed border-border/60" />
+          <div className="absolute -right-2.5 top-1/2 size-5 -translate-y-1/2 rounded-full bg-background" />
+        </div>
+
+        <div className="flex items-center justify-between p-5 pt-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-lg border border-border/50 bg-muted/30">
+              <svg viewBox="0 0 24 24" className="size-5 text-muted-foreground/60">
+                <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
+                <rect x="14" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
+                <rect x="3" y="14" width="7" height="7" rx="1" fill="currentColor" opacity="0.3" />
+                <rect x="14" y="14" width="3" height="3" rx="0.5" fill="currentColor" opacity="0.5" />
+                <rect x="19" y="14" width="2" height="3" rx="0.5" fill="currentColor" opacity="0.5" />
+                <rect x="14" y="19" width="3" height="2" rx="0.5" fill="currentColor" opacity="0.5" />
+                <rect x="19" y="19" width="2" height="2" rx="0.5" fill="currentColor" opacity="0.5" />
+              </svg>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">envitoo.app/e/meetup-2026</p>
+              <p>Show at check-in</p>
+            </div>
+          </div>
+          <span className="text-[10px] text-muted-foreground">ID: b7f3a2c1</span>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Categories ────────────────────────────────────────
+
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+  music: Music,
+  tech: Monitor,
+  food: UtensilsCrossed,
+  sports: Dumbbell,
+  arts: Palette,
+  education: BookOpen,
+  social: Users,
+  charity: Heart,
+  business: Briefcase,
+  other: Globe,
+};
 
 function CategorySection() {
   return (
-    <section className="border-b border-border/40 py-12 sm:py-16" aria-label="Event categories">
+    <section className="border-b border-border/30 py-16 sm:py-20" aria-label="Event categories">
       <PageContainer>
-        <h2 className="display-title text-2xl sm:text-3xl">Browse by category</h2>
-        <div className="mt-8 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-4">
-          {CATEGORIES.map((cat) => (
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between sm:gap-0">
+          <div>
+            <p className="text-xs tracking-wide text-muted-foreground/60 uppercase">Categories</p>
+            <h2 className="display-title mt-1 text-3xl sm:text-4xl">
+              Browse by category
+            </h2>
+          </div>
+          <Link
+            to="/discover"
+            className="hidden items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
+          >
+            View all
+            <ArrowUpRight className="size-3.5" />
+          </Link>
+        </div>
+
+        <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {CATEGORIES.map((cat, i) => (
             <Link
               key={cat}
               to={`/discover?category=${cat}`}
-              className="text-ui flex min-w-[10rem] shrink-0 items-center justify-between rounded-xl border border-border/80 bg-card px-4 py-4 text-[14px] text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-foreground sm:min-w-0"
+              className={cn(
+                "animate-fade-up group relative flex items-center gap-3 rounded-xl border border-self-weak bg-card/50 p-4 transition-all hover:border-primary/30 hover:bg-card",
+                `stagger-${Math.min(i + 1, 6)}`,
+              )}
             >
-              {CATEGORY_LABELS[cat]}
-              <ArrowRight className="size-3.5 opacity-50" />
+              <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden>
+                {(() => {
+                  const Icon = CATEGORY_ICONS[cat] ?? Globe;
+                  return <Icon className="size-4" strokeWidth={1.5} />;
+                })()}
+              </span>
+              <span className="text-sm font-medium">{CATEGORY_LABELS[cat]}</span>
             </Link>
           ))}
         </div>
+
+        <Link
+          to="/discover"
+          className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:hidden"
+        >
+          View all categories
+          <ArrowUpRight className="size-3.5" />
+        </Link>
       </PageContainer>
     </section>
   );
 }
+
+// ── Features (bento layout) ───────────────────────────
 
 const FEATURES = [
   {
     icon: CalendarPlus,
-    title: "Create & publish in minutes",
+    title: "Create & publish",
     body: "Title, schedule, capacity, cover — ship a polished event page without the busywork.",
     className: "sm:col-span-2 sm:row-span-1",
     large: true,
   },
   {
     icon: Ticket,
-    title: "Tickets & QR check-in",
+    title: "QR check-in",
     body: "Guests get QR tickets. You scan at the door. Approvals and cancellations stay simple.",
   },
   {
     icon: Users,
-    title: "Volunteers & roster",
+    title: "Volunteer roster",
     body: "Open roles, review applications, and keep staff aligned from one dashboard.",
   },
   {
     icon: Compass,
-    title: "Discover or stay unlisted",
+    title: "Discover or unlisted",
     body: "Feature public events on Discover, or share a private link for invite-only nights.",
   },
 ];
 
-function Features({
+function FeaturesSection({
   transition,
 }: {
   transition: { duration: number; ease?: readonly [number, number, number, number] };
 }) {
   return (
-    <section className="relative border-b border-border/40 py-20 sm:py-24">
-      <PageContainer className="relative">
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          variants={fadeUp}
-          transition={transition}
-        >
-          <h2 className="display-title max-w-xl text-3xl sm:text-4xl">
-            One place for hosts, guests, and volunteers
-          </h2>
-          <p className="text-lede mt-4 max-w-lg text-[1.0625rem]">
-            From first publish to door check-in — without juggling spreadsheets and group chats.
-          </p>
-        </motion.div>
+    <section className="relative border-b border-border/30 py-20 sm:py-28">
+      <div className="pointer-events-none absolute inset-0 bg-light-amber" aria-hidden />
 
-        <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <PageContainer className="relative">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="display-title max-w-2xl text-3xl sm:text-4xl">
+              For hosts, guests, <span className="italic text-primary">and</span> volunteers
+            </h2>
+            <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">
+              One platform that handles creation, registration, check-in, and coordination.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f, i) => (
             <motion.div
               key={f.title}
               className={cn(
-                "group rounded-xl border border-border/80 bg-card/80 p-6 transition-colors hover:border-primary/30 hover:bg-card",
+                "group rounded-xl border border-self-weak bg-card/60 p-6 transition-colors hover:border-primary/20 hover:bg-card",
                 f.className,
-                f.large && "flex flex-col justify-between sm:min-h-[14rem]",
+                f.large && "flex flex-col justify-between sm:min-h-[16rem]",
               )}
               initial="hidden"
               whileInView="visible"
-              viewport={{ once: true, margin: "-40px" }}
-              variants={fadeUp}
-              transition={{ ...transition, delay: reduceDelay(transition, i * 0.05) }}
+              viewport={{ once: true, margin: "-60px" }}
+              variants={{
+                hidden: { opacity: 0, y: 12 },
+                visible: { opacity: 1, y: 0 },
+              }}
+              transition={{ ...transition, delay: i * 0.06 }}
             >
               <f.icon
                 className={cn(
-                  "text-muted-foreground",
-                  f.large ? "mb-6 size-6" : "mb-4 size-5",
+                  "text-primary/60",
+                  f.large ? "mb-5 size-6" : "mb-4 size-5",
                 )}
                 strokeWidth={1.5}
               />
               {f.large ? (
                 <>
-                  <h3 className="display-headline text-xl sm:text-2xl">{f.title}</h3>
-                  <p className="mt-3 max-w-md text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
+                  <h3 className="display-headline text-2xl">{f.title}</h3>
+                  <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
                     {f.body}
                   </p>
                 </>
               ) : (
                 <>
-                  <h3 className="display-headline text-[1.0625rem]">{f.title}</h3>
-                  <p className="mt-2 text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
+                  <h3 className="display-headline-sans text-base font-semibold">{f.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     {f.body}
                   </p>
                 </>
@@ -252,101 +355,86 @@ function Features({
   );
 }
 
+// ── How It Works ──────────────────────────────────────
+
 const STEPS = [
   {
-    n: "01",
+    icon: Zap,
     title: "Create your page",
     body: "Add details, set capacity, choose public or unlisted. Publish when you're ready.",
-    icon: Zap,
   },
   {
-    n: "02",
+    icon: Share2,
     title: "Share the link",
     body: "Send one URL. Guests register in seconds — signed-in or as a guest.",
-    icon: Share2,
   },
   {
-    n: "03",
+    icon: QrCode,
     title: "Manage the day",
     body: "Approve registrations, scan QR tickets, and coordinate volunteers from the dashboard.",
-    icon: QrCode,
   },
 ];
 
-function HowItWorks({
-  transition,
-}: {
-  transition: { duration: number; ease?: readonly [number, number, number, number] };
-}) {
+function HowItWorksSection() {
   return (
-    <section className="border-b border-border/40 py-20 sm:py-24">
+    <section className="border-b border-border/30 py-20 sm:py-28">
       <PageContainer>
-        <motion.div
-          className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          variants={fadeUp}
-          transition={transition}
-        >
-          <div>
-            <h2 className="display-title text-3xl sm:text-4xl">Live in three steps</h2>
-            <p className="text-lede mt-3 max-w-md text-[1.0625rem]">
-              From blank page to door check-in without the busywork.
-            </p>
-          </div>
-          <Link
-            to="/create"
-            className="text-ui inline-flex items-center gap-1 text-[15px] text-primary transition-colors hover:text-primary/80"
-          >
-            Start free
-            <ArrowRight className="size-4" />
-          </Link>
-        </motion.div>
+        <div className="mx-auto max-w-2xl">
+          <p className="text-xs tracking-wide text-muted-foreground/60 uppercase">Process</p>
+          <h2 className="display-title mt-1 text-3xl sm:text-4xl">
+            Live in three steps
+          </h2>
+          <p className="mt-4 max-w-md text-base leading-relaxed text-muted-foreground">
+            From blank page to door check-in without the busywork.
+          </p>
+        </div>
 
-        {/* Horizontal flow with connecting line */}
-        <div className="relative mt-14">
-          <div
-            className="pointer-events-none absolute top-5 right-[16.67%] left-[16.67%] hidden h-px bg-border md:block"
-            aria-hidden
-          />
-          <div className="grid gap-10 md:grid-cols-3 md:gap-6">
-            {STEPS.map((step, i) => (
-              <motion.div
-                key={step.n}
-                className="relative flex flex-col items-start"
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-40px" }}
-                variants={fadeUp}
-                transition={{ ...transition, delay: reduceDelay(transition, i * 0.06) }}
-              >
-                <div className="relative z-10 flex size-10 items-center justify-center rounded-full border border-border bg-background">
-                  <step.icon className="size-4 text-muted-foreground" strokeWidth={1.5} />
-                </div>
-                <span className="text-ui mt-5 text-[12px] tabular-nums text-muted-foreground">
-                  {step.n}
-                </span>
-                <h3 className="display-headline mt-2 text-xl">{step.title}</h3>
-                <p className="mt-2 text-[0.9375rem] leading-[1.5] tracking-[-0.01em] text-muted-foreground">
-                  {step.body}
-                </p>
-              </motion.div>
-            ))}
-          </div>
+        <div className="mt-16 grid gap-6 sm:grid-cols-3 sm:gap-8">
+          {STEPS.map((step, i) => (
+            <div
+              key={step.title}
+              className={cn(
+                "animate-fade-up relative flex flex-col items-start text-left",
+                `stagger-${Math.min(i + 1, 6)}`,
+              )}
+            >
+              <div className="flex size-14 items-center justify-center rounded-2xl border border-border/40 bg-card">
+                <step.icon className="size-6 text-primary/70" strokeWidth={1.5} />
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                {i > 0 && (
+                  <span
+                    className="hidden h-px w-8 bg-border/40 sm:block"
+                    aria-hidden
+                  />
+                )}
+              </div>
+              <p className="mt-5 font-serif text-lg font-semibold">{step.title}</p>
+              <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                {step.body}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-12">
+          <Button asChild>
+            <Link to="/create">
+              Start free
+              <ArrowUpRight className="size-4" />
+            </Link>
+          </Button>
         </div>
       </PageContainer>
     </section>
   );
 }
 
-function FeaturedEvents({
-  transition,
-}: {
-  transition: { duration: number; ease?: readonly [number, number, number, number] };
-}) {
+// ── Featured Events ───────────────────────────────────
+
+function FeaturedEventsSection() {
   const nowIso = useMemo(() => new Date().toISOString(), []);
-  const { data, isLoading } = usePublicEvents({
+  const { data, isLoading, isError } = usePublicEvents({
     startsAfter: nowIso,
     limit: 6,
   });
@@ -359,91 +447,62 @@ function FeaturedEvents({
     [data?.events],
   );
 
-  if (!isLoading && events.length === 0) return null;
-
   return (
-    <section className="border-b border-border/40 py-20 sm:py-24">
-      <PageContainer>
-        <motion.div
-          className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          variants={fadeUp}
-          transition={transition}
-        >
+    <section className="relative border-b border-border/30 py-20 sm:py-28">
+      <div className="pointer-events-none absolute inset-0 bg-light-cyan" aria-hidden />
+      <PageContainer className="relative">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="display-title text-3xl sm:text-4xl">Featured events</h2>
-            <p className="text-lede mt-3 max-w-md text-[1.0625rem]">
-              What&apos;s open next — real events, ready to join.
-            </p>
+            <p className="text-xs tracking-wide text-muted-foreground/60 uppercase">Events</p>
+            <h2 className="display-title mt-1 text-3xl sm:text-4xl">Featured events</h2>
           </div>
           <Link
             to="/discover"
-            className="text-ui inline-flex items-center gap-1 text-[15px] text-muted-foreground transition-colors hover:text-foreground"
+            className="hidden items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
           >
             View all
-            <ArrowRight className="size-4" />
+            <ArrowUpRight className="size-3.5" />
           </Link>
-        </motion.div>
+        </div>
 
         <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {isLoading
             ? Array.from({ length: 3 }).map((_, i) => <EventCardSkeleton key={i} />)
-            : events.map((event, i) => (
-                <EventCard key={event.id} event={event} index={i} />
-              ))}
+            : isError
+              ? null
+              : events.map((event, i) => (
+                  <EventCard key={event.id} event={event} index={i} />
+                ))}
         </div>
       </PageContainer>
     </section>
   );
 }
 
-function BottomCta({
-  transition,
-}: {
-  transition: { duration: number; ease?: readonly [number, number, number, number] };
-}) {
-  return (
-    <section className="relative overflow-hidden py-20 sm:py-28">
-      <div
-        className="pointer-events-none absolute inset-0 bg-grain opacity-[0.03]"
-        aria-hidden
-      />
-      <PageContainer className="relative">
-        <motion.div
-          className="flex flex-col items-start gap-6 sm:items-center sm:text-center"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-60px" }}
-          variants={fadeUp}
-          transition={transition}
-        >
-          <p className="text-lede max-w-md">
-            Set up your first event page now. Free to start — no subscriptions.
-          </p>
-          <Button asChild size="lg" className="text-ui rounded-full px-8 text-[15px]">
-            <Link to="/create">
-              Create your first event
-              <ArrowRight data-icon="inline-end" />
-            </Link>
-          </Button>
-        </motion.div>
+// ── Bottom CTA ────────────────────────────────────────
 
-        <p
-          className="display-hero pointer-events-none mt-16 select-none text-center text-[clamp(4rem,18vw,12rem)] leading-none tracking-[-0.04em] text-foreground/[0.06]"
-          aria-hidden
-        >
-          EnviToo
-        </p>
+function CtaSection() {
+  return (
+    <section className="relative py-20 sm:py-28">
+      <div className="pointer-events-none absolute inset-0 bg-light-rose" aria-hidden />
+      <PageContainer className="relative">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-border/30 bg-card/50 p-8 text-center sm:p-12">
+          <h2 className="display-title text-2xl sm:text-3xl">
+            Ready to host your first event?
+          </h2>
+          <p className="mt-4 max-w-md mx-auto text-base leading-relaxed text-muted-foreground">
+            Set up your first event page now. Free to start — no subscriptions, no credit card.
+          </p>
+          <div className="mt-8">
+            <Button asChild size="lg">
+              <Link to="/create">
+                Create your first event
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
       </PageContainer>
     </section>
   );
-}
-
-function reduceDelay(
-  transition: { duration: number },
-  delay: number,
-): number {
-  return transition.duration === 0 ? 0 : delay;
 }

@@ -65,7 +65,7 @@ export function EditEvent() {
   const [location, setLocation] = useState<LocationSelection | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const isOrganizer = !!event && !!me && event.organizer_id === me.ID;
+  const isOrganizer = !!event && !!me && event.organizer_id === me.id;
   const isVolunteerAdmin =
     !isOrganizer && staffData?.events.some((e) => e.event_id === id) === true;
 
@@ -256,7 +256,7 @@ export function EditEvent() {
           </div>
 
           {/* Meta card */}
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-self-strong bg-card">
             {isOrganizer && (
               <div className="flex items-start gap-4 px-4 py-4">
                 <Calendar className="mt-2.5 size-5 shrink-0 text-primary/80" />
@@ -308,7 +308,7 @@ export function EditEvent() {
                   </span>
                 </div>
                 {isOrganizer && (
-                  <div className="flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs">
+                  <div className="flex rounded-lg border border-border/50 bg-muted/30 p-0.5 text-xs">
                     <button
                       type="button"
                       onClick={() => {
@@ -320,9 +320,9 @@ export function EditEvent() {
                         });
                       }}
                       className={cn(
-                        "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
+                        "min-h-[34px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                         !form.is_virtual
-                          ? "bg-primary text-primary-foreground shadow-sm"
+                          ? "bg-primary text-primary-foreground"
                           : "text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -340,9 +340,9 @@ export function EditEvent() {
                         });
                       }}
                       className={cn(
-                        "min-h-[36px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
+                        "min-h-[34px] rounded-md px-3.5 py-1.5 font-medium transition-colors",
                         form.is_virtual
-                          ? "bg-primary text-primary-foreground shadow-sm"
+                          ? "bg-primary text-primary-foreground"
                           : "text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -522,15 +522,15 @@ export function EditEvent() {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={updateMut.isPending}
-                className="ml-auto rounded-full px-6 sm:min-w-[10rem]"
-              >
-                {updateMut.isPending && <Spinner data-icon="inline-start" />}
-                Save changes
-              </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={updateMut.isPending}
+              className="ml-auto px-6 sm:min-w-[10rem]"
+            >
+              {updateMut.isPending && <Spinner data-icon="inline-start" />}
+              Save changes
+            </Button>
             </PageContainer>
           </div>
         </form>

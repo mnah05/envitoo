@@ -1,11 +1,17 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const REG_STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-500/10 text-amber-400 ring-amber-500/20",
-  approved: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
-  rejected: "bg-rose-500/10 text-rose-400 ring-rose-500/20",
-  cancelled: "bg-muted text-muted-foreground ring-border",
+  pending: "text-amber-400",
+  approved: "text-emerald-400",
+  rejected: "text-rose-400",
+  cancelled: "text-muted-foreground",
+};
+
+const REG_STATUS_DOTS: Record<string, string> = {
+  pending: "bg-amber-400",
+  approved: "bg-emerald-400",
+  rejected: "bg-rose-400",
+  cancelled: "bg-muted-foreground",
 };
 
 export function RegStatusBadge({
@@ -16,19 +22,28 @@ export function RegStatusBadge({
   className?: string;
 }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("capitalize ring-1", REG_STATUS_STYLES[status], className)}
-    >
-      {status}
-    </Badge>
+    <span className={cn("inline-flex items-center gap-1.5 text-sm", className)}>
+      <span
+        className={cn("size-1.5 rounded-full", REG_STATUS_DOTS[status] ?? "bg-muted-foreground")}
+        aria-hidden
+      />
+      <span className={cn("font-medium capitalize", REG_STATUS_STYLES[status])}>
+        {status}
+      </span>
+    </span>
   );
 }
 
 const EVENT_STATUS_STYLES: Record<string, string> = {
-  published: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
-  cancelled: "bg-rose-500/10 text-rose-400 ring-rose-500/20",
-  completed: "bg-muted text-muted-foreground ring-border",
+  published: "text-emerald-400",
+  cancelled: "text-rose-400",
+  completed: "text-muted-foreground",
+};
+
+const EVENT_STATUS_DOTS: Record<string, string> = {
+  published: "bg-emerald-400",
+  cancelled: "bg-rose-400",
+  completed: "bg-muted-foreground",
 };
 
 export function EventStatusBadge({
@@ -39,20 +54,30 @@ export function EventStatusBadge({
   className?: string;
 }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("capitalize ring-1", EVENT_STATUS_STYLES[status], className)}
-    >
-      {status}
-    </Badge>
+    <span className={cn("inline-flex items-center gap-1.5 text-sm", className)}>
+      <span
+        className={cn("size-1.5 rounded-full", EVENT_STATUS_DOTS[status] ?? "bg-muted-foreground")}
+        aria-hidden
+      />
+      <span className={cn("font-medium capitalize", EVENT_STATUS_STYLES[status])}>
+        {status}
+      </span>
+    </span>
   );
 }
 
 const VOLUNTEER_APP_STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-500/10 text-amber-400 ring-amber-500/20",
-  approved: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
-  rejected: "bg-rose-500/10 text-rose-400 ring-rose-500/20",
-  cancelled: "bg-muted text-muted-foreground ring-border",
+  pending: "text-amber-400",
+  approved: "text-emerald-400",
+  rejected: "text-rose-400",
+  cancelled: "text-muted-foreground",
+};
+
+const VOLUNTEER_APP_STATUS_DOTS: Record<string, string> = {
+  pending: "bg-amber-400",
+  approved: "bg-emerald-400",
+  rejected: "bg-rose-400",
+  cancelled: "bg-muted-foreground",
 };
 
 export function VolunteerAppStatusBadge({
@@ -63,11 +88,17 @@ export function VolunteerAppStatusBadge({
   className?: string;
 }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("capitalize ring-1", VOLUNTEER_APP_STATUS_STYLES[status], className)}
-    >
-      {status}
-    </Badge>
+    <span className={cn("inline-flex items-center gap-1.5 text-sm", className)}>
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          VOLUNTEER_APP_STATUS_DOTS[status] ?? "bg-muted-foreground",
+        )}
+        aria-hidden
+      />
+      <span className={cn("font-medium capitalize", VOLUNTEER_APP_STATUS_STYLES[status])}>
+        {status}
+      </span>
+    </span>
   );
 }

@@ -1,12 +1,13 @@
 import { cn } from "@/lib/utils";
-import { Spinner } from "@/components/ui/spinner";
 
 /** Centered loading state for page-level suspense/fetches. */
 export function Loading({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-muted-foreground">
-      <Spinner className="size-6" />
-      <span className="text-eyebrow">{label}…</span>
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-muted-foreground">
+      <div className="relative flex items-center justify-center">
+        <div className="size-8 animate-pulse rounded-full border-2 border-primary/30 border-t-primary" />
+      </div>
+      <span className="text-sm tracking-[-0.01em]">{label}…</span>
     </div>
   );
 }

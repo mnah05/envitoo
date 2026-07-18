@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
-import { CalendarDays, Compass, Menu, Ticket } from "lucide-react";
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
+import { CalendarDays, Compass, Menu, Plus, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/domain/ThemeToggle";
 import {
   Sheet,
   SheetContent,
@@ -15,7 +16,7 @@ function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "grid size-6 place-items-center rounded-md bg-gradient-to-br from-primary via-teal-400 to-sky-400 text-primary-foreground text-[11px] font-bold tracking-tight shadow-sm",
+        "grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground text-xs font-bold tracking-tight",
         className,
       )}
     >
@@ -26,10 +27,9 @@ function BrandMark({ className }: { className?: string }) {
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user } = useUser();
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/50 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
         <div className="flex items-center gap-1">
           <Button
@@ -44,7 +44,7 @@ export function Header() {
 
           <Link
             to="/"
-            className="flex items-center gap-2 text-foreground"
+            className="flex items-center gap-2.5 text-foreground"
           >
             <BrandMark />
             <span className="font-display text-[15px] font-semibold tracking-[-0.02em] sm:text-[16px]">
@@ -61,20 +61,16 @@ export function Header() {
           </SignedIn>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
           <SignedIn>
-            <Button asChild size="sm" className="hidden rounded-full sm:inline-flex">
-              <Link to="/create">Create event</Link>
+            <Button asChild size="sm" className="hidden sm:inline-flex">
+              <Link to="/create">
+                <Plus className="size-4" />
+                Create event
+              </Link>
             </Button>
-            <div className="flex items-center gap-2">
-              <div className="hidden text-right sm:block">
-                <p className="text-xs text-muted-foreground">Signed in</p>
-                <p className="max-w-[10rem] truncate text-sm font-medium">
-                  {user?.username || user?.firstName || user?.emailAddresses?.[0]?.emailAddress}
-                </p>
-              </div>
-              <UserButton afterSignOutUrl="/" />
-            </div>
+            <UserButton afterSignOutUrl="/" />
           </SignedIn>
 
           <SignedOut>
@@ -83,8 +79,11 @@ export function Header() {
                 Sign in
               </Button>
             </SignInButton>
-            <Button asChild size="sm" className="hidden rounded-full sm:inline-flex">
-              <Link to="/create">Create event</Link>
+            <Button asChild size="sm" className="hidden sm:inline-flex">
+              <Link to="/create">
+                <Plus className="size-4" />
+                Create event
+              </Link>
             </Button>
           </SignedOut>
         </div>
@@ -118,7 +117,7 @@ export function Header() {
               <MobileLink
                 to="/create"
                 label="Create event"
-                icon={<BrandMark className="size-5 rounded" />}
+                icon={<Plus className="size-5" />}
                 onClick={() => setMobileOpen(false)}
               />
             </SignedIn>
@@ -126,12 +125,12 @@ export function Header() {
               <MobileLink
                 to="/create"
                 label="Create event"
-                icon={<BrandMark className="size-5 rounded" />}
+                icon={<Plus className="size-5" />}
                 onClick={() => setMobileOpen(false)}
               />
               <div className="mt-2 px-3">
                 <SignInButton mode="redirect" forceRedirectUrl="/home">
-                  <Button className="w-full rounded-full">Sign in</Button>
+                  <Button className="w-full">Sign in</Button>
                 </SignInButton>
               </div>
             </SignedOut>
@@ -148,7 +147,7 @@ function HeaderLink({ to, children }: { to: string; children: React.ReactNode })
       to={to}
       className={({ isActive }) =>
         cn(
-          "text-ui rounded-full px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground",
+          "text-ui rounded-md px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground",
           isActive && "bg-primary/15 text-primary",
         )
       }

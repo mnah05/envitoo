@@ -22,7 +22,7 @@ export function VolunteerDashboard({ event }: { event: Event }) {
   const { data: volData } = useEventVolunteers(event.id, { limit: 100 });
   const { data: staffData } = useMyEventStaff({});
 
-  const isOrganizer = !!me && event.organizer_id === me.ID;
+  const isOrganizer = !!me && event.organizer_id === me.id;
   const isVolunteerAdmin =
     !isOrganizer && staffData?.events.some((e) => e.event_id === event.id) === true;
 

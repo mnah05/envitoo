@@ -1,14 +1,29 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClerkProvider } from "@clerk/clerk-react";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
-import { clerkAppearance } from "@/lib/clerk-appearance";
+import { useClerkAppearance } from "@/lib/clerk-appearance";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 if (!clerkPubKey) {
   // eslint-disable-next-line no-console
   console.warn("Missing VITE_CLERK_PUBLISHABLE_KEY — sign-in will not work.");
+}
+
+function ClerkWithTheme({ children }: { children: React.ReactNode }) {
+  const appearance = useClerkAppearance();
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey!}
+      signInUrl="/signin"
+      signUpUrl="/signup"
+      appearance={appearance}
+    >
+      {children}
+    </ClerkProvider>
+  );
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -26,18 +41,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <ClerkProvider
-      publishableKey={clerkPubKey!}
-      signInUrl="/signin"
-      signUpUrl="/signup"
-      afterSignInUrl="/home"
-      afterSignUpUrl="/welcome"
-      appearance={clerkAppearance}
-    >
-      <QueryClientProvider client={client}>
-        {children}
-        <Toaster position="top-center" richColors closeButton />
-      </QueryClientProvider>
-    </ClerkProvider>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <ClerkWithTheme>
+        <QueryClientProvider client={client}>
+          {children}
+          <Toaster position="top-center" richColors closeButton />
+        </QueryClientProvider>
+      </ClerkWithTheme>
+    </ThemeProvider>
   );
 }

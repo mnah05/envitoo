@@ -5,13 +5,19 @@ import { PageContainer } from "@/components/domain/Layout";
 export function NotFound() {
   return (
     <div className="pt-16">
-      <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-        <p className="display-hero text-6xl text-primary sm:text-7xl">404</p>
-        <h1 className="display-title text-2xl">Page not found</h1>
-        <p className="text-lede max-w-sm text-[1.0625rem]">
-          The page you're looking for doesn't exist.
-        </p>
-        <Button asChild className="mt-2 rounded-full">
+      <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
+        <div className="flex items-baseline gap-1 font-serif text-[clamp(4rem,12vw,8rem)] font-semibold leading-none tracking-tight">
+          <span className="text-primary">4</span>
+          <span className="text-muted-foreground/30">0</span>
+          <span className="text-primary">4</span>
+        </div>
+        <div>
+          <h1 className="display-title text-xl">Page not found</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            The page you&apos;re looking for doesn&apos;t exist.
+          </p>
+        </div>
+        <Button asChild>
           <Link to="/">Back home</Link>
         </Button>
       </PageContainer>

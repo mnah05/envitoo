@@ -4,7 +4,6 @@ import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { CalendarDays, Download, Globe, MapPin, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { PageContainer } from "@/components/domain/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EventStatusBadge, RegStatusBadge } from "@/components/domain/StatusBadge";
@@ -96,7 +95,7 @@ export function GuestTicket() {
                 <Skeleton className="h-3 w-24" />
               </div>
             </div>
-            <Separator />
+          <div className="border-t border-border/30" aria-hidden />
             <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-9 w-40" />
@@ -132,7 +131,7 @@ export function GuestTicket() {
   return (
     <div className="pt-20">
       <PageContainer width="narrow" className="py-10">
-        <div className="mx-auto overflow-hidden rounded-3xl border bg-card shadow-sm">
+        <div className="mx-auto overflow-hidden rounded-3xl border border-self-strong bg-card">
           {/* Ticket header */}
           <div className="relative bg-foreground p-6 text-background">
             <div className="pointer-events-none absolute -right-8 -top-8 size-32 rounded-full bg-primary/15 blur-3xl" />
@@ -199,7 +198,7 @@ export function GuestTicket() {
             </div>
           </div>
 
-          <Separator />
+          <div className="border-t border-border/30" />
 
           {/* Actions */}
           <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">

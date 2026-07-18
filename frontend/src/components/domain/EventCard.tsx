@@ -9,7 +9,7 @@ export function EventCard({ event, index = 0 }: { event: Event; index?: number }
   return (
     <Link
       to={href}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border/80 bg-card transition-colors hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex flex-col overflow-hidden rounded-xl border border-self-strong bg-card transition-colors hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       style={{ animationDelay: `${index * 40}ms` }}
     >
       <EventCover event={event} rounded="rounded-none" />

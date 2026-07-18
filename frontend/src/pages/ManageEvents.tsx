@@ -104,10 +104,10 @@ export function ManageEvents() {
             </Empty>
           ) : (
             events.map((event) => (
-              <div
-                key={event.id}
-                className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
-              >
+          <div
+            key={event.id}
+            className="flex flex-col gap-4 rounded-2xl border border-self-strong bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
+          >
                 <EventCover
                   event={event}
                   className="size-20 shrink-0 aspect-square sm:size-24"
