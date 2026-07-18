@@ -47,7 +47,9 @@ type Querier interface {
 	CreateVolunteerApplication(ctx context.Context, arg CreateVolunteerApplicationParams) (VolunteerApplication, error)
 	CreateVolunteerRole(ctx context.Context, arg CreateVolunteerRoleParams) (VolunteerRole, error)
 	DeleteEventVisibility(ctx context.Context, eventID uuid.UUID) error
+	DeleteStaleOutboxEmails(ctx context.Context, arg DeleteStaleOutboxEmailsParams) (int64, error)
 	DeleteVolunteerRole(ctx context.Context, arg DeleteVolunteerRoleParams) (VolunteerRole, error)
+	FetchPendingOutboxEmails(ctx context.Context, arg FetchPendingOutboxEmailsParams) ([]FetchPendingOutboxEmailsRow, error)
 	GetCalendarByUserID(ctx context.Context, userID uuid.UUID) (Calendar, error)
 	GetEventByID(ctx context.Context, id uuid.UUID) (Event, error)
 	GetEventByIDForUpdate(ctx context.Context, id uuid.UUID) (Event, error)
@@ -62,12 +64,14 @@ type Querier interface {
 	GetRegistrationByID(ctx context.Context, arg GetRegistrationByIDParams) (Registration, error)
 	// Route 9: GET /api/registrations/:id/admin
 	GetRegistrationByIDAdmin(ctx context.Context, arg GetRegistrationByIDAdminParams) (Registration, error)
+	GetRegistrationCountsByEventIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetRegistrationCountsByEventIDsRow, error)
 	GetUserByAuthUserID(ctx context.Context, authUserID string) (User, error)
 	GetVolunteerApplicationByID(ctx context.Context, arg GetVolunteerApplicationByIDParams) (GetVolunteerApplicationByIDRow, error)
 	GetVolunteerApplicationByIDAdmin(ctx context.Context, arg GetVolunteerApplicationByIDAdminParams) (GetVolunteerApplicationByIDAdminRow, error)
 	GetVolunteerApplicationWithRole(ctx context.Context, id uuid.UUID) (GetVolunteerApplicationWithRoleRow, error)
 	GetVolunteerRoleByID(ctx context.Context, id uuid.UUID) (VolunteerRole, error)
 	GetVolunteerSettingsByEvent(ctx context.Context, eventID uuid.UUID) (VolunteerSetting, error)
+	IncrementOutboxEmailRetries(ctx context.Context, arg IncrementOutboxEmailRetriesParams) error
 	// Records a confirmed volunteer in the volunteers roster table.
 	// ON CONFLICT DO NOTHING makes this idempotent — if the volunteer
 	// row already exists (e.g. re-approval), no row is returned and the
@@ -90,6 +94,7 @@ type Querier interface {
 	ListMyVolunteerStaffEvents(ctx context.Context, arg ListMyVolunteerStaffEventsParams) ([]ListMyVolunteerStaffEventsRow, error)
 	ListPublicEvents(ctx context.Context, arg ListPublicEventsParams) ([]Event, error)
 	ListVolunteerRolesByEvent(ctx context.Context, eventID uuid.UUID) ([]VolunteerRole, error)
+	MarkOutboxEmailsPublished(ctx context.Context, dollar_1 []uuid.UUID) error
 	// Route 11: POST /api/registrations/:id/reject
 	RejectRegistration(ctx context.Context, arg RejectRegistrationParams) (Registration, error)
 	// Volunteer admins may only reject applications for non-admin roles;

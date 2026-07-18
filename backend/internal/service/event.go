@@ -332,37 +332,20 @@ func (s *EventService) fetchRegistrationCounts(ctx context.Context, events []db.
 		ids[i] = e.ID
 	}
 
-	type countRow struct {
-		EventID uuid.UUID
-		Count   int32
-	}
-
-	rows, err := s.pool.Query(ctx, `
-		SELECT event_id, COUNT(*)::int4
-		FROM registrations
-		WHERE event_id = ANY($1::uuid[])
-		  AND status NOT IN ('cancelled', 'rejected')
-		GROUP BY event_id
-	`, ids)
+	rows, err := s.queries.GetRegistrationCountsByEventIDs(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("query registration counts: %w", err)
 	}
-	defer rows.Close()
 
 	counts := make(map[uuid.UUID]int32, len(events))
 	for _, id := range ids {
 		counts[id] = 0
 	}
-
-	for rows.Next() {
-		var r countRow
-		if err := rows.Scan(&r.EventID, &r.Count); err != nil {
-			return nil, fmt.Errorf("scan registration count: %w", err)
-		}
+	for _, r := range rows {
 		counts[r.EventID] = r.Count
 	}
 
-	return counts, rows.Err()
+	return counts, nil
 }
 
 func (s *EventService) fetchVisibilityMap(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID]string, error) {

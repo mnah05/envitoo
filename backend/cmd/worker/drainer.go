@@ -15,16 +15,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/mnah05/envitoo/internal/config"
+	"github.com/mnah05/envitoo/internal/db"
 )
-
-type EmailOutboxRow struct {
-	ID           uuid.UUID
-	Recipient    string
-	Template     string
-	TemplateData json.RawMessage
-	Topic        string
-	Retries      int
-}
 
 // What actually gets published to JetStream. Keep it self-contained so
 // the consumer side doesn't need to hit Postgres to know what to send.
@@ -124,31 +116,15 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	}
 	defer tx.Rollback(ctx) // no-op once committed
 
-	// 1. Grab a batch of pending rows. SKIP LOCKED means concurrent worker
-	rows, err := tx.Query(ctx, `
-		SELECT id, recipient, template, template_data, topic, retries
-		FROM email_outbox
-		WHERE status = 'PENDING'
-		  AND retries < $2
-		ORDER BY created_at
-		LIMIT $1
-		FOR UPDATE SKIP LOCKED
-	`, cfg.BatchSize, cfg.MaxRetries)
-	if err != nil {
-		return err
-	}
+	queries := db.New(tx)
 
-	var batch []EmailOutboxRow
-	for rows.Next() {
-		var r EmailOutboxRow
-		if err := rows.Scan(&r.ID, &r.Recipient, &r.Template, &r.TemplateData, &r.Topic, &r.Retries); err != nil {
-			rows.Close()
-			return err
-		}
-		batch = append(batch, r)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	// 1. Grab a batch of pending rows. SKIP LOCKED means concurrent workers
+	//    won't fight over the same rows.
+	batch, err := queries.FetchPendingOutboxEmails(ctx, db.FetchPendingOutboxEmailsParams{
+		Limit:   int32(cfg.BatchSize),
+		Retries: int32(cfg.MaxRetries),
+	})
+	if err != nil {
 		return err
 	}
 	if len(batch) == 0 {
@@ -160,11 +136,11 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	//    back so the rest of the batch can still commit.
 	type failure struct {
 		id      uuid.UUID
-		retries int
+		retries int32
 		err     string
 	}
 	type pending struct {
-		row    EmailOutboxRow
+		row    db.FetchPendingOutboxEmailsRow
 		future jetstream.PubAckFuture
 	}
 
@@ -184,17 +160,11 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 			continue
 		}
 
-		// Use the stored topic. Fall back to the template->topic map only
-		// if a row somehow has an empty/unrecognized topic — this should
-		// be rare if every INSERT path sets it correctly.
 		subject := row.Topic
 		if subject == "" {
 			subject = defaultTopicFor(row.Template)
 		}
 
-		// Dedupe key: if this exact outbox row gets published twice
-		// (e.g. retried after a crash before status was updated),
-		// JetStream will drop the duplicate within its dedupe window.
 		future, err := js.PublishAsync(subject, payload,
 			jetstream.WithMsgID(row.ID.String()))
 		if err != nil {
@@ -222,12 +192,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 
 	// 4. Mark successes as PUBLISHED, in one query.
 	if len(succeeded) > 0 {
-		_, err = tx.Exec(ctx, `
-			UPDATE email_outbox
-			SET status = 'PUBLISHED', published_at = now()
-			WHERE id = ANY($1)
-		`, succeeded)
-		if err != nil {
+		if err := queries.MarkOutboxEmailsPublished(ctx, succeeded); err != nil {
 			return err
 		}
 	}
@@ -235,28 +200,19 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	// 5. Bump retries + record last_error for failures. Rows stay PENDING
 	//    and are retried until retries reaches maxRetries, then FAILED.
 	for _, f := range failed {
-		permanentlyFailed := f.retries+1 >= cfg.MaxRetries
+		permanentlyFailed := f.retries+1 >= int32(cfg.MaxRetries)
 		if permanentlyFailed {
 			log.Printf("publish permanently failed for %s after %d attempts: %s", f.id, cfg.MaxRetries, f.err)
 		} else {
 			log.Printf("publish failed for %s: %s", f.id, f.err)
 		}
 
-		_, err = tx.Exec(ctx, `
-			UPDATE email_outbox
-			SET retries = retries + 1,
-			    last_error = $2,
-			    status = CASE
-			        WHEN retries + 1 >= $3 THEN 'FAILED'::email_outbox_status
-			        ELSE status
-			    END,
-			    failed_at = CASE
-			        WHEN retries + 1 >= $3 THEN now()
-			        ELSE failed_at
-			    END
-			WHERE id = $1
-		`, f.id, f.err, cfg.MaxRetries)
-		if err != nil {
+		lastErr := f.err
+		if err := queries.IncrementOutboxEmailRetries(ctx, db.IncrementOutboxEmailRetriesParams{
+			ID:        f.id,
+			LastError: &lastErr,
+			Retries:   int32(cfg.MaxRetries),
+		}); err != nil {
 			return err
 		}
 	}

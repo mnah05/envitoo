@@ -5,9 +5,11 @@ import (
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mnah05/envitoo/internal/config"
+	"github.com/mnah05/envitoo/internal/db"
 )
 
 func runCleanup(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig) {
@@ -34,24 +36,9 @@ func runCleanup(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig
 func deleteStaleBatch(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig) (int64, error) {
 	cutoff := time.Now().Add(-cfg.RetentionPeriod)
 
-	tag, err := pool.Exec(ctx, `
-		DELETE FROM email_outbox
-		WHERE id IN (
-			SELECT id
-			FROM email_outbox
-			WHERE (
-				status = 'PUBLISHED'
-				AND published_at < $1
-			) OR (
-				status = 'FAILED'
-				AND COALESCE(failed_at, created_at) < $1
-			)
-			LIMIT $2
-		)
-	`, cutoff, cfg.CleanupBatchSize)
-	if err != nil {
-		return 0, err
-	}
-
-	return tag.RowsAffected(), nil
+	queries := db.New(pool)
+	return queries.DeleteStaleOutboxEmails(ctx, db.DeleteStaleOutboxEmailsParams{
+		PublishedAt: pgtype.Timestamp{Time: cutoff, Valid: true},
+		Limit:       int32(cfg.CleanupBatchSize),
+	})
 }
