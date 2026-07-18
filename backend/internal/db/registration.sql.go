@@ -68,6 +68,7 @@ UPDATE registrations
    SET status = 'cancelled', updated_at = now()
  WHERE access_token = $1
    AND user_id IS NULL
+   AND status != 'cancelled'
 RETURNING id, event_id, user_id, name, email, status, created_at, updated_at, access_token, token_expires_at, checked_in_at
 `
 
@@ -96,6 +97,7 @@ UPDATE registrations
    SET status = 'cancelled', updated_at = now()
  WHERE id = $1
    AND user_id = $2
+   AND status != 'cancelled'
 RETURNING id, event_id, user_id, name, email, status, created_at, updated_at, access_token, token_expires_at, checked_in_at
 `
 
@@ -506,6 +508,32 @@ func (q *Queries) GetRegistrationByIDAdmin(ctx context.Context, arg GetRegistrat
 	return i, err
 }
 
+const getRegistrationByIDForUpdate = `-- name: GetRegistrationByIDForUpdate :one
+SELECT r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
+FROM registrations r
+WHERE r.id = $1
+FOR UPDATE
+`
+
+func (q *Queries) GetRegistrationByIDForUpdate(ctx context.Context, id uuid.UUID) (Registration, error) {
+	row := q.db.QueryRow(ctx, getRegistrationByIDForUpdate, id)
+	var i Registration
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.UserID,
+		&i.Name,
+		&i.Email,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AccessToken,
+		&i.TokenExpiresAt,
+		&i.CheckedInAt,
+	)
+	return i, err
+}
+
 const linkGuestRegistrations = `-- name: LinkGuestRegistrations :execrows
 UPDATE registrations g
    SET user_id = $2, updated_at = now()
@@ -735,6 +763,7 @@ UPDATE registrations r
  WHERE r.id = $1
    AND e.id = r.event_id
    AND e.organizer_id = $2
+   AND r.status = $4
 RETURNING r.id, r.event_id, r.user_id, r.name, r.email, r.status, r.created_at, r.updated_at, r.access_token, r.token_expires_at, r.checked_in_at
 `
 
@@ -742,11 +771,17 @@ type UpdateRegistrationStatusParams struct {
 	ID          uuid.UUID
 	OrganizerID uuid.UUID
 	Status      string
+	Status_2    string
 }
 
 // Route 12: PATCH /api/registrations/:id/status
 func (q *Queries) UpdateRegistrationStatus(ctx context.Context, arg UpdateRegistrationStatusParams) (Registration, error) {
-	row := q.db.QueryRow(ctx, updateRegistrationStatus, arg.ID, arg.OrganizerID, arg.Status)
+	row := q.db.QueryRow(ctx, updateRegistrationStatus,
+		arg.ID,
+		arg.OrganizerID,
+		arg.Status,
+		arg.Status_2,
+	)
 	var i Registration
 	err := row.Scan(
 		&i.ID,

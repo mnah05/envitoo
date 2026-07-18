@@ -138,4 +138,5 @@ SET
     updated_at = now()
 WHERE
     id = $1
-    AND organizer_id = $2 RETURNING *;
+    AND organizer_id = $2
+    AND status != 'cancelled' RETURNING *;

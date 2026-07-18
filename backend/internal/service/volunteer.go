@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -273,6 +274,32 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create volunteer application: %w", err)
 	}
 
+	// Outbox insert is transactional — failure rolls back the entire operation.
+	eventForTemplate, err := qtx.GetEventByID(ctx, eventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return dto.VolunteerApplicationResponse{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotFound)
+		}
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(applicationConfirmData{
+		Name:       app.Name,
+		EventTitle: eventForTemplate.Title,
+		EventID:    eventID.String(),
+		RoleName:   role.Name,
+	})
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    app.Email,
+		Template:     EmailTemplateApplicationConfirm,
+		TemplateData: templateData,
+		Topic:        EmailTopicApplicationConfirm,
+	}); err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("commit tx: %w", err)
 	}
@@ -355,19 +382,60 @@ func (s *VolunteerService) GetByID(ctx context.Context, appID, userID uuid.UUID)
 }
 
 // Cancel cancels a user's own pending volunteer application.
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *VolunteerService) Cancel(ctx context.Context, appID, userID uuid.UUID) (dto.VolunteerApplicationResponse, error) {
-	app, err := s.queries.CancelVolunteerApplication(ctx, db.CancelVolunteerApplicationParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	app, err := qtx.CancelVolunteerApplication(ctx, db.CancelVolunteerApplicationParams{
 		ID:     appID,
 		UserID: userID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return dto.VolunteerApplicationResponse{}, volunteerCancelError(ctx, s.queries, appID, userID)
+			return dto.VolunteerApplicationResponse{}, volunteerCancelError(ctx, qtx, appID, userID)
 		}
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("cancel application: %w", err)
 	}
 
-	return s.responseForApplication(ctx, app), nil
+	event, err := qtx.GetEventByID(ctx, app.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return dto.VolunteerApplicationResponse{}, fmt.Errorf("event %s: %w", app.EventID, ErrEventNotFound)
+		}
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	role, err := qtx.GetVolunteerRoleByID(ctx, app.RoleID)
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get role for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(applicationCancelData{
+		Name:       app.Name,
+		EventTitle: event.Title,
+		EventID:    app.EventID.String(),
+	})
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    app.Email,
+		Template:     EmailTemplateApplicationCancel,
+		TemplateData: templateData,
+		Topic:        EmailTopicApplicationCancel,
+	}); err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("commit tx: %w", err)
+	}
+
+	return volunteerAppResponse(app, role.Name, role.IsAdmin), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -517,7 +585,7 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return dto.VolunteerApplicationResponse{}, volunteerModerationError(ctx, s.queries, appID, actorID)
+			return dto.VolunteerApplicationResponse{}, volunteerModerationError(ctx, qtx, appID, actorID)
 		}
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("approve application: %w", err)
 	}
@@ -538,6 +606,33 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 		}
 	}
 
+	// Outbox insert is transactional — failure rolls back the entire operation.
+	eventForTemplate, err := qtx.GetEventByID(ctx, app.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return dto.VolunteerApplicationResponse{}, fmt.Errorf("event %s: %w", app.EventID, ErrEventNotFound)
+		}
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(volunteerStatusChangeData{
+		Name:       app.Name,
+		EventTitle: eventForTemplate.Title,
+		EventID:    app.EventID.String(),
+		NewStatus:  app.Status,
+		RoleName:   role.Name,
+	})
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    app.Email,
+		Template:     EmailTemplateVolunteerStatusChange,
+		TemplateData: templateData,
+		Topic:        EmailTopicVolunteerStatusChange,
+	}); err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("commit tx: %w", err)
 	}
@@ -548,19 +643,62 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 }
 
 // Reject sets a pending application status to "rejected".
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *VolunteerService) Reject(ctx context.Context, appID, actorID uuid.UUID) (dto.VolunteerApplicationResponse, error) {
-	app, err := s.queries.RejectVolunteerApplication(ctx, db.RejectVolunteerApplicationParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	app, err := qtx.RejectVolunteerApplication(ctx, db.RejectVolunteerApplicationParams{
 		ID:          appID,
 		OrganizerID: actorID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return dto.VolunteerApplicationResponse{}, volunteerModerationError(ctx, s.queries, appID, actorID)
+			return dto.VolunteerApplicationResponse{}, volunteerModerationError(ctx, qtx, appID, actorID)
 		}
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("reject application: %w", err)
 	}
 
-	return s.responseForApplication(ctx, app), nil
+	event, err := qtx.GetEventByID(ctx, app.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return dto.VolunteerApplicationResponse{}, fmt.Errorf("event %s: %w", app.EventID, ErrEventNotFound)
+		}
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	role, err := qtx.GetVolunteerRoleByID(ctx, app.RoleID)
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get role for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(volunteerStatusChangeData{
+		Name:       app.Name,
+		EventTitle: event.Title,
+		EventID:    app.EventID.String(),
+		NewStatus:  app.Status,
+		RoleName:   role.Name,
+	})
+	if err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    app.Email,
+		Template:     EmailTemplateVolunteerStatusChange,
+		TemplateData: templateData,
+		Topic:        EmailTopicVolunteerStatusChange,
+	}); err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return dto.VolunteerApplicationResponse{}, fmt.Errorf("commit tx: %w", err)
+	}
+
+	return volunteerAppResponse(app, role.Name, role.IsAdmin), nil
 }
 
 // ---------------------------------------------------------------------------

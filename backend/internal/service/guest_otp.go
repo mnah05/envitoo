@@ -24,9 +24,6 @@ import (
 )
 
 const (
-	emailTemplateOTP = "otp"
-	emailTopicOTP    = "emails.otp"
-
 	guestOTPTTL       = 10 * time.Minute
 	guestVerifiedTTL  = 15 * time.Minute
 	guestOTPCooldown  = 60 * time.Second
@@ -131,9 +128,9 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 	qtx := s.queries.WithTx(tx)
 	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
 		Recipient:    email,
-		Template:     emailTemplateOTP,
+		Template:     EmailTemplateOTP,
 		TemplateData: templateData,
-		Topic:        emailTopicOTP,
+		Topic:        EmailTopicOTP,
 	}); err != nil {
 		_ = s.cache.DeleteKeys(ctx, otpKey, attemptsKey, cooldownKey)
 		return dto.RequestGuestOTPResponse{}, fmt.Errorf("create email outbox: %w", err)

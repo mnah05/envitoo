@@ -28,25 +28,27 @@ type EmailMessage struct {
 }
 
 const (
-	TemplateOTP                = "otp"
-	TemplateTicketConfirm      = "ticket_confirm"
-	TemplateTicketCancel       = "ticket_cancel"
-	TemplateTicketStatusChange = "ticket_status_change"
-	TemplateApplicationConfirm = "application_confirm"
-	TemplateApplicationCancel  = "application_cancel"
-	TemplateCheckIn            = "check_in"
-	TemplateEventCancellation  = "event_cancellation"
+	TemplateOTP                   = "otp"
+	TemplateTicketConfirm         = "ticket_confirm"
+	TemplateTicketCancel          = "ticket_cancel"
+	TemplateTicketStatusChange    = "ticket_status_change"
+	TemplateApplicationConfirm    = "application_confirm"
+	TemplateApplicationCancel     = "application_cancel"
+	TemplateVolunteerStatusChange = "volunteer_status_change"
+	TemplateCheckIn               = "check_in"
+	TemplateEventCancellation     = "event_cancellation"
 )
 
 var topicForTemplate = map[string]string{
-	TemplateOTP:                "emails.otp",
-	TemplateTicketConfirm:      "emails.ticket.confirmed",
-	TemplateTicketCancel:       "emails.ticket.cancelled",
-	TemplateTicketStatusChange: "emails.ticket.status_changed",
-	TemplateApplicationConfirm: "emails.application.confirmed",
-	TemplateApplicationCancel:  "emails.application.cancelled",
-	TemplateCheckIn:            "emails.checkin",
-	TemplateEventCancellation:  "emails.event.cancelled",
+	TemplateOTP:                   "emails.otp",
+	TemplateTicketConfirm:         "emails.ticket.confirmed",
+	TemplateTicketCancel:          "emails.ticket.cancelled",
+	TemplateTicketStatusChange:    "emails.ticket.status_changed",
+	TemplateApplicationConfirm:    "emails.application.confirmed",
+	TemplateApplicationCancel:     "emails.application.cancelled",
+	TemplateVolunteerStatusChange: "emails.volunteer.status_changed",
+	TemplateCheckIn:               "emails.checkin",
+	TemplateEventCancellation:     "emails.event.cancelled",
 }
 
 // defaultTopicFor is only a fallback for rows where topic somehow ended up

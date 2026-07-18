@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -713,8 +714,18 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 // Cancel soft-cancels an event (sets status='cancelled'). Preserves all
 // registrations, volunteers, kanban, and payment rows. The organizerID
 // parameter enforces ownership in the SQL.
+//
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uuid.UUID) (db.Event, error) {
-	event, err := s.queries.CancelEvent(ctx, db.CancelEventParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.Event{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	event, err := qtx.CancelEvent(ctx, db.CancelEventParams{
 		ID:          id,
 		OrganizerID: organizerID,
 	})
@@ -723,6 +734,34 @@ func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uui
 			return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
 		}
 		return db.Event{}, fmt.Errorf("cancel event: %w", err)
+	}
+
+	organizer, err := qtx.GetUserByID(ctx, organizerID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Event{}, fmt.Errorf("organizer %s not found: %w", organizerID, ErrEventNotFound)
+		}
+		return db.Event{}, fmt.Errorf("get organizer for outbox: %w", err)
+	}
+
+	templateData, err := json.Marshal(eventCancellationData{
+		Title:   event.Title,
+		EventID: event.ID.String(),
+	})
+	if err != nil {
+		return db.Event{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    organizer.Email,
+		Template:     EmailTemplateEventCancellation,
+		TemplateData: templateData,
+		Topic:        EmailTopicEventCancellation,
+	}); err != nil {
+		return db.Event{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return db.Event{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return event, nil
 }

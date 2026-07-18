@@ -64,8 +64,10 @@ type Querier interface {
 	GetRegistrationByID(ctx context.Context, arg GetRegistrationByIDParams) (Registration, error)
 	// Route 9: GET /api/registrations/:id/admin
 	GetRegistrationByIDAdmin(ctx context.Context, arg GetRegistrationByIDAdminParams) (Registration, error)
+	GetRegistrationByIDForUpdate(ctx context.Context, id uuid.UUID) (Registration, error)
 	GetRegistrationCountsByEventIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetRegistrationCountsByEventIDsRow, error)
 	GetUserByAuthUserID(ctx context.Context, authUserID string) (User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetVolunteerApplicationByID(ctx context.Context, arg GetVolunteerApplicationByIDParams) (GetVolunteerApplicationByIDRow, error)
 	GetVolunteerApplicationByIDAdmin(ctx context.Context, arg GetVolunteerApplicationByIDAdminParams) (GetVolunteerApplicationByIDAdminRow, error)
 	GetVolunteerApplicationWithRole(ctx context.Context, id uuid.UUID) (GetVolunteerApplicationWithRoleRow, error)

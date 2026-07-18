@@ -1,6 +1,9 @@
 -- name: GetUserByAuthUserID :one
 SELECT * FROM users WHERE auth_user_id = $1;
 
+-- name: GetUserByID :one
+SELECT * FROM users WHERE id = $1;
+
 -- name: CreateUser :one
 -- Inserts a new local user row on first login. ON CONFLICT DO NOTHING
 -- makes this safe against concurrent first-logins and user.created

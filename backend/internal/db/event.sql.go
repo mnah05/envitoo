@@ -20,7 +20,8 @@ SET
     updated_at = now()
 WHERE
     id = $1
-    AND organizer_id = $2 RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
+    AND organizer_id = $2
+    AND status != 'cancelled' RETURNING id, organizer_id, title, description, starts_at, ends_at, capacity, price_in_paise, currency, status, created_at, updated_at, requires_approval, cover_image_url, calendar_id, is_virtual, meeting_url, venue_name, lat, lng, slug, category, location_address
 `
 
 type CancelEventParams struct {

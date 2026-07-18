@@ -118,6 +118,25 @@ func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID
 		return db.Registration{}, err
 	}
 
+	// Outbox insert is transactional — failure rolls back the entire operation.
+	templateData, err := json.Marshal(ticketConfirmData{
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     eventID.String(),
+		AccessToken: reg.AccessToken.String(),
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    email,
+		Template:     EmailTemplateTicketConfirm,
+		TemplateData: templateData,
+		Topic:        EmailTopicTicketConfirm,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 	}
@@ -143,13 +162,50 @@ func (s *RegistrationService) GetByAccessToken(ctx context.Context, token uuid.U
 }
 
 // CancelGuest cancels a guest registration by its access token.
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) (db.Registration, error) {
-	reg, err := s.queries.CancelGuestRegistration(ctx, token)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	reg, err := qtx.CancelGuestRegistration(ctx, token)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return db.Registration{}, fmt.Errorf("guest registration with token %s: %w", token, ErrRegistrationNotFound)
 		}
 		return db.Registration{}, fmt.Errorf("cancel guest registration: %w", err)
+	}
+
+	event, err := qtx.GetEventByID(ctx, reg.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("event %s: %w", reg.EventID, ErrEventNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(ticketCancelData{
+		Name:       reg.Name,
+		EventTitle: event.Title,
+		EventID:    reg.EventID.String(),
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    reg.Email,
+		Template:     EmailTemplateTicketCancel,
+		TemplateData: templateData,
+		Topic:        EmailTopicTicketCancel,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return reg, nil
 }
@@ -202,6 +258,25 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 	reg, err := insertUserRegistration(ctx, qtx, params)
 	if err != nil {
 		return db.Registration{}, err
+	}
+
+	// Outbox insert is transactional — failure rolls back the entire operation.
+	templateData, err := json.Marshal(ticketConfirmData{
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     eventID.String(),
+		AccessToken: reg.AccessToken.String(),
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    email,
+		Template:     EmailTemplateTicketConfirm,
+		TemplateData: templateData,
+		Topic:        EmailTopicTicketConfirm,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -333,8 +408,17 @@ func resolveName(user *db.User, override *string) string {
 }
 
 // Cancel cancels a user's own registration.
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UUID, userID uuid.UUID) (db.Registration, error) {
-	reg, err := s.queries.CancelRegistration(ctx, db.CancelRegistrationParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	reg, err := qtx.CancelRegistration(ctx, db.CancelRegistrationParams{
 		ID:     registrationID,
 		UserID: pgtype.UUID{Valid: true, Bytes: userID},
 	})
@@ -343,6 +427,34 @@ func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UU
 			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
 		}
 		return db.Registration{}, fmt.Errorf("cancel registration: %w", err)
+	}
+
+	event, err := qtx.GetEventByID(ctx, reg.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("event %s: %w", reg.EventID, ErrEventNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(ticketCancelData{
+		Name:       reg.Name,
+		EventTitle: event.Title,
+		EventID:    reg.EventID.String(),
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    reg.Email,
+		Template:     EmailTemplateTicketCancel,
+		TemplateData: templateData,
+		Topic:        EmailTopicTicketCancel,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return reg, nil
 }
@@ -521,9 +633,28 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrConflict)
 		}
 		return db.Registration{}, fmt.Errorf("approve registration: %w", err)
+	}
+
+	// Outbox insert is transactional — failure rolls back the entire operation.
+	templateData, err := json.Marshal(ticketStatusChangeData{
+		Name:       approved.Name,
+		EventTitle: event.Title,
+		EventID:    approved.EventID.String(),
+		NewStatus:  approved.Status,
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    approved.Email,
+		Template:     EmailTemplateTicketStatusChange,
+		TemplateData: templateData,
+		Topic:        EmailTopicTicketStatusChange,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -533,6 +664,7 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 }
 
 // Reject sets a registration's status to "rejected".
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (db.Registration, error) {
 	existing, err := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 		ID:          registrationID,
@@ -551,15 +683,52 @@ func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UU
 		return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationInvalidStatus)
 	}
 
-	reg, err := s.queries.RejectRegistration(ctx, db.RejectRegistrationParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	reg, err := qtx.RejectRegistration(ctx, db.RejectRegistrationParams{
 		ID:          registrationID,
 		OrganizerID: actorID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrConflict)
 		}
 		return db.Registration{}, fmt.Errorf("reject registration: %w", err)
+	}
+
+	event, err := qtx.GetEventByID(ctx, reg.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("event %s: %w", reg.EventID, ErrEventNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(ticketStatusChangeData{
+		Name:       reg.Name,
+		EventTitle: event.Title,
+		EventID:    reg.EventID.String(),
+		NewStatus:  reg.Status,
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    reg.Email,
+		Template:     EmailTemplateTicketStatusChange,
+		TemplateData: templateData,
+		Topic:        EmailTopicTicketStatusChange,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return reg, nil
 }
@@ -659,12 +828,39 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 		ID:          registrationID,
 		OrganizerID: organizerID,
 		Status:      status,
+		Status_2:    reg.Status,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrConflict)
 		}
 		return db.Registration{}, fmt.Errorf("update registration status: %w", err)
+	}
+
+	// Outbox insert is transactional — failure rolls back the entire operation.
+	event, err := qtx.GetEventByID(ctx, updated.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("event %s: %w", updated.EventID, ErrEventNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
+	}
+	templateData, err := json.Marshal(ticketStatusChangeData{
+		Name:       updated.Name,
+		EventTitle: event.Title,
+		EventID:    updated.EventID.String(),
+		NewStatus:  updated.Status,
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    updated.Email,
+		Template:     EmailTemplateTicketStatusChange,
+		TemplateData: templateData,
+		Topic:        EmailTopicTicketStatusChange,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -675,16 +871,38 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 
 // CheckIn marks an attendee as checked in. If the attendee is already
 // checked in, the existing registration is returned idempotently.
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID, accessToken uuid.UUID) (db.Registration, error) {
-	reg, err := s.queries.CheckInRegistration(ctx, db.CheckInRegistrationParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	locked, err := qtx.GetRegistrationByIDForUpdate(ctx, registrationID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("lock registration: %w", err)
+	}
+
+	if locked.CheckedInAt.Valid {
+		if err := tx.Commit(ctx); err != nil {
+			return db.Registration{}, fmt.Errorf("commit tx: %w", err)
+		}
+		return locked, nil
+	}
+
+	reg, err := qtx.CheckInRegistration(ctx, db.CheckInRegistrationParams{
 		ID:          registrationID,
 		OrganizerID: actorID,
 		AccessToken: accessToken,
 	})
 	if err == pgx.ErrNoRows {
-		// Disambiguate: already checked in, wrong token, invalid status,
-		// event not open, concurrent race, or not found.
-		existing, fetchErr := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+		existing, fetchErr := qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 			ID:          registrationID,
 			OrganizerID: actorID,
 		})
@@ -698,12 +916,15 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
 		}
 		if existing.CheckedInAt.Valid {
+			if err := tx.Commit(ctx); err != nil {
+				return db.Registration{}, fmt.Errorf("commit tx: %w", err)
+			}
 			return existing, nil
 		}
 		if existing.Status != "approved" {
 			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationInvalidStatus)
 		}
-		event, eventErr := s.queries.GetEventByID(ctx, existing.EventID)
+		event, eventErr := qtx.GetEventByID(ctx, existing.EventID)
 		if eventErr != nil {
 			if eventErr == pgx.ErrNoRows {
 				return db.Registration{}, fmt.Errorf("event %s: %w", existing.EventID, ErrEventNotFound)
@@ -713,12 +934,14 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 		if event.Status != "published" {
 			return db.Registration{}, fmt.Errorf("event %s: %w", existing.EventID, ErrEventNotOpen)
 		}
-		// Concurrent check-in likely won — re-fetch for idempotent success.
-		existing, fetchErr = s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+		existing, fetchErr = qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 			ID:          registrationID,
 			OrganizerID: actorID,
 		})
 		if fetchErr == nil && existing.CheckedInAt.Valid {
+			if err := tx.Commit(ctx); err != nil {
+				return db.Registration{}, fmt.Errorf("commit tx: %w", err)
+			}
 			return existing, nil
 		}
 		return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
@@ -726,20 +949,57 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("check in attendee: %w", err)
 	}
+
+	event, err := qtx.GetEventByID(ctx, reg.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("event %s: %w", reg.EventID, ErrEventNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get event for check-in outbox: %w", err)
+	}
+	templateData, err := json.Marshal(checkInData{
+		Name:       reg.Name,
+		EventTitle: event.Title,
+		EventID:    reg.EventID.String(),
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal check-in data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    reg.Email,
+		Template:     EmailTemplateCheckIn,
+		TemplateData: templateData,
+		Topic:        EmailTopicCheckIn,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
+	}
 	return reg, nil
 }
 
 // CheckInByEventToken checks in an attendee using the event id and QR access
 // token. Resolves the registration server-side so clients do not need the
 // full registration list loaded.
+// Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, actorID, accessToken uuid.UUID) (db.Registration, error) {
-	reg, err := s.queries.CheckInRegistrationByEventToken(ctx, db.CheckInRegistrationByEventTokenParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	reg, err := qtx.CheckInRegistrationByEventToken(ctx, db.CheckInRegistrationByEventTokenParams{
 		EventID:     eventID,
 		OrganizerID: actorID,
 		AccessToken: accessToken,
 	})
 	if err == pgx.ErrNoRows {
-		existing, fetchErr := s.queries.GetRegistrationByEventTokenAdmin(ctx, db.GetRegistrationByEventTokenAdminParams{
+		existing, fetchErr := qtx.GetRegistrationByEventTokenAdmin(ctx, db.GetRegistrationByEventTokenAdminParams{
 			EventID:     eventID,
 			AccessToken: accessToken,
 			OrganizerID: actorID,
@@ -751,12 +1011,15 @@ func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, 
 			return db.Registration{}, fmt.Errorf("check-in by token lookup: %w", fetchErr)
 		}
 		if existing.CheckedInAt.Valid {
+			if err := tx.Commit(ctx); err != nil {
+				return db.Registration{}, fmt.Errorf("commit tx: %w", err)
+			}
 			return existing, nil
 		}
 		if existing.Status != "approved" {
 			return db.Registration{}, fmt.Errorf("registration %s: %w", existing.ID, ErrRegistrationInvalidStatus)
 		}
-		event, eventErr := s.queries.GetEventByID(ctx, eventID)
+		event, eventErr := qtx.GetEventByID(ctx, eventID)
 		if eventErr != nil {
 			if eventErr == pgx.ErrNoRows {
 				return db.Registration{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotFound)
@@ -766,18 +1029,49 @@ func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, 
 		if event.Status != "published" {
 			return db.Registration{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotOpen)
 		}
-		existing, fetchErr = s.queries.GetRegistrationByEventTokenAdmin(ctx, db.GetRegistrationByEventTokenAdminParams{
+		existing, fetchErr = qtx.GetRegistrationByEventTokenAdmin(ctx, db.GetRegistrationByEventTokenAdminParams{
 			EventID:     eventID,
 			AccessToken: accessToken,
 			OrganizerID: actorID,
 		})
 		if fetchErr == nil && existing.CheckedInAt.Valid {
+			if err := tx.Commit(ctx); err != nil {
+				return db.Registration{}, fmt.Errorf("commit tx: %w", err)
+			}
 			return existing, nil
 		}
 		return db.Registration{}, fmt.Errorf("registration with token %s: %w", accessToken, ErrRegistrationNotFound)
 	}
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("check in by event token: %w", err)
+	}
+
+	event, err := qtx.GetEventByID(ctx, reg.EventID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("event %s: %w", reg.EventID, ErrEventNotFound)
+		}
+		return db.Registration{}, fmt.Errorf("get event for check-in outbox: %w", err)
+	}
+	templateData, err := json.Marshal(checkInData{
+		Name:       reg.Name,
+		EventTitle: event.Title,
+		EventID:    reg.EventID.String(),
+	})
+	if err != nil {
+		return db.Registration{}, fmt.Errorf("marshal check-in data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    reg.Email,
+		Template:     EmailTemplateCheckIn,
+		TemplateData: templateData,
+		Topic:        EmailTopicCheckIn,
+	}); err != nil {
+		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return reg, nil
 }

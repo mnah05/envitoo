@@ -1,69 +1,185 @@
-Here is the master blueprint for your architecture. You can take this directly to your terminal, fire up Neovim, and start laying down the foundation.
+# Email Outbox Implementation Report
 
-We will approach this with structured intensity, breaking the project down into a clear tech tree so you can build, test, and verify each node independently before wiring them all together.
+## Files changed (13 files, +917/-90)
 
-### **Project Blueprint: High-Fidelity Event-Driven Email Dispatch**
-
-**Core Objective:** Build a bulletproof, asynchronous background job system that guarantees exactly-once email delivery while protecting the primary database from external API latencies and localized node failures.
-
-**The Tech Stack:**
-
-* **Language:** Go (Optimized for high-concurrency, lightweight goroutines, and native M1 silicon performance).
-* **Primary State:** PostgreSQL (Handles transactional data integrity).
-* **Message Broker:** Redis (Handles high-throughput, volatile queue states).
-* **Queue Engine:** `asynq` (Go-native Redis queue management).
-* **External Provider:** Resend API.
+- `sql/registration.sql` — 3 queries modified, 1 new query
+- `sql/event.sql` — 1 query modified
+- `sql/user.sql` — 1 new query
+- `internal/db/*.sql.go` — 4 regenerated files (sqlc)
+- `internal/service/email_templates.go` — **new file**
+- `internal/service/registration.go` — 8 methods converted
+- `internal/service/volunteer.go` — 4 methods converted
+- `internal/service/event.go` — 1 method converted
+- `internal/service/guest_otp.go` — removed duplicate constants
+- `cmd/worker/drainer.go` — added volunteer_status_change template
 
 ---
 
-### **Execution Tech Tree**
+## 1. SQL changes (registration.sql)
 
-#### **Node 1: The Database Foundation (PostgreSQL)**
+### CancelRegistration — idempotency guard added
+```
+- AND user_id = $2
++ AND user_id = $2 AND status != 'cancelled'
+```
+Re-cancel returns zero rows → `pgx.ErrNoRows` → `ErrRegistrationNotFound` → no email.
 
-* **Action:** Create the `outbox_events` table.
-* **Specs:** Needs an `id` (UUID), `event_type` (String), `payload` (JSONB), and `created_at` (Timestamp).
-* **Goal:** Establish the durable buffer. This table should remain empty 99% of the time, acting strictly as a fail-safe between the database and Redis.
+### CancelGuestRegistration — idempotency guard added
+```
+- AND user_id IS NULL
++ AND user_id IS NULL AND status != 'cancelled'
+```
+Same as above: re-cancel returns 404, no email.
 
-#### **Node 2: The Application Server Gateway (Go)**
+### UpdateRegistrationStatus — expected-status guard added
+```
+- AND e.organizer_id = $2
++ AND e.organizer_id = $2 AND r.status = $4
+```
+New `$4` parameter (`Status_2` in generated Go) is the status the caller read before the update. If a concurrent change already moved it, zero rows → `ErrConflict`.
 
-* **Action:** Write the core HTTP handler and the atomic database transaction.
-* **Specs:** In a single `tx.Commit()`, insert the primary business data (e.g., the user record) alongside the email payload into the `outbox_events` table.
-* **Standardized Return:** Ensure the API returns the exact structure you require for clean client-side parsing:
-```json
-{
-  "data": {
-    "status": "queued",
-    "action": "email_dispatch_initiated",
-    "reference_id": "outbox_uuid_here"
-  },
-  "error": null
-}
+### GetRegistrationByIDForUpdate — new query
+```sql
+SELECT r.* FROM registrations r WHERE r.id = $1 FOR UPDATE;
+```
+Used by `CheckIn` to serialize concurrent check-in attempts within a transaction.
 
+---
+
+## 2. SQL changes (event.sql)
+
+### CancelEvent — idempotency guard added
+```
+- AND organizer_id = $2 RETURNING *;
++ AND organizer_id = $2 AND status != 'cancelled' RETURNING *;
 ```
 
+---
 
+## 3. SQL changes (user.sql)
 
-#### **Node 3: The Outbox Relay (The Drainer)**
-
-* **Action:** Build a standalone goroutine that runs alongside your main server or as a totally separate binary.
-* **Specs:** It runs a continuous loop (`time.Ticker`). It `SELECT`s new rows from `outbox_events`, marshals the payload into an `asynq.NewTask`, executes `client.Enqueue()`, and upon receiving no error from Redis, immediately executes a `DELETE` on that Postgres row.
-* **Goal:** Decouple the fast database write from the network-dependent queue insertion.
-
-#### **Node 4: The Worker Pool & Execution (Asynq + Resend)**
-
-* **Action:** Set up the `asynq.Server` and define the worker handler for your specific `event_type`.
-* **Specs:**
-* **Rate Limiting:** Implement a global Redis token bucket (via Lua script) limiting execution to 5 operations per second.
-* **Idempotency:** Generate a server-side hash (`SHA256(event_type + outbox_id)`). Use `SETNX` in Redis to ensure the task hasn't already been processed during a previous zombie worker state.
-* **Dispatch:** Call the Resend API.
-
-
-* **Goal:** Consume the queue efficiently, respect third-party rate limits, and ensure network drops never result in duplicate emails.
+### GetUserByID — new query
+```sql
+SELECT * FROM users WHERE id = $1;
+```
+Needed by `EventService.Cancel` to fetch the organizer's email for the cancellation outbox row.
 
 ---
 
-### **Vibe Coding the Prototype**
+## 4. New file: internal/service/email_templates.go
 
-Because this architecture separates concerns so cleanly, you can prompt your way through prototyping the individual components incredibly fast. You can use one-shot prompts to generate the boilerplate `asynq` worker configurations and the outbox polling loop independently, testing them in isolation before bridging them.
+Single source of truth for all email template/topic constants and template data structs.
 
-Which node of the tech tree are you unlocking first?
+**9 template name constants**: `EmailTemplateOTP`, `EmailTemplateTicketConfirm`, `EmailTemplateTicketCancel`, `EmailTemplateTicketStatusChange`, `EmailTemplateApplicationConfirm`, `EmailTemplateApplicationCancel`, `EmailTemplateVolunteerStatusChange`, `EmailTemplateCheckIn`, `EmailTemplateEventCancellation`
+
+**9 NATS topic constants**: `EmailTopicOTP` → `"emails.otp"`, `EmailTopicTicketConfirm` → `"emails.ticket.confirmed"`, etc.
+
+**7 template data structs** (with json tags):
+- `ticketConfirmData` — Name, EventTitle, EventID, AccessToken
+- `ticketCancelData` — Name, EventTitle, EventID
+- `ticketStatusChangeData` — Name, EventTitle, EventID, NewStatus
+- `applicationConfirmData` — Name, EventTitle, EventID, RoleName
+- `applicationCancelData` — Name, EventTitle, EventID
+- `volunteerStatusChangeData` — Name, EventTitle, EventID, NewStatus, RoleName
+- `checkInData` — Name, EventTitle, EventID
+- `eventCancellationData` — Title, EventID
+
+---
+
+## 5. cmd/worker/drainer.go
+
+Added `TemplateVolunteerStatusChange` (`"volunteer_status_change"`) to the existing template constants and `topicForTemplate` map pointing to `"emails.volunteer.status_changed"`.
+
+---
+
+## 6. internal/service/registration.go — 8 methods
+
+All outbox inserts follow the same pattern:
+```
+marshal templateData → qtx.CreateEmailOutbox → tx.Commit
+```
+With the comment `// Outbox insert is transactional — failure rolls back the entire operation.`
+
+### CreateGuest (already in TX)
+Before `tx.Commit`: marshal `ticketConfirmData` using `event.Title` (already loaded), `CreateEmailOutbox` with `EmailTemplateTicketConfirm` / `EmailTopicTicketConfirm`.
+
+### Create (already in TX)
+Same as CreateGuest: `ticketConfirmData`, event title already available.
+
+### CancelGuest (was not in TX)
+Wrapped: `pool.Begin` → `qtx.CancelGuestRegistration` → `qtx.GetEventByID` → marshal `ticketCancelData` → `CreateEmailOutbox` → `tx.Commit`.
+
+### Cancel (was not in TX)
+Wrapped: `pool.Begin` → `qtx.CancelRegistration` → `qtx.GetEventByID` → marshal `ticketCancelData` → `CreateEmailOutbox` → `tx.Commit`.
+
+### Approve (already in TX)
+- Race guard: `ApproveRegistration` returns `pgx.ErrNoRows` → now returns **`ErrConflict`** (was `ErrRegistrationNotFound`)
+- Before commit: fetch event title via `qtx.GetEventByIDForUpdate` (already loaded), marshal `ticketStatusChangeData`, `CreateEmailOutbox`.
+
+### Reject (was not in TX)
+Wrapped: `pool.Begin` → `qtx.RejectRegistration` → `qtx.GetEventByID` → marshal `ticketStatusChangeData` → `CreateEmailOutbox` → `tx.Commit`.
+- Race guard: `pgx.ErrNoRows` → **`ErrConflict`** (was `ErrRegistrationNotFound`)
+
+### UpdateStatus (already in TX)
+- Passes `reg.Status` as new `Status_2` param (expected current status)
+- Race guard: `pgx.ErrNoRows` → **`ErrConflict`** (was `ErrRegistrationNotFound`)
+- Before commit: fetch event title via `qtx.GetEventByID`, marshal `ticketStatusChangeData`, `CreateEmailOutbox`.
+
+### CheckIn (was not in TX)
+Wrapped: `pool.Begin` → `qtx.GetRegistrationByIDForUpdate` (lock row) → `qtx.CheckInRegistration` → on success: `qtx.GetEventByID` → marshal `checkInData` → `CreateEmailOutbox` → `tx.Commit`.
+- Idempotent: already-checked-in skips outbox, commits and returns existing.
+- All fallback queries use `qtx` instead of `s.queries`.
+
+### CheckInByEventToken (was not in TX)
+Wrapped: `pool.Begin` → `qtx.CheckInRegistrationByEventToken` → on success: `qtx.GetEventByID` → marshal `checkInData` → `CreateEmailOutbox` → `tx.Commit`.
+- Same idempotent handling and qtx fallback as CheckIn.
+
+---
+
+## 7. internal/service/volunteer.go — 4 methods
+
+### Apply (already in TX)
+Before commit: `qtx.GetEventByID` → marshal `applicationConfirmData` with `role.Name` → `CreateEmailOutbox`.
+
+### Approve (already in TX)
+- Fixed `volunteerModerationError` call to use `qtx` (was `s.queries`)
+- Before commit: `qtx.GetEventByID` → marshal `volunteerStatusChangeData` with `role.Name` → `CreateEmailOutbox`.
+
+### Cancel (was not in TX)
+Wrapped: `pool.Begin` → `qtx.CancelVolunteerApplication` → `qtx.GetEventByID` → `qtx.GetVolunteerRoleByID` → marshal `applicationCancelData` → `CreateEmailOutbox` → `tx.Commit`.
+- Uses `qtx` in `volunteerCancelError` (was `s.queries`).
+
+### Reject (was not in TX)
+Wrapped: `pool.Begin` → `qtx.RejectVolunteerApplication` → `qtx.GetEventByID` → `qtx.GetVolunteerRoleByID` → marshal `volunteerStatusChangeData` → `CreateEmailOutbox` → `tx.Commit`.
+- Uses `qtx` in `volunteerModerationError` (was `s.queries`).
+
+---
+
+## 8. internal/service/event.go — 1 method
+
+### Cancel (was not in TX)
+Wrapped: `pool.Begin` → `qtx.CancelEvent` → `qtx.GetUserByID` (for organizer email) → marshal `eventCancellationData` → `CreateEmailOutbox` → `tx.Commit`.
+
+---
+
+## 9. internal/service/guest_otp.go
+
+Removed duplicate constants `emailTemplateOTP` and `emailTopicOTP`. The `RequestGuestOTP` method now uses `EmailTemplateOTP` and `EmailTopicOTP` from `email_templates.go`.
+
+---
+
+## Coverage
+
+| Template | Topic | Producer methods | Status |
+|----------|-------|-----------------|--------|
+| `otp` | `emails.otp` | `RequestGuestOTP` | Already done |
+| `ticket_confirm` | `emails.ticket.confirmed` | `CreateGuest`, `Create` | Done |
+| `ticket_cancel` | `emails.ticket.cancelled` | `CancelGuest`, `Cancel` | Done |
+| `ticket_status_change` | `emails.ticket.status_changed` | `Approve`, `Reject`, `UpdateStatus` | Done |
+| `application_confirm` | `emails.application.confirmed` | `Apply` | Done |
+| `application_cancel` | `emails.application.cancelled` | `Cancel` (volunteer) | Done |
+| `volunteer_status_change` | `emails.volunteer.status_changed` | `Approve`, `Reject` (volunteer) | Done |
+| `check_in` | `emails.checkin` | `CheckIn`, `CheckInByEventToken` | Done |
+| `event_cancellation` | `emails.event.cancelled` | `Cancel` (event) | Done |
+
+**15 outbox insert sites across 13 service methods, covering all 9 templates.**

@@ -49,6 +49,7 @@ UPDATE registrations
    SET status = 'cancelled', updated_at = now()
  WHERE access_token = $1
    AND user_id IS NULL
+   AND status != 'cancelled'
 RETURNING *;
 
 -- Route 4: POST /api/events/:id/register
@@ -73,6 +74,7 @@ UPDATE registrations
    SET status = 'cancelled', updated_at = now()
  WHERE id = $1
    AND user_id = $2
+   AND status != 'cancelled'
 RETURNING *;
 
 -- Route 7: GET /api/me/registrations
@@ -183,6 +185,7 @@ UPDATE registrations r
  WHERE r.id = $1
    AND e.id = r.event_id
    AND e.organizer_id = $2
+   AND r.status = $4
 RETURNING r.*;
 
 -- Route 13: POST /api/registrations/:id/check-in
@@ -234,6 +237,12 @@ UPDATE registrations r
    AND r.status = 'approved'
    AND r.checked_in_at IS NULL
 RETURNING r.*;
+
+-- name: GetRegistrationByIDForUpdate :one
+SELECT r.*
+FROM registrations r
+WHERE r.id = $1
+FOR UPDATE;
 
 -- name: GetRegistrationByEventTokenAdmin :one
 SELECT r.*
