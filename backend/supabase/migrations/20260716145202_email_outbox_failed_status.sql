@@ -1,3 +1,0 @@
-ALTER TYPE email_outbox_status ADD VALUE IF NOT EXISTS 'FAILED';
-
-ALTER TABLE email_outbox ADD COLUMN IF NOT EXISTS failed_at TIMESTAMP;
