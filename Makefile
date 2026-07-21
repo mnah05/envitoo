@@ -4,8 +4,8 @@
 # Configurable paths and commands
 GO        ?= go
 NPM       ?= npm
-BACKEND   := backend
-FRONTEND  := frontend
+BACKEND   := server
+FRONTEND  := client
 BACKEND_PKG := ./cmd/server
 FRONTEND_PORT := 5173
 BACKEND_PORT := 8080

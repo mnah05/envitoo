@@ -144,7 +144,7 @@ export function ManageEvents() {
                       Manage
                     </Link>
                   </Button>
-                  {event.status !== "cancelled" && (
+                  {event.status !== "cancelled" && new Date(event.ends_at) > new Date() && (
                     <CancelEventDialog
                       eventTitle={event.title}
                       pending={cancelMut.isPending}
