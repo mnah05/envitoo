@@ -51,3 +51,15 @@ Pre-commit hooks (via `make setup`): gitleaks, gofmt, go vet — gitleaks is opt
 - Put Go 1.26+ on `PATH` before running backend commands: `export PATH="/usr/local/go/bin:$PATH"`.
 - Vite proxies `/api` and `/healthz` to `localhost:8080` in dev; leave `VITE_API_BASE_URL` empty in `client/.env`.
 - Without real Clerk keys, the UI shell renders but discover/event pages stay empty because Clerk fails to initialize.
+
+### Working without Clerk keys (limited mode)
+
+The backend accepts any non-empty `CLERK_SECRET_KEY` at startup; JWT verification only runs on protected routes. Public API endpoints work without real Clerk credentials:
+
+```bash
+curl http://localhost:8080/healthz
+curl 'http://localhost:8080/api/events?limit=5'
+curl http://localhost:8080/api/events/slug/envitoo-launch-meetup
+```
+
+The Vite dev proxy forwards these same paths from `:5173` to the backend. Use this to verify DB + API wiring when Clerk keys are unavailable. Auth flows (`/signin`, `/create`, host dashboards) still require valid Clerk keys.
