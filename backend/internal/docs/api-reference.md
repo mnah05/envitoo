@@ -28,7 +28,7 @@ All routes pass through (in order):
 2. `RequestID` — assigns unique request ID
 3. `Logger injection` — attaches `slog.Logger` with request ID to context
 4. `CORS` — allows all origins, standard methods + headers
-5. `RateLimiter` — 30 req/s, burst 60, 3-minute window
+5. `RateLimiter` — public routes: 10 req/s burst 20; guest OTP routes: 5 req/min burst 5; authenticated routes: 30 req/s burst 60 (3-minute idle cleanup)
 
 Protected routes additionally pass through:
 6. `Auth` — verifies Clerk session JWT from `Authorization` header (local JWKS crypto, no network call)
@@ -44,9 +44,10 @@ Liveness probe.
 
 | | |
 |---|---|
-| **Auth** | Public |
-| **Params** | None |
+| **Auth** | Public by default. If `HEALTHZ_TOKEN` is set, requires `?pass=<token>` (constant-time compare). |
+| **Params** | `pass` (optional; required only when `HEALTHZ_TOKEN` is configured) |
 | **Response 200** | `{"status": "ok"}` |
+| **Errors** | 401 — wrong or missing `pass` when token is configured |
 
 ## GET /api/me
 
@@ -270,7 +271,7 @@ Requests a 6-digit email OTP for guest registration. Validates the event is publ
 | **Path params** | `id` — event UUID |
 | **Body** | `RequestGuestOTPRequest` |
 | **Response 200** | `{"status":"otp_sent","expires_in_seconds":600}` |
-| **Errors** | 400 — invalid id / validation; 404 — event not found; 409 — event not open; 429 — resend rate limited; 503 — Redis or OTP secret unavailable |
+| **Errors** | 400 — invalid id / validation; 404 — event not found; 409 — event not open; 429 — resend rate limited (per-email cooldown) or OTP route rate limit (5/min/IP); 503 — Redis or OTP secret unavailable |
 
 ### RequestGuestOTPRequest
 

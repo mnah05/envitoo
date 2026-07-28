@@ -1,0 +1,5 @@
+Volunteer application cancelled — {{.EventTitle}}
+
+{{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
+
+Your volunteer application for {{.EventTitle}} has been cancelled.

@@ -30,6 +30,15 @@ var (
 		CleanupIdleTime: 3 * time.Minute,
 		MaxVisitors:     defaultMaxVisitors,
 	}
+	// DefaultOTPConfig is intentionally tighter than DefaultPublicConfig —
+	// each OTP request can enqueue a real outbound email.
+	DefaultOTPConfig = RateLimitConfig{
+		Rate:            5.0 / 60.0, // 5 requests per minute
+		Burst:           5,
+		CleanupInterval: time.Minute,
+		CleanupIdleTime: 3 * time.Minute,
+		MaxVisitors:     defaultMaxVisitors,
+	}
 	DefaultAuthConfig = RateLimitConfig{
 		Rate:            30,
 		Burst:           60,

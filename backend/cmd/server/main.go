@@ -74,7 +74,7 @@ func main() {
 	e := echo.New()
 	e.HideBanner = false
 	e.HidePort = false
-	server.New(database.Pool(), queries, appCache, cfg.OTPSecret, log).Register(ctx, e)
+	server.New(database.Pool(), queries, appCache, cfg.OTPSecret, cfg.HealthzToken, log).Register(ctx, e)
 
 	serveErr := make(chan error, 1)
 	go func() {

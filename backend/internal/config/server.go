@@ -23,6 +23,8 @@ type Config struct {
 	// OTPSecret is the HMAC key for guest email OTP. Optional at process
 	// start; OTP endpoints return 503 if empty.
 	OTPSecret string
+	// HealthzToken, when set, must be provided as ?pass= on GET /healthz.
+	HealthzToken string
 }
 
 // Load reads environment variables prefixed with DB_ and CLERK_ into a Config.
@@ -30,7 +32,7 @@ func Load() (Config, error) {
 	k := koanf.New(".")
 
 	err := k.Load(env.Provider("", ".", func(key string) string {
-		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") || key == "REDIS_URL" || key == "OTP_SECRET" {
+		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") || key == "REDIS_URL" || key == "OTP_SECRET" || key == "HEALTHZ_TOKEN" {
 			return key
 		}
 		return ""
@@ -59,6 +61,7 @@ func Load() (Config, error) {
 		ClerkSecretKey:       clerkSecretKey,
 		RedisURL:             k.String("REDIS_URL"),
 		OTPSecret:            k.String("OTP_SECRET"),
+		HealthzToken:         k.String("HEALTHZ_TOKEN"),
 	}, nil
 }
 

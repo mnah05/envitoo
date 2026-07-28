@@ -1,185 +1,83 @@
-# Email Outbox Implementation Report
+# Email delivery pipeline (outbox → NATS → Resend)
 
-## Files changed (13 files, +917/-90)
+## Overview
 
-- `sql/registration.sql` — 3 queries modified, 1 new query
-- `sql/event.sql` — 1 query modified
-- `sql/user.sql` — 1 new query
-- `internal/db/*.sql.go` — 4 regenerated files (sqlc)
-- `internal/service/email_templates.go` — **new file**
-- `internal/service/registration.go` — 8 methods converted
-- `internal/service/volunteer.go` — 4 methods converted
-- `internal/service/event.go` — 1 method converted
-- `internal/service/guest_otp.go` — removed duplicate constants
-- `cmd/worker/drainer.go` — added volunteer_status_change template
-
----
-
-## 1. SQL changes (registration.sql)
-
-### CancelRegistration — idempotency guard added
 ```
-- AND user_id = $2
-+ AND user_id = $2 AND status != 'cancelled'
-```
-Re-cancel returns zero rows → `pgx.ErrNoRows` → `ErrRegistrationNotFound` → no email.
-
-### CancelGuestRegistration — idempotency guard added
-```
-- AND user_id IS NULL
-+ AND user_id IS NULL AND status != 'cancelled'
-```
-Same as above: re-cancel returns 404, no email.
-
-### UpdateRegistrationStatus — expected-status guard added
-```
-- AND e.organizer_id = $2
-+ AND e.organizer_id = $2 AND r.status = $4
-```
-New `$4` parameter (`Status_2` in generated Go) is the status the caller read before the update. If a concurrent change already moved it, zero rows → `ErrConflict`.
-
-### GetRegistrationByIDForUpdate — new query
-```sql
-SELECT r.* FROM registrations r WHERE r.id = $1 FOR UPDATE;
-```
-Used by `CheckIn` to serialize concurrent check-in attempts within a transaction.
-
----
-
-## 2. SQL changes (event.sql)
-
-### CancelEvent — idempotency guard added
-```
-- AND organizer_id = $2 RETURNING *;
-+ AND organizer_id = $2 AND status != 'cancelled' RETURNING *;
+API / services
+  └─ INSERT email_outbox (PENDING) in the same TX as the domain write
+        ↓
+cmd/worker (outbox drainer)
+  └─ FetchPending SKIP LOCKED → PublishAsync to JetStream (MsgID=outbox_id)
+  └─ Mark PUBLISHED / bump retries → FAILED
+        ↓
+NATS JetStream stream EMAILS (subjects emails.>)
+        ↓
+cmd/mailer (durable consumer email-resend)
+  └─ Render HTML+text templates
+  └─ Resend send (idempotency key = outbox_id)
+  └─ Ack / Nak / Term
 ```
 
----
+Producers never call Resend directly. The mailer never needs Postgres for send content — the JetStream payload is self-contained.
 
-## 3. SQL changes (user.sql)
+## Processes
 
-### GetUserByID — new query
-```sql
-SELECT * FROM users WHERE id = $1;
+| Binary | Role | Required env |
+|---|---|---|
+| `cmd/server` | Inserts outbox rows | `DB_URL`, `CLERK_*`, Redis/`OTP_SECRET` for guest OTP |
+| `cmd/worker` | Drains outbox → NATS | `DB_URL`, `NATS_URL`, `WORKER_*` |
+| `cmd/mailer` | NATS → Resend | `NATS_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `APP_PUBLIC_URL` |
+
+Local run (after NATS + Redis + Postgres are up):
+
+```bash
+cd backend
+go run ./cmd/server
+go run ./cmd/worker
+go run ./cmd/mailer
 ```
-Needed by `EventService.Cancel` to fetch the organizer's email for the cancellation outbox row.
 
----
+## JetStream
 
-## 4. New file: internal/service/email_templates.go
+On startup, both worker and mailer ensure:
 
-Single source of truth for all email template/topic constants and template data structs.
+- Stream `EMAILS`, subjects `emails.>`, work-queue retention
+- Mailer durable consumer `email-resend`, explicit ack, max deliver 10
 
-**9 template name constants**: `EmailTemplateOTP`, `EmailTemplateTicketConfirm`, `EmailTemplateTicketCancel`, `EmailTemplateTicketStatusChange`, `EmailTemplateApplicationConfirm`, `EmailTemplateApplicationCancel`, `EmailTemplateVolunteerStatusChange`, `EmailTemplateCheckIn`, `EmailTemplateEventCancellation`
+## Templates (9)
 
-**9 NATS topic constants**: `EmailTopicOTP` → `"emails.otp"`, `EmailTopicTicketConfirm` → `"emails.ticket.confirmed"`, etc.
+| Template | Topic |
+|---|---|
+| `otp` | `emails.otp` |
+| `ticket_confirm` | `emails.ticket.confirmed` |
+| `ticket_cancel` | `emails.ticket.cancelled` |
+| `ticket_status_change` | `emails.ticket.status_changed` |
+| `application_confirm` | `emails.application.confirmed` |
+| `application_cancel` | `emails.application.cancelled` |
+| `volunteer_status_change` | `emails.volunteer.status_changed` |
+| `check_in` | `emails.checkin` |
+| `event_cancellation` | `emails.event.cancelled` |
 
-**7 template data structs** (with json tags):
-- `ticketConfirmData` — Name, EventTitle, EventID, AccessToken
-- `ticketCancelData` — Name, EventTitle, EventID
-- `ticketStatusChangeData` — Name, EventTitle, EventID, NewStatus
-- `applicationConfirmData` — Name, EventTitle, EventID, RoleName
-- `applicationCancelData` — Name, EventTitle, EventID
-- `volunteerStatusChangeData` — Name, EventTitle, EventID, NewStatus, RoleName
-- `checkInData` — Name, EventTitle, EventID
-- `eventCancellationData` — Title, EventID
+Rendering lives in `internal/email` (`embed` HTML + text). `APP_PUBLIC_URL` builds ticket (`/ticket?token=`) and home (`/home`) links.
 
----
+## Idempotency
 
-## 5. cmd/worker/drainer.go
+- Drainer publish uses JetStream `MsgID = outbox_id`
+- Mailer Resend calls use `IdempotencyKey = outbox_id`
 
-Added `TemplateVolunteerStatusChange` (`"volunteer_status_change"`) to the existing template constants and `topicForTemplate` map pointing to `"emails.volunteer.status_changed"`.
+Redeliveries should not create duplicate inbox mail under normal Resend semantics.
 
----
+## Failure modes
 
-## 6. internal/service/registration.go — 8 methods
+| Stage | Behavior |
+|---|---|
+| Drainer publish fail | Row stays PENDING; retries until `WORKER_MAX_RETRIES` then FAILED |
+| Mailer render unknown template / bad JSON | Ack (poison) — do not infinite loop |
+| Mailer Resend 4xx (permanent) | Term message |
+| Mailer Resend 5xx / network | Nak for redelivery |
 
-All outbox inserts follow the same pattern:
-```
-marshal templateData → qtx.CreateEmailOutbox → tx.Commit
-```
-With the comment `// Outbox insert is transactional — failure rolls back the entire operation.`
+Note: once the drainer marks a row PUBLISHED, delivery retries are NATS-only. Monitor mailer logs for Term'd OTP/ticket sends.
 
-### CreateGuest (already in TX)
-Before `tx.Commit`: marshal `ticketConfirmData` using `event.Title` (already loaded), `CreateEmailOutbox` with `EmailTemplateTicketConfirm` / `EmailTopicTicketConfirm`.
+## Guest OTP + email
 
-### Create (already in TX)
-Same as CreateGuest: `ticketConfirmData`, event title already available.
-
-### CancelGuest (was not in TX)
-Wrapped: `pool.Begin` → `qtx.CancelGuestRegistration` → `qtx.GetEventByID` → marshal `ticketCancelData` → `CreateEmailOutbox` → `tx.Commit`.
-
-### Cancel (was not in TX)
-Wrapped: `pool.Begin` → `qtx.CancelRegistration` → `qtx.GetEventByID` → marshal `ticketCancelData` → `CreateEmailOutbox` → `tx.Commit`.
-
-### Approve (already in TX)
-- Race guard: `ApproveRegistration` returns `pgx.ErrNoRows` → now returns **`ErrConflict`** (was `ErrRegistrationNotFound`)
-- Before commit: fetch event title via `qtx.GetEventByIDForUpdate` (already loaded), marshal `ticketStatusChangeData`, `CreateEmailOutbox`.
-
-### Reject (was not in TX)
-Wrapped: `pool.Begin` → `qtx.RejectRegistration` → `qtx.GetEventByID` → marshal `ticketStatusChangeData` → `CreateEmailOutbox` → `tx.Commit`.
-- Race guard: `pgx.ErrNoRows` → **`ErrConflict`** (was `ErrRegistrationNotFound`)
-
-### UpdateStatus (already in TX)
-- Passes `reg.Status` as new `Status_2` param (expected current status)
-- Race guard: `pgx.ErrNoRows` → **`ErrConflict`** (was `ErrRegistrationNotFound`)
-- Before commit: fetch event title via `qtx.GetEventByID`, marshal `ticketStatusChangeData`, `CreateEmailOutbox`.
-
-### CheckIn (was not in TX)
-Wrapped: `pool.Begin` → `qtx.GetRegistrationByIDForUpdate` (lock row) → `qtx.CheckInRegistration` → on success: `qtx.GetEventByID` → marshal `checkInData` → `CreateEmailOutbox` → `tx.Commit`.
-- Idempotent: already-checked-in skips outbox, commits and returns existing.
-- All fallback queries use `qtx` instead of `s.queries`.
-
-### CheckInByEventToken (was not in TX)
-Wrapped: `pool.Begin` → `qtx.CheckInRegistrationByEventToken` → on success: `qtx.GetEventByID` → marshal `checkInData` → `CreateEmailOutbox` → `tx.Commit`.
-- Same idempotent handling and qtx fallback as CheckIn.
-
----
-
-## 7. internal/service/volunteer.go — 4 methods
-
-### Apply (already in TX)
-Before commit: `qtx.GetEventByID` → marshal `applicationConfirmData` with `role.Name` → `CreateEmailOutbox`.
-
-### Approve (already in TX)
-- Fixed `volunteerModerationError` call to use `qtx` (was `s.queries`)
-- Before commit: `qtx.GetEventByID` → marshal `volunteerStatusChangeData` with `role.Name` → `CreateEmailOutbox`.
-
-### Cancel (was not in TX)
-Wrapped: `pool.Begin` → `qtx.CancelVolunteerApplication` → `qtx.GetEventByID` → `qtx.GetVolunteerRoleByID` → marshal `applicationCancelData` → `CreateEmailOutbox` → `tx.Commit`.
-- Uses `qtx` in `volunteerCancelError` (was `s.queries`).
-
-### Reject (was not in TX)
-Wrapped: `pool.Begin` → `qtx.RejectVolunteerApplication` → `qtx.GetEventByID` → `qtx.GetVolunteerRoleByID` → marshal `volunteerStatusChangeData` → `CreateEmailOutbox` → `tx.Commit`.
-- Uses `qtx` in `volunteerModerationError` (was `s.queries`).
-
----
-
-## 8. internal/service/event.go — 1 method
-
-### Cancel (was not in TX)
-Wrapped: `pool.Begin` → `qtx.CancelEvent` → `qtx.GetUserByID` (for organizer email) → marshal `eventCancellationData` → `CreateEmailOutbox` → `tx.Commit`.
-
----
-
-## 9. internal/service/guest_otp.go
-
-Removed duplicate constants `emailTemplateOTP` and `emailTopicOTP`. The `RequestGuestOTP` method now uses `EmailTemplateOTP` and `EmailTopicOTP` from `email_templates.go`.
-
----
-
-## Coverage
-
-| Template | Topic | Producer methods | Status |
-|----------|-------|-----------------|--------|
-| `otp` | `emails.otp` | `RequestGuestOTP` | Already done |
-| `ticket_confirm` | `emails.ticket.confirmed` | `CreateGuest`, `Create` | Done |
-| `ticket_cancel` | `emails.ticket.cancelled` | `CancelGuest`, `Cancel` | Done |
-| `ticket_status_change` | `emails.ticket.status_changed` | `Approve`, `Reject`, `UpdateStatus` | Done |
-| `application_confirm` | `emails.application.confirmed` | `Apply` | Done |
-| `application_cancel` | `emails.application.cancelled` | `Cancel` (volunteer) | Done |
-| `volunteer_status_change` | `emails.volunteer.status_changed` | `Approve`, `Reject` (volunteer) | Done |
-| `check_in` | `emails.checkin` | `CheckIn`, `CheckInByEventToken` | Done |
-| `event_cancellation` | `emails.event.cancelled` | `Cancel` (event) | Done |
-
-**15 outbox insert sites across 13 service methods, covering all 9 templates.**
+See also `guest-email-otp.md`. Request OTP inserts `template=otp` into the outbox; delivery depends on worker + mailer + Resend being healthy.

@@ -32,8 +32,10 @@ API inserts email_outbox (PENDING)
         ↓
 cmd/worker/drainer publishes to NATS JetStream
         ↓
-external consumer sends mail
+cmd/mailer consumes emails.> and sends via Resend
 ```
+
+See `email-service-flow.md` for stream/consumer setup and env vars.
 
 ---
 

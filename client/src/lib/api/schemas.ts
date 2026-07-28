@@ -156,6 +156,30 @@ export const CreateGuestRegistrationInput = z.object({
 });
 export type CreateGuestRegistrationValues = z.infer<typeof CreateGuestRegistrationInput>;
 
+export const RequestGuestOTPInput = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email(),
+});
+export type RequestGuestOTPValues = z.infer<typeof RequestGuestOTPInput>;
+
+export const RequestGuestOTPResponseSchema = z.object({
+  status: z.string(),
+  expires_in_seconds: z.number().int(),
+});
+export type RequestGuestOTPResponse = z.infer<typeof RequestGuestOTPResponseSchema>;
+
+export const VerifyGuestOTPInput = z.object({
+  email: z.string().email(),
+  otp: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+export type VerifyGuestOTPValues = z.infer<typeof VerifyGuestOTPInput>;
+
+export const VerifyGuestOTPResponseSchema = z.object({
+  status: z.string(),
+  expires_in_seconds: z.number().int(),
+});
+export type VerifyGuestOTPResponse = z.infer<typeof VerifyGuestOTPResponseSchema>;
+
 export const CreateRegistrationInput = z.object({
   name: z.string().min(1).max(200).optional(),
   email: z.string().email().optional(),

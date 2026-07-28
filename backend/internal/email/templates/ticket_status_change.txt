@@ -1,0 +1,7 @@
+Registration update — {{.EventTitle}}
+
+{{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
+
+Your registration for {{.EventTitle}} is now {{.NewStatus}}.
+
+{{if .CTAURL}}{{.CTALabel}}: {{.CTAURL}}{{end}}

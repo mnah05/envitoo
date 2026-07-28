@@ -1,0 +1,5 @@
+Event cancelled — {{.Title}}
+
+{{.Title}} has been cancelled by the organizer.
+
+{{if .CTAURL}}{{.CTALabel}}: {{.CTAURL}}{{end}}

@@ -1,0 +1,7 @@
+You're registered for {{.EventTitle}}
+
+{{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
+
+You're registered for {{.EventTitle}}. Keep this email handy for check-in.
+
+{{if .CTAURL}}{{.CTALabel}}: {{.CTAURL}}{{end}}
