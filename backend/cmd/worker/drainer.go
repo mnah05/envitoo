@@ -24,6 +24,7 @@ func main() {
 	defer stop()
 
 	_ = godotenv.Load()
+	_ = godotenv.Load(".env.local")
 
 	cfg, err := config.LoadWorker()
 	if err != nil {
