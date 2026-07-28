@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
 	"time"
@@ -28,11 +29,13 @@ type Server struct {
 	events        *service.EventService
 	registrations *service.RegistrationService
 	volunteers    *service.VolunteerService
+	healthToken   string
 }
 
 // New creates a Server with all services initialized.
 // otpSecret is the HMAC key for guest email OTP (OTP_SECRET env).
-func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret string, log *slog.Logger) *Server {
+// healthToken, when non-empty, must be supplied as ?pass= on /healthz.
+func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, healthToken string, log *slog.Logger) *Server {
 	validate := dto.NewValidator()
 	access := service.NewEventAccessService(queries)
 	return &Server{
@@ -44,6 +47,7 @@ func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret stri
 		events:        service.NewEventService(pool, queries, access, log),
 		registrations: service.NewRegistrationService(pool, queries, access, c, otpSecret, log),
 		volunteers:    service.NewVolunteerService(pool, queries, access, log),
+		healthToken:   healthToken,
 	}
 }
 
@@ -87,9 +91,12 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	public.GET("/events/:id", s.GetEvent)
 	public.GET("/events", s.ListPublicEvents)
 
-	// Public guest registration + email OTP
-	public.POST("/events/:id/register/guest/otp", s.RequestGuestOTP)
-	public.POST("/events/:id/register/guest/otp/verify", s.VerifyGuestOTP)
+	// Guest OTP — tighter limiter (each request can enqueue outbound email).
+	otp := e.Group("/api", middleware.PublicRateLimiter(ctx, middleware.DefaultOTPConfig))
+	otp.POST("/events/:id/register/guest/otp", s.RequestGuestOTP)
+	otp.POST("/events/:id/register/guest/otp/verify", s.VerifyGuestOTP)
+
+	// Public guest registration (post-OTP)
 	public.POST("/events/:id/register/guest", s.CreateGuestRegistration)
 	public.GET("/guest-registrations", s.GetGuestRegistration)
 	public.DELETE("/guest-registrations", s.CancelGuestRegistration)
@@ -140,10 +147,14 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	protected.POST("/volunteer-applications/:id/reject", s.RejectVolunteerApplication)
 }
 
-// Health handles GET /healthz. Requires ?pass=iamwhoiamngga.
+// Health handles GET /healthz.
+// If HEALTHZ_TOKEN is set, requires matching ?pass=. Otherwise public liveness.
 func (s *Server) Health(c echo.Context) error {
-	if c.QueryParam("pass") != "iamwhoiamngga" {
-		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+	if s.healthToken != "" {
+		got := c.QueryParam("pass")
+		if subtle.ConstantTimeCompare([]byte(got), []byte(s.healthToken)) != 1 {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }

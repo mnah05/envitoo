@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import {
   useApi,
   createGuestRegistration,
+  requestGuestOTP,
+  verifyGuestOTP,
   getGuestRegistration,
   cancelGuestRegistration,
   createRegistration,
@@ -21,6 +23,8 @@ import {
   checkInAttendee,
   checkInByEventToken,
   type CreateGuestRegistrationValues,
+  type RequestGuestOTPValues,
+  type VerifyGuestOTPValues,
   type CreateRegistrationValues,
   type CheckInValues,
   type UpdateRegistrationStatusValues,
@@ -36,6 +40,34 @@ export const regKeys = {
 };
 
 // --- Guest (public) ---------------------------------------------------------
+
+export function useRequestGuestOTP() {
+  const api = useApi();
+  return useMutation({
+    mutationFn: ({ eventId, values }: { eventId: string; values: RequestGuestOTPValues }) =>
+      requestGuestOTP(api, eventId, values),
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 429) {
+        toast.error(err.message || "Please wait before requesting another code");
+        return;
+      }
+      toast.error(err instanceof ApiError ? err.message : "Failed to send verification code");
+    },
+  });
+}
+
+export function useVerifyGuestOTP() {
+  const api = useApi();
+  return useMutation({
+    mutationFn: ({ eventId, values }: { eventId: string; values: VerifyGuestOTPValues }) =>
+      verifyGuestOTP(api, eventId, values),
+    onError: (err) => {
+      // Inline field errors are handled by the form for 400; still toast other failures.
+      if (err instanceof ApiError && err.status === 400) return;
+      toast.error(err instanceof ApiError ? err.message : "Failed to verify code");
+    },
+  });
+}
 
 export function useGuestRegistration(token: string, enabled = true) {
   const api = useApi();

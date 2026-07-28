@@ -1,0 +1,7 @@
+EnviToo verification code
+
+{{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
+
+Your code for {{.EventTitle}} is: {{.OTP}}
+
+It expires in 10 minutes. If you did not request this, ignore this email.

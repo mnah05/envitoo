@@ -236,14 +236,9 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 	}
 
 	name := resolveName(user, req.Name)
-	// Normalize so (event_id, email) uniqueness matches guest OTP path.
-	// Ignore blank overrides (including whitespace-only) and fall back to profile email.
+	// Always use the verified account email. Client overrides enable
+	// inbox bombing and can block the real owner via UNIQUE(event_id, email).
 	email := normalizeGuestEmail(user.Email)
-	if req.Email != nil {
-		if n := normalizeGuestEmail(*req.Email); n != "" {
-			email = n
-		}
-	}
 
 	params := db.CreateRegistrationUserParams{
 		EventID:        eventID,
@@ -890,10 +885,26 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 	}
 
 	if locked.CheckedInAt.Valid {
+		// Idempotent return still requires staff authz + matching access token.
+		// Without this, any authenticated caller who knows a registration ID
+		// could read PII and the guest access_token after check-in.
+		existing, fetchErr := qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+			ID:          registrationID,
+			OrganizerID: actorID,
+		})
+		if fetchErr == pgx.ErrNoRows {
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+		}
+		if fetchErr != nil {
+			return db.Registration{}, fmt.Errorf("check-in authz: %w", fetchErr)
+		}
+		if existing.AccessToken != accessToken {
+			return db.Registration{}, fmt.Errorf("registration %s: %w", registrationID, ErrRegistrationNotFound)
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 		}
-		return locked, nil
+		return existing, nil
 	}
 
 	reg, err := qtx.CheckInRegistration(ctx, db.CheckInRegistrationParams{

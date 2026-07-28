@@ -249,13 +249,8 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 	}
 
 	name := resolveName(user, req.Name)
-	// Normalize; ignore blank/whitespace overrides (email is NOT NULL).
+	// Always use the verified account email (same policy as registration).
 	email := normalizeGuestEmail(user.Email)
-	if req.Email != nil {
-		if n := normalizeGuestEmail(*req.Email); n != "" {
-			email = n
-		}
-	}
 
 	app, err := qtx.CreateVolunteerApplication(ctx, db.CreateVolunteerApplicationParams{
 		EventID:     eventID,

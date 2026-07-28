@@ -15,6 +15,7 @@ require (
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/nats-io/nats.go v1.52.0
 	github.com/redis/go-redis/v9 v9.21.0
+	github.com/resend/resend-go/v3 v3.12.0
 	golang.org/x/sync v0.21.0
 	golang.org/x/time v0.15.0
 )

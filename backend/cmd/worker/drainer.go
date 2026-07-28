@@ -16,50 +16,8 @@ import (
 
 	"github.com/mnah05/envitoo/internal/config"
 	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/email"
 )
-
-// What actually gets published to JetStream. Keep it self-contained so
-// the consumer side doesn't need to hit Postgres to know what to send.
-type EmailMessage struct {
-	OutboxID     uuid.UUID       `json:"outbox_id"`
-	Recipient    string          `json:"recipient"`
-	Template     string          `json:"template"`
-	TemplateData json.RawMessage `json:"template_data"`
-}
-
-const (
-	TemplateOTP                   = "otp"
-	TemplateTicketConfirm         = "ticket_confirm"
-	TemplateTicketCancel          = "ticket_cancel"
-	TemplateTicketStatusChange    = "ticket_status_change"
-	TemplateApplicationConfirm    = "application_confirm"
-	TemplateApplicationCancel     = "application_cancel"
-	TemplateVolunteerStatusChange = "volunteer_status_change"
-	TemplateCheckIn               = "check_in"
-	TemplateEventCancellation     = "event_cancellation"
-)
-
-var topicForTemplate = map[string]string{
-	TemplateOTP:                   "emails.otp",
-	TemplateTicketConfirm:         "emails.ticket.confirmed",
-	TemplateTicketCancel:          "emails.ticket.cancelled",
-	TemplateTicketStatusChange:    "emails.ticket.status_changed",
-	TemplateApplicationConfirm:    "emails.application.confirmed",
-	TemplateApplicationCancel:     "emails.application.cancelled",
-	TemplateVolunteerStatusChange: "emails.volunteer.status_changed",
-	TemplateCheckIn:               "emails.checkin",
-	TemplateEventCancellation:     "emails.event.cancelled",
-}
-
-// defaultTopicFor is only a fallback for rows where topic somehow ended up
-// empty (bad insert, old row before the column existed, etc.) so the
-// publisher doesn't have to special-case them.
-func defaultTopicFor(template string) string {
-	if t, ok := topicForTemplate[template]; ok {
-		return t
-	}
-	return "emails.unknown"
-}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -82,7 +40,10 @@ func main() {
 		log.Fatal("Ping failed: ", err)
 	}
 
-	nc, err := nats.Connect(cfg.NATSURL)
+	nc, err := nats.Connect(cfg.NATSURL,
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(2*time.Second),
+	)
 	if err != nil {
 		log.Fatalf("nats connect: %v", err)
 	}
@@ -93,10 +54,16 @@ func main() {
 		log.Fatalf("jetstream init: %v", err)
 	}
 
+	if _, err := email.EnsureEmailsStream(ctx, js); err != nil {
+		log.Fatalf("ensure EMAILS stream: %v", err)
+	}
+
 	go runCleanup(ctx, pool, cfg)
 
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
+
+	log.Printf("outbox drainer ready: nats=%s batch=%d", cfg.NATSURL, cfg.BatchSize)
 
 	for {
 		select {
@@ -151,7 +118,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	futures := make([]pending, 0, len(batch))
 
 	for _, row := range batch {
-		payload, err := json.Marshal(EmailMessage{
+		payload, err := json.Marshal(email.EmailMessage{
 			OutboxID:     row.ID,
 			Recipient:    row.Recipient,
 			Template:     row.Template,
@@ -164,7 +131,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 
 		subject := row.Topic
 		if subject == "" {
-			subject = defaultTopicFor(row.Template)
+			subject = email.DefaultTopicFor(row.Template)
 		}
 
 		future, err := js.PublishAsync(subject, payload,
@@ -177,7 +144,6 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	}
 
 	// 3. Resolve acks and split into succeeded / failed.
-
 	ctxAck, cancel := context.WithTimeout(ctx, cfg.AckWaitLimit)
 	defer cancel()
 

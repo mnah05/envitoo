@@ -1,0 +1,5 @@
+Volunteer update — {{.EventTitle}}
+
+{{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
+
+Your volunteer application for {{.RoleName}} at {{.EventTitle}} is now {{.NewStatus}}.

@@ -4,6 +4,8 @@ import {
   EventSchema,
   RegistrationListSchema,
   RegistrationSchema,
+  RequestGuestOTPResponseSchema,
+  VerifyGuestOTPResponseSchema,
   UserSchema,
   VolunteerSettingsSchema,
   VolunteerRoleSchema,
@@ -13,6 +15,10 @@ import {
   EventStaffListSchema,
   type CreateEventValues,
   type CreateGuestRegistrationValues,
+  type RequestGuestOTPValues,
+  type RequestGuestOTPResponse,
+  type VerifyGuestOTPValues,
+  type VerifyGuestOTPResponse,
   type CreateRegistrationValues,
   type UpdateEventValues,
   type UpdateRegistrationStatusValues,
@@ -115,6 +121,26 @@ export function cancelEvent(api: Api, id: string): Promise<Event> {
 }
 
 // --- Registrations (guest / public) ----------------------------------------
+
+export function requestGuestOTP(
+  api: Api,
+  eventId: string,
+  values: RequestGuestOTPValues,
+): Promise<RequestGuestOTPResponse> {
+  return api
+    .post<unknown>(`/api/events/${eventId}/register/guest/otp`, values)
+    .then((d) => parseOrThrow(RequestGuestOTPResponseSchema, d));
+}
+
+export function verifyGuestOTP(
+  api: Api,
+  eventId: string,
+  values: VerifyGuestOTPValues,
+): Promise<VerifyGuestOTPResponse> {
+  return api
+    .post<unknown>(`/api/events/${eventId}/register/guest/otp/verify`, values)
+    .then((d) => parseOrThrow(VerifyGuestOTPResponseSchema, d));
+}
 
 export function createGuestRegistration(
   api: Api,

@@ -1,0 +1,5 @@
+Volunteer application received — {{.EventTitle}}
+
+{{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
+
+We received your application for {{.RoleName}} at {{.EventTitle}}. We'll notify you when there's an update.

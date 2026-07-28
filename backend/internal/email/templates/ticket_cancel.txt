@@ -1,0 +1,5 @@
+Registration cancelled — {{.EventTitle}}
+
+{{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
+
+Your registration for {{.EventTitle}} has been cancelled.

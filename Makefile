@@ -1,5 +1,5 @@
 .PHONY: help dev stop backend frontend install install-backend install-frontend \
-        build build-frontend build-backend clean test logs
+        build build-frontend build-backend clean test logs worker mailer
 
 # Configurable paths and commands
 GO        ?= go
@@ -7,6 +7,8 @@ NPM       ?= npm
 BACKEND   := backend
 FRONTEND  := client
 BACKEND_PKG := ./cmd/server
+WORKER_PKG  := ./cmd/worker
+MAILER_PKG  := ./cmd/mailer
 FRONTEND_PORT := 5173
 BACKEND_PORT := 8080
 
@@ -38,6 +40,14 @@ dev: stop ## Run backend and frontend together (Ctrl-C stops both)
 backend: ## Run the Go backend on :8080
 	@echo "backend → http://localhost:$(BACKEND_PORT)"
 	@cd $(BACKEND) && $(GO) run $(BACKEND_PKG)
+
+worker: ## Run the email outbox → NATS drainer
+	@echo "outbox worker starting…"
+	@cd $(BACKEND) && $(GO) run $(WORKER_PKG)
+
+mailer: ## Run the NATS → Resend email mailer
+	@echo "email mailer starting…"
+	@cd $(BACKEND) && $(GO) run $(MAILER_PKG)
 
 frontend: ## Run the Vite frontend on :5173
 	@echo "frontend → http://localhost:$(FRONTEND_PORT)"
