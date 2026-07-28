@@ -24,6 +24,7 @@ func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	_ = godotenv.Load()
+	_ = godotenv.Load(".env.local")
 
 	cfg, err := config.Load()
 	if err != nil {
