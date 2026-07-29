@@ -1,4 +1,4 @@
-# Clerk CLI — Authentication & Targeting Reference
+# Clerk CLI - Authentication & Targeting Reference
 
 Everything you need to know about how the CLI authenticates, resolves keys, and targets the right application/instance.
 
@@ -81,8 +81,8 @@ When you run a command without `--app`/`--instance`:
 
 Most commands accept `--app <id>` and `--instance <target>` to override the linked profile:
 
-- `--app <id>` — Clerk application ID (starts with `app_`). Works from any directory; no link required.
-- `--instance <target>` — One of:
+- `--app <id>` - Clerk application ID (starts with `app_`). Works from any directory; no link required.
+- `--instance <target>` - One of:
   - `dev` (development instance, the default)
   - `prod` (production instance)
   - a full instance ID (starts with `ins_`)
@@ -93,7 +93,7 @@ Examples:
 # Operate on a specific app without linking the repo
 clerk api /users --app app_abc123
 
-# Pull production env keys (dangerous — only when you know what you're doing)
+# Pull production env keys (dangerous - only when you know what you're doing)
 clerk env pull --app app_abc123 --instance prod
 
 # Target a specific instance directly

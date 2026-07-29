@@ -1,20 +1,23 @@
 ---
 name: clerk-cli
 description: >-
-  Operate the Clerk CLI (`clerk` binary) for authentication, user/org/session management,
-  deploy verification, instance config, env keys, and any Clerk Backend or Platform API
-  call. Use when the user mentions Clerk management tasks, "list clerk users", "create a
-  clerk user", "update organization", "pull clerk config", "clerk env pull",
-  "clerk doctor", "clerk deploy", "clerk deploy status", "clerk api", or any ad-hoc
-  Clerk API request. Prefer the CLI over raw HTTP: it handles auth, key resolution,
-  app/instance targeting, and formatting automatically.
+  Operate the Clerk CLI (`clerk` binary) for authentication, user/org/session
+  management, impersonation, local webhook testing, deploy verification,
+  instance config, env keys, feature toggles, and any Clerk Backend, Platform,
+  or Frontend API call. Use when the user mentions Clerk management tasks,
+  "list clerk users", "impersonate a user", "test webhooks locally",
+  "enable orgs", "enable billing",
+  "clerk env pull", "clerk doctor", "clerk deploy", "clerk api", or any ad-hoc
+  Clerk API request. Prefer the CLI over raw HTTP: it handles auth, key
+  resolution, app/instance targeting, and formatting automatically.
+license: MIT
 ---
 
 # Clerk CLI
 
 The `clerk` binary is a pre-authenticated gateway to Clerk's Backend API and Platform API, plus project-level tooling (auth, linking, env pulls, instance config). When the user asks anything that touches a Clerk resource, reach for `clerk` first instead of hand-rolling `curl`.
 
-> This skill was installed by `clerk init` (or `clerk skill install`) and is pinned to clerk `1.5.0`. If `clerk --version` disagrees, refresh it with `clerk skill install` (or `bunx clerk@1.5.0 skill install`). The binary is always the source of truth, so run `clerk <command> --help` to verify anything this skill claims.
+> This skill targets clerk `latest`. If `clerk --version` disagrees with the latest available CLI, refresh it with `clerk skill install` or a package runner such as `bunx clerk@latest`. The binary is always the source of truth, so run `clerk <command> --help` to verify anything this skill claims.
 
 ## Execution environment (prefer the host, understand the sandbox warning)
 
@@ -64,24 +67,24 @@ the host before acting on it or reporting it to the user.
 Before running any `clerk` command, figure out which binary to invoke and bind that choice for the rest of the session:
 
 ```sh
-# 1. Prefer a globally installed binary when it matches the skill's pinned version.
+# 1. Prefer a globally installed binary when it matches the skill's target version.
 command -v clerk >/dev/null 2>&1 && clerk --version
 ```
 
-If that prints `1.5.0` (or any version you trust), use bare `clerk` for the rest of the session.
+If that prints `latest` or any version you trust, use bare `clerk` for the rest of the session.
 
 Otherwise fall back to a package runner, in this order (matches the CLI's own `preferredRunner` logic, which prefers the runner that matches the project's lockfile):
 
 | Project package manager   | Invocation                       |
 | ------------------------- | -------------------------------- |
-| bun (`bun.lock*`)         | `bunx clerk@1.5.0`     |
-| npm (`package-lock.json`) | `npx -y clerk@1.5.0`   |
-| pnpm (`pnpm-lock.yaml`)   | `pnpm dlx clerk@1.5.0` |
-| yarn >= 2 (`yarn.lock`)   | `yarn dlx clerk@1.5.0` |
+| bun (`bun.lock*`)         | `bunx clerk@latest`     |
+| npm (`package-lock.json`) | `npx -y clerk@latest`   |
+| pnpm (`pnpm-lock.yaml`)   | `pnpm dlx clerk@latest` |
+| yarn >= 2 (`yarn.lock`)   | `yarn dlx clerk@latest` |
 
 Yarn Classic (v1) has no `dlx`; treat those projects as "no preferred runner" and fall back to the first runner from the list above that's on PATH.
 
-The published npm package is **`clerk`**, not `@clerk/cli`. Never teach `npm install -g clerk` as the primary path. The bundled skill is versioned alongside the binary, so a globally installed mismatched version will drift. If `clerk --version` disagrees with `1.5.0`, either upgrade the global install or fall back to the pinned-runner form above.
+The published npm package is **`clerk`**, not `@clerk/cli`. Never teach `npm install -g clerk` as the primary path. If the global CLI is stale or behaves differently from this skill, either upgrade the global install or fall back to the `latest` runner form above.
 
 ## Prerequisites (run at session start)
 
@@ -96,7 +99,7 @@ clerk doctor --json           # structured health check; exit 1 if anything fail
 
 Each result has `name`, `status` (`pass`/`warn`/`fail`), `message`, optional `detail`, optional `remedy` (how to fix it), and optional `fix` (label for auto-fixable issues). Parse that and act on it, or surface it to the user. If `Host execution` warns, rerun the command on the host before trusting any auth/link/env/API failures from the same sandboxed run. Rerun `clerk doctor --json` whenever a later command starts misbehaving.
 
-If `clerk --version` reports a newer CLI than this skill (which is pinned to `1.5.0`), run `clerk skill install` to refresh the bundled skill. The CLI binary is always the source of truth.
+If `clerk --version` reports a newer CLI than this skill covers, trust `clerk <command> --help` first and refresh this skill bundle from its source.
 
 ## The mental model
 
@@ -106,10 +109,11 @@ If `clerk --version` reports a newer CLI than this skill (which is pinned to `1.
 | **Instance config**             | Manage the configuration (social providers, session lifetimes, etc.) for a specific instance | `config pull`, `config schema`, `config patch`, `config put`   |
 | **Backend API (default)**       | Runtime data: users, orgs, sessions, invitations, JWT templates, webhooks                    | `clerk api <path>`                                             |
 | **Platform API (`--platform`)** | Account-level: applications, instances, billing                                              | `clerk api --platform <path>`                                  |
+| **Frontend API (`--fapi`)**     | The instance's public client-facing API (what clerk-js calls)                                | `clerk api --fapi <path>`                                      |
 
 A project is "linked" to an application via `clerk link`. Once linked, most commands auto-resolve the target app and dev instance from the repo's git remote. To target something else, pass `--app <id>` and/or `--instance dev|prod|<instance_id>`. See [references/auth.md](references/auth.md) for the full resolution order.
 
-## Discover endpoints — don't memorize them
+## Discover endpoints - don't memorize them
 
 The CLI ships with the Clerk OpenAPI catalog. Always discover endpoints dynamically instead of guessing paths:
 
@@ -152,7 +156,13 @@ clerk api /users --include
 
 # Platform API (account-level, not tenant data)
 clerk api /v1/platform/applications --platform
+
+# Frontend API (the instance's public client-facing API — what clerk-js calls.
+# Unauthenticated; --fapi and --platform cannot be combined, --secret-key is ignored)
+clerk api --fapi /environment
 ```
+
+In human mode, `clerk api` with no arguments opens an interactive request builder; in agent mode it prints usage guidance and exits `0` — always pass an endpoint (or `ls`) explicitly from scripts.
 
 For instance config, prefer the dedicated `clerk config ...` commands over raw Platform API `/config` paths. They handle dry-run, diffing, and confirmation more cleanly than the raw endpoint form.
 
@@ -160,7 +170,7 @@ For instance config, prefer the dedicated `clerk config ...` commands over raw P
 
 **JSON bodies must be valid JSON.** The CLI validates and rejects malformed payloads.
 
-**Endpoint paths may be given with or without `/v1/` prefix** — both work for Backend API calls. The CLI normalizes.
+**Endpoint paths may be given with or without `/v1/` prefix** - both work for Backend API calls. The CLI normalizes.
 
 See [references/recipes.md](references/recipes.md) for concrete patterns: listing/filtering users, creating orgs, impersonation sessions, etc.
 
@@ -182,7 +192,7 @@ jq '.data[] | {id, email_addresses}'      /tmp/users.json   # project to a few f
 jq '[.data[] | select(.banned)] | length' /tmp/users.json   # aggregate without reading rows
 ```
 
-**If `jq` is not available**, fall back to Python or Node — both can stream the file without printing it whole:
+**If `jq` is not available**, fall back to Python or Node - both can stream the file without printing it whole:
 
 ```sh
 python3 -c 'import json; d=json.load(open("/tmp/users.json")); print(len(d["data"]), d["hasMore"])'
@@ -196,9 +206,9 @@ node -e 'const d=require("/tmp/users.json"); console.log(d.data.length, d.hasMor
 | Command                       | Purpose                                                                                                                                                                                                                                                                                                             | Key flags                                                                                                                                                                        |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `clerk init`                  | Scaffold Clerk into a project. `--starter` only supports bootstrap for Next.js, React Router, Astro, Nuxt, TanStack Start, React, Vue, and JavaScript.                                                                                                                                                              | `--framework`, `--pm`, `--name` (with `--starter`), `--app`, `--starter`, `-y`, `--no-skills`                                                                                    |
-| `clerk auth login`            | OAuth browser login (stores token). Agent mode: no-op if already logged in. With no stored session it still opens a browser and binds a localhost callback, so it is not unattended; prefer `CLERK_PLATFORM_API_KEY` for headless flows. Aliases: `signup`, `signin`, `sign-in`. Top-level shortcut: `clerk login`. | —                                                                                                                                                                                |
-| `clerk auth logout`           | Clear stored credentials. Aliases: `signout`, `sign-out`. Top-level shortcut: `clerk logout`.                                                                                                                                                                                                                       | —                                                                                                                                                                                |
-| `clerk whoami`                | Print the logged-in email.                                                                                                                                                                                                                                                                                          | —                                                                                                                                                                                |
+| `clerk auth login`            | OAuth browser login (stores token). Agent mode: no-op if already logged in. With no stored session it still opens a browser and binds a localhost callback, so it is not unattended; prefer `CLERK_PLATFORM_API_KEY` for headless flows. Aliases: `signup`, `signin`, `sign-in`. Top-level shortcut: `clerk login`. | -                                                                                                                                                                                |
+| `clerk auth logout`           | Clear stored credentials. Aliases: `signout`, `sign-out`. Top-level shortcut: `clerk logout`.                                                                                                                                                                                                                       | -                                                                                                                                                                                |
+| `clerk whoami`                | Print the logged-in email.                                                                                                                                                                                                                                                                                          | -                                                                                                                                                                                |
 | `clerk link` / `clerk unlink` | Link this repo to a Clerk app, or remove the link. `unlink` requires `--yes` in agent mode.                                                                                                                                                                                                                         | (see `--help`)                                                                                                                                                                   |
 | `clerk env pull`              | Write publishable + secret keys to the framework's env file (merge, not clobber). Resolves `.env.development.local` → framework-preferred file → `.env.local`; override with `--file`.                                                                                                                              | (see `--help`)                                                                                                                                                                   |
 | `clerk config {pull,schema}`  | Fetch instance config JSON, or its JSON Schema.                                                                                                                                                                                                                                                                     | (see `--help`)                                                                                                                                                                   |
@@ -209,15 +219,22 @@ node -e 'const d=require("/tmp/users.json"); console.log(d.data.length, d.hasMor
 | `clerk users list`            | List users via curated BAPI flags. JSON output (default when piped or in agent mode) is `{data, hasMore}` so callers can paginate without `/users/count`. `--limit` defaults to 100 (max 250).                                                                                                                      | `--limit`, `--offset`, `--query`, `--email-address`, `--phone-number`, `--username`, `--user-id`, `--external-id`, `--order-by`, `--json`, `--app`, `--instance`, `--secret-key` |
 | `clerk users create`          | Create a user from curated flags or a raw BAPI body. Confirmation prompt unless `--yes`.                                                                                                                                                                                                                            | `--email`, `--phone`, `--username`, `--password`, `--first-name`, `--last-name`, `--external-id`, `-d, --data`, `--file`, `--dry-run`, `--yes`, `--json`                         |
 | `clerk users open [user-id]`  | Open a user's dashboard page. Agent mode requires `user-id` and prints a JSON descriptor instead of launching a browser.                                                                                                                                                                                            | (see `--help`)                                                                                                                                                                   |
+| `clerk impersonate [user]`    | Sign in as a user for debugging: creates a short-lived actor token and prints the sign-in URL. Alias: `clerk imp`. Requires `clerk auth login` (no `--secret-key`-only bypass) — every token is stamped `cli:<email>` for auditability. `[user]` accepts a `user_...` ID, exact email, or fuzzy search term. On production it bypasses the user's MFA and may count against the impersonation quota — confirm with the user first. | `--print`, `--open`, `--yes`, `--expires-in <seconds>` (default 3600), `--actor <context>`, `--app`, `--instance`                                                                |
+| `clerk impersonate revoke <actor-token-id>` | Revoke a pending actor token. The token `id` is printed only at creation (the Backend API has no actor-token list endpoint), so capture it then.                                                                                                                                                      | `--app`, `--instance`                                                                                                                                                            |
 | `clerk open [subpath]`        | Open the linked app's dashboard in a browser. Agent mode: prints a JSON descriptor instead of opening.                                                                                                                                                                                                              | (see `--help`)                                                                                                                                                                   |
 | `clerk deploy`                | Human-mode production deploy wizard. Agent mode: emits a read-only JSON handoff and tells the agent whether to ask the human to run the wizard, wait for provisioning, finish OAuth, or do nothing.                                                                                                                 | `--mode agent`, `--mode human`, `--verbose`                                                                                                                                      |
 | `clerk deploy status`         | Read-only deploy verification. Triggers a DNS check, reports aggregate domain and OAuth readiness, and exits `0` only when complete. Agent mode does one quick check by default; pass `--wait` to keep waiting.                                                                                                     | `--mode agent`, `--wait`, `--verbose`                                                                                                                                            |
+| `clerk webhooks listen`       | First-party local webhook tunnel (like `stripe listen`): opens a Svix relay inbox URL and forwards each delivery to your local handler. No auth, no linked project, no Clerk API. Full flow in [references/recipes.md](references/recipes.md#webhooks-local-testing).                                                 | `--forward-to <url>` (required), `--token <c_token>`, `-H, --header <k:v>` (repeatable), `--json` (NDJSON)                                                                       |
+| `clerk webhooks token`        | Mint a relay token (`c_` + 10 base62 chars) to pin a stable `listen` inbox URL across machines: `clerk webhooks listen --token "$(clerk webhooks token)" --forward-to ...`.                                                                                                                                          | `--json`                                                                                                                                                                         |
+| `clerk webhooks verify`       | Verify a webhook signature offline (pure local HMAC, no auth): from a saved `listen` event line (`--delivery @event.json`) or from the four raw values.                                                                                                                                                             | `--secret <whsec>` (required), `--delivery @file`, `--payload @file`, `--id`, `--timestamp`, `--signature`, `--json`                                                             |
+| `clerk enable orgs` / `clerk disable orgs` | Toggle Organizations on the instance. For org features, components, and API usage, see the `clerk-orgs` skill.                                                                                                                                                                                         | `--force-selection`, `--auto-create`, `--max-members <n>`, `--domains`, `--dry-run`, `--yes`, `--app`, `--instance`                                                              |
+| `clerk enable billing` / `clerk disable billing` | Toggle billing for users and/or orgs (defaults to both). For plans, pricing components, and entitlements, see the `clerk-billing` skill.                                                                                                                                                         | `--for <orgs\|users>`, `--dry-run`, `--yes`, `--no-skills` (enable only), `--app`, `--instance`                                                                                  |
 | `clerk doctor`                | Health check (CLI version, login, link, env, config, completion; plus host-execution probe in agent mode).                                                                                                                                                                                                          | `--json`, `--spotlight`, `--verbose`, `--fix`                                                                                                                                    |
 | `clerk api [path]`            | Authenticated HTTP to Backend/Platform API.                                                                                                                                                                                                                                                                         | `-X`, `-d`, `--file`, `--dry-run`, `--yes`, `--include`, `--app`, `--secret-key`, `--instance`, `--platform`                                                                     |
 | `clerk api ls [filter]`       | Discover endpoints from the bundled OpenAPI catalog.                                                                                                                                                                                                                                                                | (see `--help`)                                                                                                                                                                   |
-| `clerk completion [shell]`    | Print a shell completion script (`bash`, `zsh`, `fish`, `powershell`).                                                                                                                                                                                                                                              | —                                                                                                                                                                                |
+| `clerk completion [shell]`    | Print a shell completion script (`bash`, `zsh`, `fish`, `powershell`).                                                                                                                                                                                                                                              | -                                                                                                                                                                                |
 | `clerk update`                | Update the CLI to the latest version.                                                                                                                                                                                                                                                                               | `--channel`, `-y`, `--all`                                                                                                                                                       |
-| `clerk skill install`         | Reinstall the bundled `clerk-cli` skill. Run after upgrading the CLI so the skill matches the new binary.                                                                                                                                                                                                           | (see `--help`)                                                                                                                                                                   |
+| `clerk skill install`         | Reinstall the bundled `clerk-cli` skill from the CLI. In this standalone bundle, update the skill source directly instead.                                                                                                                                                                                          | (see `--help`)                                                                                                                                                                   |
 
 **`clerk <command> --help` is the source of truth for flags.** This table is a hint, not a spec. Before running an unfamiliar command or flag combination, run `clerk <command> --help` once per session. Every command also defines `setExamples([...])` in source, which `--help` renders as a copy-pasteable Examples block, so you rarely need to guess syntax.
 
@@ -232,11 +249,13 @@ The CLI auto-detects agent mode when stdout is not a TTY, or when `--mode agent`
 - **`init` never selects or creates a real Clerk app for you in agent mode unless authenticated or given a target.** Pass `--app <id>` (or pre-link the project) to authenticate and link a real app, or pass `--keyless` to use auto-generated temporary development keys when bootstrapping a new project on a keyless-capable framework. Without either, agent mode prints manual setup guidance and exits cleanly.
 - **`unlink` requires `--yes` in agent mode.** This preserves the same safety bar as other destructive commands while still letting an agent complete the unlink non-interactively.
 - **Mutations still require `--yes`** unless you accept per-call confirmation is impossible.
+- **`impersonate` requires the `[user]` positional in agent mode.** If a search term matches multiple users, it exits `2` listing candidate user IDs — retry with a specific `user_...` ID. Output is a JSON object (`{url, id, userId, actor, ...}`); surface `url` to the user and capture `id` — it is the only chance to record the revoke handle.
+- **`webhooks listen` is long-running.** Run it in the background. In agent mode (or with `--json`) it emits NDJSON: one `ready` line (`{type:"ready", relay_url, forward_to}`), then one `event` line per delivery — each event line can be fed back to `clerk webhooks verify --delivery`.
 - **`doctor --fix` is ignored.** Parse `doctor --json` output's `remedy` field and act on it yourself.
 - **`apps list` and `apps create` default to JSON** when piped.
-- **`users` defaults to JSON when piped, like `apps`.** `clerk users list` and `clerk users create` emit JSON in agent mode. Bare `clerk users` (no subcommand) is a usage error in agent mode — pass `list`, `create`, or `open` explicitly. `clerk users open` requires the `user-id` positional in agent mode and prints a JSON descriptor instead of launching a browser.
+- **`users` defaults to JSON when piped, like `apps`.** `clerk users list` and `clerk users create` emit JSON in agent mode. Bare `clerk users` (no subcommand) is a usage error in agent mode - pass `list`, `create`, or `open` explicitly. `clerk users open` requires the `user-id` positional in agent mode and prints a JSON descriptor instead of launching a browser.
 - **`deploy` has an agent handoff plus a verification gate.** In agent mode, bare `clerk deploy` is read-only and emits a JSON handoff. It never drives the interactive wizard. Do not tell Claude or another agent to run `! clerk deploy`, because the wizard needs interactive stdin prompts. Ask the human to run `clerk deploy` in a new terminal window when needed, then run `clerk deploy status --mode agent` to verify completion. See [references/agent-mode.md](references/agent-mode.md#deploy-handoff-and-verification).
-- **`--input-json <json|@file|->`** expands JSON into flags on any command (e.g. `clerk init --input-json '{"framework":"next","yes":true}'`). Piped stdin is also accepted: `echo '{"yes":true}' | clerk init`. Place `--input-json` after the leaf subcommand. Full rules in [references/agent-mode.md](references/agent-mode.md#passing-options-as-json---input-json).
+- **`--input-json <json|@file|->`** expands JSON into flags on any command (e.g. `clerk init --input-json '{"framework":"next","yes":true}'`). Stdin needs the explicit `-` marker (`echo '{"yes":true}' | clerk init --input-json -`); bare piped stdin is **not** auto-detected, so shell loops and self-reading commands (`cat body.json | clerk api …`) are untouched. Place `--input-json` after the leaf subcommand. Full rules in [references/agent-mode.md](references/agent-mode.md#passing-options-as-json---input-json).
 
 Full matrix and sandbox details in [references/agent-mode.md](references/agent-mode.md).
 
@@ -256,6 +275,6 @@ Full matrix and sandbox details in [references/agent-mode.md](references/agent-m
 
 ## References
 
-- [references/auth.md](references/auth.md) — auth flow, key resolution order, host-vs-sandbox behavior, `--app`/`--instance` targeting, Backend vs Platform API.
-- [references/recipes.md](references/recipes.md) — copy-pasteable recipes for common Clerk tasks.
-- [references/agent-mode.md](references/agent-mode.md) — agent-mode behavior matrix, sandbox warning semantics, exit codes, error format.
+- [references/auth.md](references/auth.md) - auth flow, key resolution order, host-vs-sandbox behavior, `--app`/`--instance` targeting, Backend vs Platform API.
+- [references/recipes.md](references/recipes.md) - copy-pasteable recipes for common Clerk tasks.
+- [references/agent-mode.md](references/agent-mode.md) - agent-mode behavior matrix, sandbox warning semantics, exit codes, error format.
