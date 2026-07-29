@@ -13,9 +13,9 @@ import (
 // ---------------------------------------------------------------------------
 
 // CreateRegistrationRequest is the request body for POST /api/events/:id/register.
+// Email always comes from the authenticated account; it is not accepted in the body.
 type CreateRegistrationRequest struct {
-	Name  *string `json:"name" validate:"omitempty,min=1,max=200"`
-	Email *string `json:"email" validate:"omitempty,email"`
+	Name *string `json:"name" validate:"omitempty,min=1,max=200"`
 }
 
 // CreateGuestRegistrationRequest is the request body for POST /api/events/:id/register/guest.

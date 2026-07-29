@@ -430,6 +430,9 @@ func (s *Server) ApproveRegistration(c echo.Context) error {
 		if errors.Is(err, service.ErrEventFull) {
 			return echo.NewHTTPError(http.StatusConflict, "event is full")
 		}
+		if errors.Is(err, service.ErrConflict) {
+			return echo.NewHTTPError(http.StatusConflict, "registration status conflict")
+		}
 		log.ErrorContext(ctx, "approve registration", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
@@ -458,11 +461,17 @@ func (s *Server) RejectRegistration(c echo.Context) error {
 		if errors.Is(err, service.ErrRegistrationNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "registration not found")
 		}
+		if errors.Is(err, service.ErrEventNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "event not found")
+		}
 		if errors.Is(err, service.ErrEventStaffForbidden) {
 			return echo.NewHTTPError(http.StatusForbidden, "registration rejection is not allowed for this event")
 		}
 		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
 			return echo.NewHTTPError(http.StatusConflict, "only pending registrations can be rejected")
+		}
+		if errors.Is(err, service.ErrConflict) {
+			return echo.NewHTTPError(http.StatusConflict, "registration status conflict")
 		}
 		log.ErrorContext(ctx, "reject registration", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
@@ -508,6 +517,9 @@ func (s *Server) UpdateRegistrationStatus(c echo.Context) error {
 		}
 		if errors.Is(err, service.ErrRegistrationInvalidStatus) {
 			return echo.NewHTTPError(http.StatusConflict, "registration status transition not allowed")
+		}
+		if errors.Is(err, service.ErrConflict) {
+			return echo.NewHTTPError(http.StatusConflict, "registration status conflict")
 		}
 		log.ErrorContext(ctx, "update registration status", "id", id, "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")

@@ -406,3 +406,48 @@ func TestConcurrentApprove_RejectedDoesNotOversell(t *testing.T) {
 		t.Fatalf("active registration count = %d, want %d (oversell on approve)", count, capacity)
 	}
 }
+
+func TestCancelThenReRegister_AllowedAfterPartialUnique(t *testing.T) {
+	fx := setupConcurrentRegistrationFixture(t, 5, false, 1)
+	ctx := context.Background()
+
+	var hasActivePartial bool
+	err := fx.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM pg_indexes
+			WHERE schemaname = current_schema()
+			  AND indexname = 'idx_registrations_event_email_active'
+		)
+	`).Scan(&hasActivePartial)
+	if err != nil {
+		t.Fatalf("check migration index: %v", err)
+	}
+	if !hasActivePartial {
+		t.Skip("apply migration 20260729120000_registration_active_partial_unique to run cancel+re-register test")
+	}
+
+	user := fx.users[0]
+	first, err := fx.svc.Create(ctx, &user, fx.event.ID, dto.CreateRegistrationRequest{})
+	if err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	if _, err := fx.svc.Cancel(ctx, first.ID, user.ID); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+
+	second, err := fx.svc.Create(ctx, &user, fx.event.ID, dto.CreateRegistrationRequest{})
+	if err != nil {
+		t.Fatalf("re-register after cancel: %v", err)
+	}
+	if second.ID == first.ID {
+		t.Fatal("expected a new registration row after cancel, got same id")
+	}
+	if second.Status != "approved" {
+		t.Fatalf("status = %q, want approved", second.Status)
+	}
+
+	// Active duplicate must still conflict.
+	if _, err := fx.svc.Create(ctx, &user, fx.event.ID, dto.CreateRegistrationRequest{}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("second active create error = %v, want ErrConflict", err)
+	}
+}

@@ -133,8 +133,11 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 
 			// Link any prior guest registrations (user_id IS NULL) that
 			// match the new user's email. Safe w.r.t. the partial unique
-			// index idx_registrations_user_event because UNIQUE(event_id,
-			// email) guarantees at most one row per event/email.
+			// index idx_registrations_user_event (active statuses only):
+			// LinkGuestRegistrations skips events where the user already
+			// has an active (pending/approved) row; cancelled/rejected
+			// user rows do not block linking. idx_registrations_event_email_active
+			// allows at most one active guest row per event/email.
 			linked, cancelled, err := linkGuestRegistrationsTx(ctx, qtx, created.ID, email)
 			if err != nil {
 				log.ErrorContext(ctx, "link guest registrations", "user_id", created.ID, "error", err)

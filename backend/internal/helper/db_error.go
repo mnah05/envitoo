@@ -29,10 +29,13 @@ func IsUniqueViolation(err error, constraint string) bool {
 }
 
 // IsRegistrationDuplicate returns true when err is a unique violation on
-// the registrations (event_id, email) or (event_id, user_id) constraints.
+// the active-registration partial unique indexes (event_id, email) or
+// (event_id, user_id). Also matches the pre-migration table constraint
+// name so unmigrated databases still map to ErrConflict.
 func IsRegistrationDuplicate(err error) bool {
-	return IsUniqueViolation(err, "registrations_event_id_email_key") ||
-		IsUniqueViolation(err, "idx_registrations_user_event")
+	return IsUniqueViolation(err, "idx_registrations_event_email_active") ||
+		IsUniqueViolation(err, "idx_registrations_user_event") ||
+		IsUniqueViolation(err, "registrations_event_id_email_key")
 }
 
 // IsForeignKeyViolation returns true when err is a Postgres foreign-key

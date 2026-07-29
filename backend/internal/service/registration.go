@@ -129,22 +129,8 @@ func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID
 	}
 
 	// Outbox insert is transactional — failure rolls back the entire operation.
-	templateData, err := json.Marshal(ticketConfirmData{
-		Name:        reg.Name,
-		EventTitle:  event.Title,
-		EventID:     eventID.String(),
-		AccessToken: reg.AccessToken.String(),
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    email,
-		Template:     EmailTemplateTicketConfirm,
-		TemplateData: templateData,
-		Topic:        EmailTopicTicketConfirm,
-	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	if err := enqueueRegistrationCreatedEmail(ctx, qtx, reg, event); err != nil {
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -238,8 +224,9 @@ func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) 
 // User
 // ---------------------------------------------------------------------------
 
-// Create registers an authenticated user for the given event. Name and
-// email fall back to the user's profile values when not provided in req.
+// Create registers an authenticated user for the given event. Name falls
+// back to the user's profile when not provided in req. Email always comes
+// from the authenticated account.
 func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID uuid.UUID, req dto.CreateRegistrationRequest) (reg db.Registration, err error) {
 	log := s.logger(ctx)
 	log.Info("registration_create_start", "event_id", eventID, "user_id", user.ID)
@@ -270,8 +257,7 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 	}
 
 	name := resolveName(user, req.Name)
-	// Always use the verified account email. Client overrides enable
-	// inbox bombing and can block the real owner via UNIQUE(event_id, email).
+	// Always use the verified account email (never accept a client override).
 	email := normalizeGuestEmail(user.Email)
 
 	params := db.CreateRegistrationUserParams{
@@ -290,28 +276,59 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 	}
 
 	// Outbox insert is transactional — failure rolls back the entire operation.
-	templateData, err := json.Marshal(ticketConfirmData{
-		Name:        reg.Name,
-		EventTitle:  event.Title,
-		EventID:     eventID.String(),
-		AccessToken: reg.AccessToken.String(),
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    email,
-		Template:     EmailTemplateTicketConfirm,
-		TemplateData: templateData,
-		Topic:        EmailTopicTicketConfirm,
-	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+	if err := enqueueRegistrationCreatedEmail(ctx, qtx, reg, event); err != nil {
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return db.Registration{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return reg, nil
+}
+
+// enqueueRegistrationCreatedEmail queues ticket_confirm only for approved
+// creates. Pending (requires_approval) uses ticket_status_change instead so
+// attendees are not told they are already registered.
+func enqueueRegistrationCreatedEmail(ctx context.Context, qtx *db.Queries, reg db.Registration, event db.Event) error {
+	template, topic := registrationCreatedEmailTemplate(reg.Status)
+	var templateData []byte
+	var err error
+	if template == EmailTemplateTicketStatusChange {
+		templateData, err = json.Marshal(ticketStatusChangeData{
+			Name:       reg.Name,
+			EventTitle: event.Title,
+			EventID:    reg.EventID.String(),
+			NewStatus:  reg.Status,
+		})
+	} else {
+		templateData, err = json.Marshal(ticketConfirmData{
+			Name:        reg.Name,
+			EventTitle:  event.Title,
+			EventID:     reg.EventID.String(),
+			AccessToken: reg.AccessToken.String(),
+		})
+	}
+	if err != nil {
+		return fmt.Errorf("marshal template data: %w", err)
+	}
+	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+		Recipient:    reg.Email,
+		Template:     template,
+		TemplateData: templateData,
+		Topic:        topic,
+	}); err != nil {
+		return fmt.Errorf("create email outbox: %w", err)
+	}
+	return nil
+}
+
+// registrationCreatedEmailTemplate selects the outbox template/topic for a
+// newly created registration. ticket_confirm is reserved for approved creates.
+func registrationCreatedEmailTemplate(status string) (template, topic string) {
+	if status == "pending" {
+		return EmailTemplateTicketStatusChange, EmailTopicTicketStatusChange
+	}
+	return EmailTemplateTicketConfirm, EmailTopicTicketConfirm
 }
 
 func (s *RegistrationService) lockEventForRegistration(ctx context.Context, qtx *db.Queries, eventID uuid.UUID) (db.Event, error) {

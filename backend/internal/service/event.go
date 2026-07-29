@@ -504,7 +504,17 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		return s.updateStaffFields(ctx, id, actorID, req)
 	}
 
-	current, err := s.queries.GetEventByID(ctx, id)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return db.Event{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := s.queries.WithTx(tx)
+
+	// Lock the event row before capacity checks / writes so concurrent
+	// registrations cannot race a capacity shrink past the active count.
+	current, err := qtx.GetEventByIDForUpdate(ctx, id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
@@ -544,7 +554,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		params.EndsAt = *req.EndsAt
 	}
 	if req.Capacity != nil {
-		count, countErr := s.queries.CountActiveRegistrationsByEvent(ctx, id)
+		count, countErr := qtx.CountActiveRegistrationsByEvent(ctx, id)
 		if countErr != nil {
 			return db.Event{}, fmt.Errorf("count registrations for capacity: %w", countErr)
 		}
@@ -628,7 +638,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		params.MeetingUrl = nil
 	}
 
-	event, err = s.queries.UpdateEvent(ctx, params)
+	event, err = qtx.UpdateEvent(ctx, params)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
@@ -637,7 +647,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 	}
 
 	if req.Visibility != nil {
-		if _, err := s.queries.UpsertEventVisibility(ctx, db.UpsertEventVisibilityParams{
+		if _, err := qtx.UpsertEventVisibility(ctx, db.UpsertEventVisibilityParams{
 			EventID:    id,
 			Visibility: *req.Visibility,
 		}); err != nil {
@@ -645,6 +655,9 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		}
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return db.Event{}, fmt.Errorf("commit tx: %w", err)
+	}
 	return event, nil
 }
 
@@ -783,6 +796,10 @@ func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uui
 	if err != nil {
 		return db.Event{}, fmt.Errorf("marshal template data: %w", err)
 	}
+
+	// Notify organizer plus every active registrant (pending/approved).
+	// Deduplicate by email so an organizer who is also registered gets one mail.
+	recipients := map[string]struct{}{organizer.Email: {}}
 	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
 		Recipient:    organizer.Email,
 		Template:     EmailTemplateEventCancellation,
@@ -790,6 +807,25 @@ func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uui
 		Topic:        EmailTopicEventCancellation,
 	}); err != nil {
 		return db.Event{}, fmt.Errorf("create email outbox: %w", err)
+	}
+
+	regs, err := qtx.ListActiveRegistrationsByEvent(ctx, id)
+	if err != nil {
+		return db.Event{}, fmt.Errorf("list active registrations for cancel: %w", err)
+	}
+	for _, reg := range regs {
+		if _, seen := recipients[reg.Email]; seen {
+			continue
+		}
+		recipients[reg.Email] = struct{}{}
+		if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
+			Recipient:    reg.Email,
+			Template:     EmailTemplateEventCancellation,
+			TemplateData: templateData,
+			Topic:        EmailTopicEventCancellation,
+		}); err != nil {
+			return db.Event{}, fmt.Errorf("create email outbox: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

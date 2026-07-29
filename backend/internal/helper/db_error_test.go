@@ -11,18 +11,41 @@ import (
 func TestIsUniqueViolation_pgxv5(t *testing.T) {
 	err := &pgconn.PgError{
 		Code:           pgerrcode.UniqueViolation,
-		ConstraintName: "registrations_event_id_email_key",
+		ConstraintName: "idx_registrations_event_email_active",
 	}
 	wrapped := fmt.Errorf("create registration: %w", err)
 
-	if !IsUniqueViolation(wrapped, "registrations_event_id_email_key") {
+	if !IsUniqueViolation(wrapped, "idx_registrations_event_email_active") {
 		t.Fatal("expected unique violation match for pgx/v5/pgconn.PgError")
 	}
 	if !IsRegistrationDuplicate(wrapped) {
-		t.Fatal("expected IsRegistrationDuplicate for registrations_event_id_email_key")
+		t.Fatal("expected IsRegistrationDuplicate for idx_registrations_event_email_active")
 	}
 	if IsUniqueViolation(wrapped, "other_constraint") {
 		t.Fatal("did not expect match for different constraint")
+	}
+}
+
+func TestIsRegistrationDuplicate_constraintNames(t *testing.T) {
+	names := []string{
+		"idx_registrations_event_email_active",
+		"idx_registrations_user_event",
+		"registrations_event_id_email_key", // pre-migration
+	}
+	for _, name := range names {
+		err := fmt.Errorf("create: %w", &pgconn.PgError{
+			Code:           pgerrcode.UniqueViolation,
+			ConstraintName: name,
+		})
+		if !IsRegistrationDuplicate(err) {
+			t.Fatalf("IsRegistrationDuplicate(%q) = false, want true", name)
+		}
+	}
+	if IsRegistrationDuplicate(fmt.Errorf("create: %w", &pgconn.PgError{
+		Code:           pgerrcode.UniqueViolation,
+		ConstraintName: "other_constraint",
+	})) {
+		t.Fatal("did not expect match for unrelated constraint")
 	}
 }
 

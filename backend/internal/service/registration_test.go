@@ -58,3 +58,24 @@ func TestRegistrationStatusTransitionAllowed(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistrationCreatedEmailTemplate(t *testing.T) {
+	tests := []struct {
+		status       string
+		wantTemplate string
+		wantTopic    string
+	}{
+		{"pending", EmailTemplateTicketStatusChange, EmailTopicTicketStatusChange},
+		{"approved", EmailTemplateTicketConfirm, EmailTopicTicketConfirm},
+		{"rejected", EmailTemplateTicketConfirm, EmailTopicTicketConfirm}, // non-pending create path uses confirm
+	}
+	for _, tt := range tests {
+		t.Run(tt.status, func(t *testing.T) {
+			gotTemplate, gotTopic := registrationCreatedEmailTemplate(tt.status)
+			if gotTemplate != tt.wantTemplate || gotTopic != tt.wantTopic {
+				t.Fatalf("registrationCreatedEmailTemplate(%q) = (%q, %q), want (%q, %q)",
+					tt.status, gotTemplate, gotTopic, tt.wantTemplate, tt.wantTopic)
+			}
+		})
+	}
+}

@@ -352,7 +352,7 @@ Cancels a guest registration by access token. Only affects rows where `user_id I
 
 ## POST /api/events/:id/register
 
-Registers the authenticated user for an event. Transaction + row lock. Checks capacity. Status is `approved` (or `pending` if `requires_approval`). Name falls back to username, then email local-part. Email falls back to profile email. On access token collision, regenerates and retries.
+Registers the authenticated user for an event. Transaction + row lock. Checks capacity. Status is `approved` (or `pending` if `requires_approval`). Name falls back to username, then email local-part. Email always comes from the authenticated account profile (not overridable in the body). On access token collision, regenerates and retries.
 
 | | |
 |---|---|
@@ -366,8 +366,7 @@ Registers the authenticated user for an event. Transaction + row lock. Checks ca
 
 ```json
 {
-  "name": "string|null (1-200)",
-  "email": "string|null (email format)"
+  "name": "string|null (1-200)"
 }
 ```
 

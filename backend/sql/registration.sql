@@ -4,6 +4,13 @@ FROM registrations
 WHERE event_id = $1
   AND status NOT IN ('cancelled', 'rejected');
 
+-- name: ListActiveRegistrationsByEvent :many
+SELECT *
+FROM registrations
+WHERE event_id = $1
+  AND status NOT IN ('cancelled', 'rejected')
+ORDER BY created_at ASC;
+
 -- name: LinkGuestRegistrations :execrows
 UPDATE registrations g
    SET user_id = $2, updated_at = now()
@@ -13,6 +20,7 @@ UPDATE registrations g
      SELECT 1 FROM registrations u
      WHERE u.event_id = g.event_id
        AND u.user_id = $2
+       AND u.status IN ('pending', 'approved')
    );
 
 -- name: CancelSupersededGuestRegistrations :execrows
@@ -25,6 +33,7 @@ UPDATE registrations g
      SELECT 1 FROM registrations u
      WHERE u.event_id = g.event_id
        AND u.user_id = $2
+       AND u.status IN ('pending', 'approved')
    );
 
 -- Route 1: POST /api/events/:id/register/guest

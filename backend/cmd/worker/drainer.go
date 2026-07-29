@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -20,6 +21,34 @@ import (
 	"github.com/mnah05/envitoo/internal/email"
 	"github.com/mnah05/envitoo/internal/logging"
 )
+
+// errAckTimeout is returned when an async publish ack does not arrive before
+// the wait deadline. Kept as a sentinel so callers can compare / use Error().
+var errAckTimeout = errors.New("ack timeout")
+
+// resolvePubAck waits for a JetStream PubAckFuture result.
+//
+// A plain select on Ok/Err/ctx.Done is unsafe: when the deadline fires, Ok
+// (or Err) may already be ready too, and Go picks among ready cases at random.
+// That can mark a successful publish as timed out. After Done fires we do a
+// non-blocking nested select that prefers Ok/Err when either is ready.
+func resolvePubAck(ctx context.Context, ok <-chan *jetstream.PubAck, errCh <-chan error) error {
+	select {
+	case <-ok:
+		return nil
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		select {
+		case <-ok:
+			return nil
+		case err := <-errCh:
+			return err
+		default:
+			return errAckTimeout
+		}
+	}
+}
 
 func main() {
 	log := logging.New("worker")
@@ -164,19 +193,16 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	defer cancel()
 
 	for _, p := range futures {
-		select {
-		case <-p.future.Ok():
-			succeeded = append(succeeded, p.row.ID)
-			log.Info("outbox_publish_ok",
-				"outbox_id", p.row.ID,
-				"template", p.row.Template,
-				"topic", p.topic,
-			)
-		case err := <-p.future.Err():
+		if err := resolvePubAck(ctxAck, p.future.Ok(), p.future.Err()); err != nil {
 			failed = append(failed, failure{id: p.row.ID, retries: p.row.Retries, err: err.Error(), topic: p.topic})
-		case <-ctxAck.Done():
-			failed = append(failed, failure{id: p.row.ID, retries: p.row.Retries, err: "ack timeout", topic: p.topic})
+			continue
 		}
+		succeeded = append(succeeded, p.row.ID)
+		log.Info("outbox_publish_ok",
+			"outbox_id", p.row.ID,
+			"template", p.row.Template,
+			"topic", p.topic,
+		)
 	}
 
 	// 4. Mark successes as PUBLISHED, in one query.
