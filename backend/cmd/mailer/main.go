@@ -28,7 +28,7 @@ func main() {
 	defer stop()
 
 	_ = godotenv.Load()
-	_ = godotenv.Load(".env.local")
+	_ = godotenv.Overload(".env.local")
 
 	cfg, err := config.LoadMailer()
 	if err != nil {

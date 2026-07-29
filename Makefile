@@ -1,6 +1,7 @@
 .PHONY: help dev stop backend frontend install install-backend install-frontend \
         build build-frontend build-backend clean test check check-backend \
-        check-frontend ci logs worker mailer
+        check-frontend ci logs worker mailer \
+        dc-up dc-stop dc-down dc-logs dc-ps dc-full
 
 # Configurable paths and commands
 GO        ?= go
@@ -31,7 +32,7 @@ stop: ## Stop dev servers bound to the default frontend/backend ports
 		fi; \
 	done
 
-dev: stop ## Run backend and frontend together (Ctrl-C stops both)
+dev: stop dc-up ## Run infra (docker) + backend + frontend (Ctrl-C stops both)
 	@trap 'kill 0' EXIT; \
 	echo "Starting backend and frontend… (Ctrl-C to stop)"; \
 	$(MAKE) -s backend & \
@@ -77,6 +78,25 @@ build-backend: ## Build the Go backend binary
 
 build-frontend: ## Build the frontend for production
 	@cd $(FRONTEND) && $(NPM) run build
+
+## Docker Compose
+dc-up: ## Start infrastructure services (postgres, redis, nats) in background
+	docker compose up -d --wait
+
+dc-stop: ## Stop infrastructure services
+	docker compose stop
+
+dc-down: ## Stop and remove containers, networks, volumes
+	docker compose down
+
+dc-logs: ## Tail logs from infrastructure services
+	docker compose logs -f
+
+dc-ps: ## List running infrastructure services
+	docker compose ps
+
+dc-full: ## Build and run the full stack (infra + backend service) in docker
+	docker compose --profile full up --build -d
 
 ## Misc
 test: ## Run backend tests

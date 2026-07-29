@@ -9,9 +9,7 @@ EnviToo is an event management platform with a **Go API** (`backend/`, port 8080
 These are **not** in the startup update script:
 
 - **Go 1.26+** at `/usr/local/go` (the repo's `go.mod` requires 1.26.4; system `/usr/bin/go` may be older)
-- **PostgreSQL** and **Redis** via `apt` (`postgresql`, `redis-server`)
-- Create a local DB user/database, e.g. `envitoo` / `envitoo` on `localhost:5432`
-- Apply SQL migrations manually: run every file in `backend/supabase/migrations/` in filename order with `psql` (there is no `docker-compose`; Supabase CLI is optional and expects Docker)
+- **Docker** with Compose v2 plugin
 
 ### Environment files (required to run the app)
 
@@ -19,7 +17,8 @@ Copy templates and fill in secrets (never commit `.env` files):
 
 | File | Required vars |
 |------|----------------|
-| `backend/.env` | `DB_URL`, `CLERK_SECRET_KEY`; optional `REDIS_URL`, `OTP_SECRET` |
+| `backend/.env` | `DB_URL` (remote Supabase for prod), `CLERK_SECRET_KEY`; optional `REDIS_URL`, `OTP_SECRET` |
+| `backend/.env.local` | Overrides `DB_URL`, `REDIS_URL`, `NATS_URL` to point at local docker services (provided; gitignored) |
 | `client/.env` | `VITE_CLERK_PUBLISHABLE_KEY` |
 
 Clerk keys come from the Clerk dashboard or `npx clerk@1.5.0 env pull` after `clerk auth login` + `clerk link`. **Valid Clerk keys are required** for the frontend to load public event data (the API client uses `useAuth()` from Clerk even for unauthenticated routes).
@@ -28,10 +27,14 @@ Clerk keys come from the Clerk dashboard or `npx clerk@1.5.0 env pull` after `cl
 
 ```bash
 export PATH="/usr/local/go/bin:$PATH"
-sudo service postgresql start
-sudo service redis-server start
-make dev   # backend :8080 + frontend :5173
+make dev   # docker infra (postgres+redis+nats) + local backend:8080 + frontend:5173
 ```
+
+- `make dc-up` — infra only (postgres, redis, nats via docker-compose)
+- `make dc-full` — full stack in docker (infra + backend container)
+- `make dc-down` — stop all docker services
+
+Migrations run automatically on first `dc-up` (mounted as init scripts). To re-run: `docker compose down -v && make dc-up`.
 
 Optional email pipeline: `make worker` and `make mailer` (need NATS + Resend).
 

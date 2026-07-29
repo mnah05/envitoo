@@ -26,7 +26,7 @@ func main() {
 	slog.SetDefault(log)
 
 	_ = godotenv.Load()
-	_ = godotenv.Load(".env.local")
+	_ = godotenv.Overload(".env.local")
 
 	cfg, err := config.Load()
 	if err != nil {
