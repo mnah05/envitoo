@@ -2,6 +2,8 @@ import { Link, useParams } from "react-router-dom";
 import { useCallback } from "react";
 import { useEffect, useState } from "react";
 import { ArrowLeft, CalendarDays, Check, CheckCircle2, Copy, Globe, HeartHandshake, MapPin, Pencil, ScanLine, Users, X } from "lucide-react";
+import { useReducedMotion } from "framer-motion";
+import { CircleCheckIcon, UsersIcon } from "lucide-animated";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -119,13 +121,15 @@ export function EventDashboard() {
     }
   }, [eventUrl]);
 
+  const reduceMotion = useReducedMotion();
+
   if (eventLoading && !event) {
     return <EventDashboardSkeleton />;
   }
 
   if (!event || (!isOrganizer && !isVolunteerAdmin)) {
     return (
-      <div className="pt-16">
+      <div className="pt-14">
         <PageContainer className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center">
           <h1 className="display-title text-2xl">Event not found</h1>
           <p className="text-lede text-[1.0625rem]">You may not have access to this event.</p>
@@ -147,7 +151,7 @@ export function EventDashboard() {
     statusMut.isPending || approveMut.isPending || rejectMut.isPending;
 
   return (
-    <div className="pt-16">
+    <div className="pt-14">
       <PageContainer width="wide" className="py-10">
         <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
           <Link to="/manage">
@@ -214,11 +218,11 @@ export function EventDashboard() {
             </TabsList>
 
             <TabsContent value="registrations">
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Stat icon={<Users className="size-5" />} label="Capacity" value={event.capacity} />
-                <Stat icon={<CheckCircle2 className="size-5" />} label="Approved" value={approved} />
-                <Stat icon={<Users className="size-5" />} label="Pending" value={pending} />
-                <Stat icon={<CheckCircle2 className="size-5" />} label="Checked in" value={checkedIn} />
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Stat icon={<UsersIcon size={20} animateOnHover={!reduceMotion} className="text-muted-foreground" />} label="Capacity" value={event.capacity} />
+                <Stat icon={<CircleCheckIcon size={20} animateOnHover={!reduceMotion} className="text-muted-foreground" />} label="Approved" value={approved} />
+                <Stat icon={<UsersIcon size={20} animateOnHover={!reduceMotion} className="text-muted-foreground" />} label="Pending" value={pending} />
+                <Stat icon={<CircleCheckIcon size={20} animateOnHover={!reduceMotion} className="text-muted-foreground" />} label="Checked in" value={checkedIn} />
               </div>
               {event.status !== "cancelled" && (
                 <p className="mt-3 text-sm text-muted-foreground">{seatsLeft} seats remaining.</p>
@@ -264,9 +268,9 @@ export function EventDashboard() {
                     ))}
                   </div>
                 ) : regTotal === 0 ? (
-                  <Empty className="mt-6 min-h-[30vh] border">
+                  <Empty className="mt-6 min-h-[30vh] rounded-xl border border-border">
                     <EmptyMedia variant="icon">
-                      <Users className="size-6" />
+                      <UsersIcon size={24} animateOnHover={!reduceMotion} />
                     </EmptyMedia>
                     <EmptyTitle>No registrations yet</EmptyTitle>
                     <EmptyDescription>
@@ -386,7 +390,7 @@ function Stat({
   value: number;
 }) {
   return (
-    <div className="rounded-xl border border-self-strong bg-card p-5">
+    <div className="rounded-lg border border-border bg-card p-5">
       <div className="flex items-center gap-2 text-muted-foreground">
         {icon}
         <span className="text-sm font-medium tracking-[-0.01em]">{label}</span>
@@ -586,7 +590,7 @@ function RegistrationCard({
 
 function EventDashboardSkeleton() {
   return (
-    <div className="pt-16">
+    <div className="pt-14">
       <PageContainer width="wide" className="py-10">
         <Skeleton className="mb-4 h-8 w-24" />
         <div className="flex flex-wrap items-start justify-between gap-4">

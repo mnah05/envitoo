@@ -50,7 +50,7 @@ export function GuestTicket() {
 
   if (!token) {
     return (
-      <div className="pt-16">
+      <div className="pt-14">
         <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <Ticket className="size-10 text-muted-foreground" />
           <h1 className="display-title text-2xl">No ticket provided</h1>
@@ -108,7 +108,7 @@ export function GuestTicket() {
 
   if (error instanceof ApiError && error.status === 404) {
     return (
-      <div className="pt-16">
+      <div className="pt-14">
         <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <h1 className="display-title text-2xl">Ticket not found</h1>
           <p className="text-lede max-w-sm text-[1.0625rem]">

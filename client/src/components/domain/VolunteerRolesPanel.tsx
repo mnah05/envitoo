@@ -65,7 +65,7 @@ export function VolunteerRolesPanel({ eventId }: { eventId: string }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex items-center gap-2">
         <Shield className="size-5 text-muted-foreground" />
         <h3 className="display-headline text-[1.0625rem]">Roles</h3>
@@ -82,7 +82,7 @@ export function VolunteerRolesPanel({ eventId }: { eventId: string }) {
             ))}
           </div>
         ) : !roles || roles.length === 0 ? (
-          <Empty className="border">
+          <Empty className="rounded-lg border border-border">
             <EmptyMedia variant="icon">
               <Shield className="size-6" />
             </EmptyMedia>

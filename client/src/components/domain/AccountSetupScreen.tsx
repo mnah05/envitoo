@@ -29,9 +29,8 @@ export function AccountSetupScreen() {
 
   if (isError) {
     return (
-      <div className="relative flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-16">
-        <div className="pointer-events-none absolute inset-0 bg-light-teal opacity-70" aria-hidden />
-        <div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center">
+      <div className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-16">
+        <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-8 text-center">
           <h1 className="display-title text-xl">Setup interrupted</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             We couldn&apos;t finish setting up your account. Please try again.
@@ -48,14 +47,12 @@ export function AccountSetupScreen() {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-16">
-      <div className="pointer-events-none absolute inset-0 bg-light-teal" aria-hidden />
-
+    <div className="relative flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-16">
       <motion.div
         initial={reducedMotion ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: reducedMotion ? 0 : 0.4, ease: "easeOut" }}
-        className="relative w-full max-w-md rounded-2xl border border-border bg-card p-8"
+        className="relative w-full max-w-md rounded-xl border border-border bg-card p-8"
       >
         <div className="flex flex-col items-center text-center">
           <div className="relative flex size-16 items-center justify-center">

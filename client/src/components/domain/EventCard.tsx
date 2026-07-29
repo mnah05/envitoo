@@ -9,7 +9,7 @@ export function EventCard({ event, index = 0 }: { event: Event; index?: number }
   return (
     <Link
       to={href}
-      className="group flex flex-col overflow-hidden rounded-xl border border-self-strong bg-card transition-colors hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       style={{ animationDelay: `${index * 40}ms` }}
     >
       <EventCover event={event} rounded="rounded-none" />
@@ -77,12 +77,12 @@ export function EventCover({
 }
 
 const GRADIENTS = [
-  "bg-gradient-to-br from-teal-500 via-teal-800 to-zinc-950",
-  "bg-gradient-to-br from-cyan-500 via-sky-900 to-zinc-950",
-  "bg-gradient-to-br from-rose-500 via-rose-900 to-zinc-950",
-  "bg-gradient-to-br from-emerald-500 via-emerald-900 to-zinc-950",
-  "bg-gradient-to-br from-amber-500 via-orange-800 to-zinc-950",
-  "bg-gradient-to-br from-sky-500 via-blue-900 to-zinc-950",
+  "bg-gradient-to-br from-zinc-500 via-zinc-800 to-zinc-950",
+  "bg-gradient-to-br from-neutral-500 via-neutral-800 to-black",
+  "bg-gradient-to-br from-stone-500 via-stone-800 to-zinc-950",
+  "bg-gradient-to-br from-slate-500 via-slate-800 to-zinc-950",
+  "bg-gradient-to-br from-zinc-400 via-zinc-700 to-zinc-950",
+  "bg-gradient-to-br from-neutral-400 via-zinc-800 to-black",
 ];
 
 function gradientFor(id: string): string {

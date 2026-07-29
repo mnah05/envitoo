@@ -56,7 +56,7 @@ export function VolunteerApplicationsPanel({
   }
 
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ClipboardList className="size-5 text-muted-foreground" />
@@ -71,7 +71,7 @@ export function VolunteerApplicationsPanel({
 
       <div className="mt-4">
         {apps.length === 0 ? (
-          <Empty className="border">
+          <Empty className="rounded-lg border border-border">
             <EmptyMedia variant="icon">
               <ClipboardList className="size-6" />
             </EmptyMedia>

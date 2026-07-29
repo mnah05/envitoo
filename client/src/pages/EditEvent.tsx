@@ -182,7 +182,7 @@ export function EditEvent() {
 
   if (eventLoading && !event) {
     return (
-      <div className="pt-16">
+      <div className="pt-14">
         <PageContainer width="narrow" className="py-10">
           <Skeleton className="mb-4 h-8 w-24" />
           <Skeleton className="h-9 w-48" />
@@ -199,7 +199,7 @@ export function EditEvent() {
 
   if (!event || !form) {
     return (
-      <div className="pt-16">
+      <div className="pt-14">
         <PageContainer className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center">
           <h1 className="display-title text-2xl">Event not found</h1>
           <p className="text-lede text-[1.0625rem]">You may not have access to this event.</p>
@@ -214,7 +214,7 @@ export function EditEvent() {
   const isFree = event.price_in_paise === 0;
 
   return (
-    <div className="relative min-h-screen pt-16">
+    <div className="relative min-h-screen pt-14">
       <PageContainer width="narrow" className="py-10 sm:py-14">
         <Button
           asChild

@@ -15,12 +15,12 @@ export function BottomNav() {
   return (
     <nav
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-background/90 backdrop-blur-xl sm:hidden",
+        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-md sm:hidden",
         "pb-[env(safe-area-inset-bottom)]",
       )}
       aria-label="Primary"
     >
-      <div className="mx-auto flex h-16 max-w-md items-stretch justify-around">
+      <div className="mx-auto flex h-14 max-w-md items-stretch justify-around">
         <NavItem to="/discover" label="Discover" icon={<Compass className="size-5" />} />
 
         <NavLink
@@ -31,8 +31,8 @@ export function BottomNav() {
           {({ isActive }) => (
             <span
               className={cn(
-                "grid size-11 -translate-y-2 place-items-center rounded-full bg-primary text-primary-foreground transition-colors active:bg-primary/90",
-                isActive && "border-2 border-primary/30",
+                "grid size-10 -translate-y-1.5 place-items-center rounded-full bg-primary text-primary-foreground transition-colors active:bg-primary/90",
+                isActive && "ring-2 ring-primary/25 ring-offset-2 ring-offset-background",
               )}
             >
               <Plus className="size-5" />
@@ -77,13 +77,13 @@ function NavItem({
     >
       {({ isActive }) => (
         <>
-          <span className={cn("transition-colors", isActive && "text-primary")}>
+          <span className={cn("transition-colors", isActive && "text-foreground")}>
             {icon}
           </span>
           <span
             className={cn(
               "text-[11px] font-medium",
-              isActive ? "text-primary" : "text-muted-foreground",
+              isActive ? "text-foreground" : "text-muted-foreground",
             )}
           >
             {label}

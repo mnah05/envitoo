@@ -2,12 +2,12 @@ import { cn } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/api";
 
 const CATEGORY_STYLES: Record<string, string> = {
-  technical: "text-sky-400",
-  cultural: "text-rose-400",
-  sports: "text-emerald-400",
-  workshop: "text-amber-400",
-  seminar: "text-teal-400",
-  hackathon: "text-orange-400",
+  technical: "text-sky-500 dark:text-sky-400",
+  cultural: "text-zinc-600 dark:text-zinc-300",
+  sports: "text-emerald-600 dark:text-emerald-400",
+  workshop: "text-amber-600 dark:text-amber-400",
+  seminar: "text-blue-600 dark:text-blue-400",
+  hackathon: "text-orange-600 dark:text-orange-400",
   other: "text-muted-foreground",
 };
 

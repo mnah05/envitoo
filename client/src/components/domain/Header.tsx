@@ -16,7 +16,7 @@ function BrandMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground text-xs font-bold tracking-tight",
+        "grid size-6 place-items-center rounded-md bg-primary text-[11px] font-semibold tracking-tight text-primary-foreground",
         className,
       )}
     >
@@ -29,8 +29,8 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/50 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:h-14 sm:px-6">
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -42,12 +42,9 @@ export function Header() {
             <Menu className="size-5" />
           </Button>
 
-          <Link
-            to="/"
-            className="flex items-center gap-2.5 text-foreground"
-          >
+          <Link to="/" className="flex items-center gap-2 text-foreground">
             <BrandMark />
-            <span className="font-display text-[15px] font-semibold tracking-[-0.02em] sm:text-[16px]">
+            <span className="font-display text-[15px] font-semibold tracking-[-0.03em]">
               EnviToo
             </span>
           </Link>
@@ -92,7 +89,9 @@ export function Header() {
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="bottom" className="sm:hidden">
           <SheetHeader>
-            <SheetTitle className="text-left">Browse EnviToo</SheetTitle>
+            <SheetTitle className="text-left font-display tracking-[-0.02em]">
+              Browse EnviToo
+            </SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-1 px-2 pb-4">
             <MobileLink
@@ -147,8 +146,8 @@ function HeaderLink({ to, children }: { to: string; children: React.ReactNode })
       to={to}
       className={({ isActive }) =>
         cn(
-          "text-ui rounded-md px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground",
-          isActive && "bg-primary/15 text-primary",
+          "text-ui rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+          isActive && "bg-muted text-foreground",
         )
       }
     >
@@ -174,10 +173,10 @@ function MobileLink({
       onClick={onClick}
       className={({ isActive }) =>
         cn(
-          "flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-base font-medium transition-colors",
+          "flex min-h-[48px] items-center gap-3 rounded-lg px-3 text-base font-medium transition-colors",
           isActive
-            ? "bg-primary/15 text-primary"
-            : "text-foreground hover:bg-muted/60",
+            ? "bg-muted text-foreground"
+            : "text-foreground hover:bg-muted/70",
         )
       }
     >

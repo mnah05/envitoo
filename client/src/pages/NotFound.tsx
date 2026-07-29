@@ -4,9 +4,9 @@ import { PageContainer } from "@/components/domain/Layout";
 
 export function NotFound() {
   return (
-    <div className="pt-16">
+    <div className="pt-14">
       <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
-        <div className="flex items-baseline gap-1 font-serif text-[clamp(4rem,12vw,8rem)] font-semibold leading-none tracking-tight">
+        <div className="flex items-baseline gap-1 font-display text-[clamp(4rem,12vw,8rem)] font-semibold leading-none tracking-[-0.04em]">
           <span className="text-primary">4</span>
           <span className="text-muted-foreground/30">0</span>
           <span className="text-primary">4</span>

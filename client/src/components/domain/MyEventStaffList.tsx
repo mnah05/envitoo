@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
-import { CalendarDays, Settings2, ShieldCheck } from "lucide-react";
+import { CalendarDays, Settings2 } from "lucide-react";
+import { useReducedMotion } from "framer-motion";
+import { HeartHandshakeIcon } from "lucide-animated";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -17,16 +19,17 @@ import { formatEventDate } from "@/lib/format";
 export function MyEventStaffList() {
   const { data, isLoading } = useMyEventStaff({ limit: 50 });
   const events = data?.events ?? [];
+  const reduceMotion = useReducedMotion();
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {isLoading ? (
         Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
+            className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
           >
-            <Skeleton className="size-20 shrink-0 rounded-xl sm:size-24" />
+            <Skeleton className="size-20 shrink-0 rounded-lg sm:size-24" />
             <div className="flex flex-1 flex-col gap-2">
               <Skeleton className="h-5 w-2/3" />
               <div className="flex gap-4">
@@ -38,13 +41,13 @@ export function MyEventStaffList() {
           </div>
         ))
       ) : events.length === 0 ? (
-        <Empty className="min-h-[40vh] border">
+        <Empty className="min-h-[40vh] rounded-xl border border-border">
           <EmptyMedia variant="icon">
-            <ShieldCheck className="size-6" />
+            <HeartHandshakeIcon size={24} animateOnHover={!reduceMotion} />
           </EmptyMedia>
-          <EmptyTitle>You're not a volunteer admin for any events</EmptyTitle>
+          <EmptyTitle>You&apos;re not a volunteer admin for any events</EmptyTitle>
           <EmptyDescription>
-            Browse events and apply to volunteer. If approved as an admin, you'll help manage them here.
+            Browse events and apply to volunteer. If approved as an admin, you&apos;ll help manage them here.
           </EmptyDescription>
           <Button asChild>
             <Link to="/discover">Discover events</Link>
@@ -54,7 +57,7 @@ export function MyEventStaffList() {
         events.map((item) => (
           <div
             key={item.event_id}
-            className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
+            className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
           >
             <EventCover
               event={{

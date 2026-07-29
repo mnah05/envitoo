@@ -8,8 +8,8 @@ export type TicketPdfInput = {
   token: string;
 };
 
-const ACCENT = "#14b8a6";
-const INK = "#09090b";
+const ACCENT = "#18181b";
+const INK = "#18181b";
 const MUTE = "#71717a";
 const LINE = "#e4e4e7";
 

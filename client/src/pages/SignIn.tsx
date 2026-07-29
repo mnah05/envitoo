@@ -7,7 +7,7 @@ export function SignInPage() {
     (location.state as { from?: string } | null)?.from ?? "/home";
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-16">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-16">
       <SignIn
         routing="path"
         path="/signin"

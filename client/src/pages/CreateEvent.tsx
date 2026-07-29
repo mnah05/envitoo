@@ -183,7 +183,7 @@ export function CreateEvent() {
   }
 
   return (
-    <div className="relative min-h-screen pt-16">
+    <div className="relative min-h-screen pt-14">
       <PageContainer width="narrow" className="py-10 sm:py-14">
         <Button
           type="button"

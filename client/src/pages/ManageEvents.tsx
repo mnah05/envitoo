@@ -1,6 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { CalendarDays, Globe, MapPin, Plus, Settings2, TriangleAlert } from "lucide-react";
+import { useReducedMotion } from "framer-motion";
+import { PlusIcon } from "lucide-animated";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -34,18 +36,19 @@ export function ManageEvents() {
   const events = data?.events ?? [];
   const cancelMut = useCancelEvent();
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     document.title = "My events — EnviToo";
   }, []);
 
   return (
-    <div className="pt-16">
+    <div className="pt-14">
       <PageContainer className="py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="display-title text-3xl sm:text-4xl">My events</h1>
-            <p className="text-lede mt-3 text-[1.0625rem]">Events you're hosting.</p>
+            <p className="text-lede mt-3">Events you&apos;re hosting.</p>
           </div>
           <Button asChild>
             <Link to="/create">
@@ -66,14 +69,14 @@ export function ManageEvents() {
           </label>
         </div>
 
-        <div className="mt-8 flex flex-col gap-4">
+        <div className="mt-8 flex flex-col gap-3">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
+                className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
               >
-                <Skeleton className="size-20 shrink-0 rounded-xl sm:size-24" />
+                <Skeleton className="size-20 shrink-0 rounded-lg sm:size-24" />
                 <div className="flex flex-1 flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-5 w-20 rounded-full" />
@@ -92,9 +95,9 @@ export function ManageEvents() {
               </div>
             ))
           ) : events.length === 0 ? (
-            <Empty className="min-h-[40vh] border">
+            <Empty className="min-h-[40vh] rounded-xl border border-border">
               <EmptyMedia variant="icon">
-                <Plus className="size-6" />
+                <PlusIcon size={24} animateOnHover={!reduceMotion} />
               </EmptyMedia>
               <EmptyTitle>No events yet</EmptyTitle>
               <EmptyDescription>Create your first event to start hosting.</EmptyDescription>
@@ -106,7 +109,7 @@ export function ManageEvents() {
             events.map((event) => (
           <div
             key={event.id}
-            className="flex flex-col gap-4 rounded-2xl border border-self-strong bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
+            className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:gap-5"
           >
                 <EventCover
                   event={event}

@@ -3,10 +3,9 @@
 @import "leaflet/dist/leaflet.css";
 
 /*
-  EnviToo design system — dark with teal brand.
-  Near-black base, teal primary, directional ambient light, fine grain texture.
-  Display: Clash Display (hero scale), Sentient (section/feature headlines)
-  Body: Satoshi
+  EnviToo design system — clean neutral (Cursor-ish).
+  Zinc surfaces, monochrome primary buttons, blue focus ring only.
+  Display: Inter Tight · Body/UI: Inter
 */
 
 @theme inline {
@@ -44,101 +43,101 @@
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
 
-  --font-sans: "Satoshi", "Inter", system-ui, sans-serif;
-  --font-display: "Clash Display", "Inter", system-ui, sans-serif;
-  --font-serif: "Sentient", "Georgia", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Inter Tight", "Inter", system-ui, sans-serif;
+  --font-serif: "Inter Tight", "Inter", system-ui, sans-serif;
 
   --text-xs: 0.75rem;
   --text-xs--line-height: 1.333;
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.385;
-  --text-base: 1.0625rem;
-  --text-base--line-height: 1.47;
-  --text-lg: clamp(1.125rem, 0.4vw + 1.05rem, 1.3125rem);
-  --text-lg--line-height: 1.42;
-  --text-xl: clamp(1.25rem, 0.5vw + 1.1rem, 1.375rem);
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: clamp(1.0625rem, 0.3vw + 1rem, 1.1875rem);
+  --text-lg--line-height: 1.45;
+  --text-xl: clamp(1.1875rem, 0.4vw + 1.05rem, 1.3125rem);
   --text-xl--line-height: 1.35;
-  --text-2xl: clamp(1.375rem, 0.8vw + 1.15rem, 1.75rem);
+  --text-2xl: clamp(1.3125rem, 0.6vw + 1.1rem, 1.625rem);
   --text-2xl--line-height: 1.25;
-  --text-3xl: clamp(1.75rem, 1.2vw + 1.2rem, 2rem);
+  --text-3xl: clamp(1.625rem, 1vw + 1.15rem, 1.875rem);
   --text-3xl--line-height: 1.15;
-  --text-4xl: clamp(2rem, 1.8vw + 1.2rem, 2.5rem);
-  --text-4xl--line-height: 1.1;
-  --text-5xl: clamp(2.5rem, 3vw + 1.2rem, 3.5rem);
-  --text-5xl--line-height: 1.05;
-  --text-6xl: clamp(3rem, 4.5vw + 1rem, 4.5rem);
-  --text-6xl--line-height: 1.02;
-  --text-7xl: clamp(3.5rem, 6vw + 0.8rem, 5.5rem);
-  --text-7xl--line-height: 1;
+  --text-4xl: clamp(1.875rem, 1.5vw + 1.15rem, 2.25rem);
+  --text-4xl--line-height: 1.12;
+  --text-5xl: clamp(2.25rem, 2.5vw + 1.1rem, 3rem);
+  --text-5xl--line-height: 1.08;
+  --text-6xl: clamp(2.75rem, 3.5vw + 1rem, 3.75rem);
+  --text-6xl--line-height: 1.05;
+  --text-7xl: clamp(3.25rem, 5vw + 0.8rem, 4.5rem);
+  --text-7xl--line-height: 1.02;
 }
 
 :root {
-  --radius: 8px;
+  --radius: 0.5rem;
 
-  --background: #f8f8fb;
-  --foreground: #1a1a2e;
+  --background: #fafafa;
+  --foreground: #18181b;
   --card: #ffffff;
-  --card-foreground: #1a1a2e;
+  --card-foreground: #18181b;
   --popover: #ffffff;
-  --popover-foreground: #1a1a2e;
+  --popover-foreground: #18181b;
 
-  --primary: #0d9488;
-  --primary-foreground: #ffffff;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
 
-  --secondary: #e8e8f0;
-  --secondary-foreground: #1a1a2e;
-  --muted: #f0f0f5;
-  --muted-foreground: #6b6b80;
-  --accent: #0284c7;
-  --accent-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
 
-  --destructive: #e11d48;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
 
-  --border: #e2e2ec;
-  --input: #e8e8f0;
-  --ring: #0d9488;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #3b82f6;
 
-  --skeleton: #e8e8f0;
+  --skeleton: #e4e4e7;
 
-  --brand: #0d9488;
-  --brand-glow: rgba(13, 148, 136, 0.25);
-  --cyan: #06b6d4;
+  --brand: #18181b;
+  --brand-glow: rgba(24, 24, 27, 0.08);
+  --cyan: #0ea5e9;
   --rose: #e11d48;
   --amber: #d97706;
   --emerald: #059669;
 }
 
 html.dark, .dark {
-  --background: #07070b;
-  --foreground: #f4f4f8;
-  --card: #0c0c12;
-  --card-foreground: #f4f4f8;
-  --popover: #111118;
-  --popover-foreground: #f4f4f8;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #111111;
+  --card-foreground: #fafafa;
+  --popover: #141414;
+  --popover-foreground: #fafafa;
 
-  --primary: #14b8a6;
-  --primary-foreground: #042f2e;
+  --primary: #fafafa;
+  --primary-foreground: #0a0a0a;
 
-  --secondary: #16161f;
-  --secondary-foreground: #f4f4f8;
-  --muted: #12121a;
-  --muted-foreground: #9b9bb0;
-  --accent: #38bdf8;
-  --accent-foreground: #0c4a6e;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #fafafa;
+  --muted: #171717;
+  --muted-foreground: #a1a1aa;
+  --accent: #1a1a1a;
+  --accent-foreground: #fafafa;
 
-  --destructive: #f43f5e;
+  --destructive: #ef4444;
   --destructive-foreground: #ffffff;
 
-  --border: #24243a;
-  --input: #16161f;
-  --ring: #14b8a6;
+  --border: #262626;
+  --input: #262626;
+  --ring: #3b82f6;
 
-  --skeleton: #16161f;
+  --skeleton: #1a1a1a;
 
-  --brand: #14b8a6;
-  --brand-glow: rgba(20, 184, 166, 0.45);
-  --cyan: #22d3ee;
+  --brand: #fafafa;
+  --brand-glow: rgba(250, 250, 250, 0.06);
+  --cyan: #38bdf8;
   --rose: #fb7185;
   --amber: #fbbf24;
   --emerald: #34d399;
@@ -157,8 +156,8 @@ html.dark, .dark {
     background-color: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
-    font-size: 1.0625rem;
-    line-height: 1.47;
+    font-size: 1rem;
+    line-height: 1.5;
     letter-spacing: -0.011em;
     font-weight: 400;
     font-optical-sizing: auto;
@@ -175,7 +174,7 @@ html.dark, .dark {
   h4 {
     font-family: var(--font-display);
     font-weight: 600;
-    letter-spacing: -0.022em;
+    letter-spacing: -0.025em;
     text-wrap: balance;
   }
 
@@ -184,7 +183,7 @@ html.dark, .dark {
   }
 
   ::selection {
-    background-color: color-mix(in srgb, var(--primary) 35%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 14%, transparent);
     color: var(--foreground);
   }
 
@@ -219,35 +218,32 @@ html.dark, .dark {
 }
 
 @layer utilities {
-  /* Marketing hero — large title / display (Clash Display) */
   .display-hero {
     font-family: var(--font-display);
     font-weight: 600;
-    line-height: 1.02;
-    letter-spacing: -0.032em;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
   }
 
   .display-hero-light {
     font-family: var(--font-display);
     font-weight: 500;
-    line-height: 1.02;
+    line-height: 1.05;
     letter-spacing: -0.035em;
   }
 
-  /* Section / page titles — Sentient serif for premium editorial feel */
   .display-title {
-    font-family: var(--font-serif);
-    font-weight: 500;
-    line-height: 1.08;
-    letter-spacing: -0.015em;
+    font-family: var(--font-display);
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.028em;
   }
 
-  /* Card / feature titles — Sentient */
   .display-headline {
-    font-family: var(--font-serif);
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-weight: 600;
     line-height: 1.2;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.022em;
   }
 
   .display-headline-sans {
@@ -257,23 +253,21 @@ html.dark, .dark {
     letter-spacing: -0.02em;
   }
 
-  /* Supporting subcopy under heroes */
   .text-lede {
     font-family: var(--font-sans);
     font-weight: 400;
-    font-size: clamp(1.125rem, 0.6vw + 1.05rem, 1.3125rem);
-    line-height: 1.45;
-    letter-spacing: -0.014em;
+    font-size: clamp(1.0625rem, 0.4vw + 1rem, 1.1875rem);
+    line-height: 1.5;
+    letter-spacing: -0.011em;
     color: var(--muted-foreground);
   }
 
-  /* Small section label above a title */
   .text-eyebrow {
     font-family: var(--font-sans);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 500;
     line-height: 1.35;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     color: var(--muted-foreground);
   }
@@ -288,7 +282,6 @@ html.dark, .dark {
     text-transform: none;
   }
 
-  /* Stats / big numbers */
   .text-stat {
     font-family: var(--font-display);
     font-weight: 600;
@@ -297,7 +290,6 @@ html.dark, .dark {
     font-variant-numeric: tabular-nums;
   }
 
-  /* Compact UI chrome (nav, badges, buttons inherit) */
   .text-ui {
     font-family: var(--font-sans);
     font-weight: 500;
@@ -305,97 +297,89 @@ html.dark, .dark {
   }
 
   .font-serif {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
   }
 
   .font-display {
     font-family: var(--font-display);
   }
 
-  /* Glass with directional light — no banding, no leak */
   .glass {
-    background: color-mix(in srgb, var(--card) 72%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 6%, transparent);
+    background: color-mix(in srgb, var(--card) 88%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   }
 
   .glass-strong {
-    background: color-mix(in srgb, var(--card) 85%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent);
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
   }
 
-  /* Directional light washes — each section gets its own light source */
+  /* Soft marketing washes — Landing hero only */
   .bg-light-teal {
     background: radial-gradient(
-      ellipse 75% 55% at 70% 0%,
-      rgba(20, 184, 166, 0.18),
-      transparent 50%
+      ellipse 80% 55% at 75% -10%,
+      color-mix(in srgb, var(--foreground) 5%, transparent),
+      transparent 55%
     );
   }
 
   .bg-light-amber {
     background: radial-gradient(
-      ellipse 60% 50% at 30% 0%,
-      rgba(251, 191, 36, 0.12),
-      transparent 45%
+      ellipse 60% 45% at 20% 0%,
+      color-mix(in srgb, var(--foreground) 3%, transparent),
+      transparent 50%
     );
   }
 
   .bg-light-rose {
     background: radial-gradient(
       ellipse 50% 40% at 50% 100%,
-      rgba(251, 114, 133, 0.1),
-      transparent 40%
+      color-mix(in srgb, var(--foreground) 3%, transparent),
+      transparent 45%
     );
   }
 
   .bg-light-cyan {
     background: radial-gradient(
-      ellipse 65% 50% at 0% 50%,
-      rgba(34, 211, 238, 0.10),
-      transparent 45%
+      ellipse 65% 50% at 0% 40%,
+      color-mix(in srgb, var(--ring) 6%, transparent),
+      transparent 50%
     );
   }
 
   .bg-light-neutral {
     background: radial-gradient(
       ellipse 70% 40% at 50% 0%,
-      color-mix(in srgb, var(--foreground) 3%, transparent),
+      color-mix(in srgb, var(--foreground) 2.5%, transparent),
       transparent 50%
     );
   }
 
-  /* Fine grain texture for tactile depth */
   .bg-grain {
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
-    background-repeat: repeat;
-    background-size: 180px 180px;
+    background-image: none;
   }
 
-  /* Self-colored border: a 1px stroke at low opacity of the surface's own color */
   .border-self {
     border: 1px solid color-mix(in srgb, var(--card-foreground) 8%, transparent);
   }
 
   .border-self-strong {
-    border: 1px solid color-mix(in srgb, var(--card-foreground) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--card-foreground) 12%, transparent);
   }
 
   .border-self-weak {
-    border: 1px solid color-mix(in srgb, var(--card-foreground) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--card-foreground) 6%, transparent);
   }
 
-  /* Simplified single-hue teal border gradient (limited use) */
   .border-gradient {
     border: 1px solid transparent;
     background:
       linear-gradient(var(--card), var(--card)) padding-box,
-      linear-gradient(135deg, rgba(20, 184, 166, 0.5), rgba(20, 184, 166, 0.15))
+      linear-gradient(135deg, color-mix(in srgb, var(--foreground) 18%, transparent), color-mix(in srgb, var(--foreground) 6%, transparent))
         border-box;
   }
 
@@ -408,31 +392,30 @@ html.dark, .dark {
     display: none;
   }
 
-  /* Reveal animations — content is ALWAYS visible, only position animates */
   @keyframes fade-up {
     from {
-      transform: translateY(12px);
+      transform: translateY(10px);
+      opacity: 0.92;
     }
     to {
       transform: translateY(0);
+      opacity: 1;
     }
   }
 
   .animate-fade-up {
-    animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* Stagger children */
   .stagger-1 { animation-delay: 0ms; }
-  .stagger-2 { animation-delay: 80ms; }
-  .stagger-3 { animation-delay: 160ms; }
-  .stagger-4 { animation-delay: 240ms; }
-  .stagger-5 { animation-delay: 320ms; }
-  .stagger-6 { animation-delay: 400ms; }
+  .stagger-2 { animation-delay: 70ms; }
+  .stagger-3 { animation-delay: 140ms; }
+  .stagger-4 { animation-delay: 210ms; }
+  .stagger-5 { animation-delay: 280ms; }
+  .stagger-6 { animation-delay: 350ms; }
 
-  /* Pulse glow for active/interactive elements */
   @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 20%, transparent); }
-    50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 0%, transparent); }
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 16%, transparent); }
+    50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 0%, transparent); }
   }
 }

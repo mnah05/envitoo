@@ -49,7 +49,7 @@ export function EventDetail() {
 
   if (error || !event) {
     return (
-      <div className="pt-16">
+      <div className="pt-14">
         <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <h1 className="display-title text-2xl">Event not found</h1>
           <p className="max-w-sm text-base leading-relaxed text-muted-foreground">
@@ -66,9 +66,7 @@ export function EventDetail() {
   const cancelled = event.status === "cancelled";
 
   return (
-    <div className="relative pt-16">
-      <div className="pointer-events-none absolute inset-0 bg-light-teal" aria-hidden />
-
+    <div className="pt-14">
       <div className="relative h-[28vh] min-h-[14rem] w-full overflow-hidden sm:h-[40vh] sm:min-h-[20rem]">
         <EventCover event={event} rounded="rounded-none" className="h-full" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
@@ -77,7 +75,7 @@ export function EventDetail() {
             {event.category && <CategoryPill category={event.category} />}
             <EventStatusBadge status={event.status} />
             {event.visibility === "unlisted" && (
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed bg-card/80 px-2 py-0.5 text-xs font-medium text-muted-foreground backdrop-blur">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-card/80 px-2 py-0.5 text-xs font-medium text-muted-foreground backdrop-blur">
                 Unlisted — not on Discover
               </span>
             )}
@@ -184,7 +182,7 @@ export function EventDetail() {
             <div className="rounded-xl border border-self-strong bg-card p-6">
               {cancelled ? (
                 <div className="rounded-lg bg-muted p-6 text-center">
-                  <p className="font-serif text-base font-semibold">This event has been cancelled.</p>
+                  <p className="display-headline text-base">This event has been cancelled.</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Registrations are closed.
                   </p>
@@ -238,7 +236,7 @@ function InfoRow({
 
 function EventDetailSkeleton() {
   return (
-    <div className="pt-16">
+    <div className="pt-14">
       <Skeleton className="h-[40vh] min-h-[20rem] w-full rounded-none" />
       <PageContainer className="py-10">
         <Skeleton className="mb-6 h-8 w-24" />

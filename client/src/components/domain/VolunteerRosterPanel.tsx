@@ -26,7 +26,7 @@ export function VolunteerRosterPanel({
 }) {
 
   return (
-    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <HeartHandshake className="size-5 text-muted-foreground" />
@@ -39,7 +39,7 @@ export function VolunteerRosterPanel({
 
       <div className="mt-4">
         {volunteers.length === 0 ? (
-          <Empty className="border">
+          <Empty className="rounded-lg border border-border">
             <EmptyMedia variant="icon">
               <HeartHandshake className="size-6" />
             </EmptyMedia>

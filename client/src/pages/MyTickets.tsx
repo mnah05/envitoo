@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ClipboardList, Download, Globe, MapPin, ShieldCheck, Ticket } from "lucide-react";
+import { useReducedMotion } from "framer-motion";
+import { CalendarDaysIcon } from "lucide-animated";
 import { QRCodeCanvas, QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,16 +28,17 @@ import type { Registration } from "@/lib/api";
 export function MyTickets() {
   const { data, isLoading } = useMyRegistrations({ limit: 50 });
   const regs = data?.registrations ?? [];
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     document.title = "My tickets — EnviToo";
   }, []);
 
   return (
-    <div className="pt-16">
+    <div className="pt-14">
       <PageContainer className="py-10">
         <h1 className="display-title text-3xl sm:text-4xl">My dashboard</h1>
-        <p className="text-lede mt-3 text-[1.0625rem]">
+        <p className="text-lede mt-3">
           Your tickets, volunteer applications, and events you help manage.
         </p>
 
@@ -60,12 +63,12 @@ export function MyTickets() {
               <div className="mt-6 flex flex-col gap-6">
                 {isLoading ? (
                   Array.from({ length: 2 }).map((_, i) => (
-                    <Skeleton key={i} className="h-64 w-full rounded-2xl" />
+                    <Skeleton key={i} className="h-64 w-full rounded-xl" />
                   ))
                 ) : regs.length === 0 ? (
-                  <Empty className="min-h-[40vh] border">
+                  <Empty className="min-h-[40vh] rounded-xl border border-border">
                     <EmptyMedia variant="icon">
-                      <Ticket className="size-6" />
+                      <CalendarDaysIcon size={24} animateOnHover={!reduceMotion} />
                     </EmptyMedia>
                     <EmptyTitle>No tickets yet</EmptyTitle>
                     <EmptyDescription>
@@ -142,7 +145,7 @@ function TicketCard({ reg }: { reg: Registration }) {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-self-strong bg-card">
+    <div className="relative overflow-hidden rounded-xl border border-border bg-card">
       {/* Top: hero area */}
       <div className="relative bg-primary/[0.04]">
         <div className="flex flex-col gap-3 p-5 pb-8">
