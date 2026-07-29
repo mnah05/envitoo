@@ -60,7 +60,7 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	e.Use(middleware.RequestLogger(s.log))
 
 	e.Use(echoMiddleware.BodyLimit("1MB"))
-	e.Use(echoMiddleware.TimeoutWithConfig(echoMiddleware.TimeoutConfig{
+	e.Use(echoMiddleware.ContextTimeoutWithConfig(echoMiddleware.ContextTimeoutConfig{
 		Timeout: 30 * time.Second,
 	}))
 
