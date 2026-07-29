@@ -34,7 +34,18 @@ func NewVolunteerService(pool *pgxpool.Pool, queries *db.Queries, access *EventA
 
 // UpsertSettings creates or updates volunteer settings for an event.
 // Verifies that the requester is the event organizer.
-func (s *VolunteerService) UpsertSettings(ctx context.Context, eventID, organizerID uuid.UUID, req dto.UpsertVolunteerSettingsRequest) (db.VolunteerSetting, error) {
+func (s *VolunteerService) UpsertSettings(ctx context.Context, eventID, organizerID uuid.UUID, req dto.UpsertVolunteerSettingsRequest) (settings db.VolunteerSetting, err error) {
+	log := s.logger(ctx)
+	log.Info("volunteer_settings_upsert_start", "event_id", eventID, "organizer_id", organizerID)
+	defer func() {
+		attrs := []any{"event_id", eventID, "organizer_id", organizerID}
+		if err != nil {
+			logOpOutcome(log, "volunteer_settings_upsert", err, attrs...)
+			return
+		}
+		log.Info("volunteer_settings_upsert_ok", attrs...)
+	}()
+
 	event, err := s.queries.GetEventByID(ctx, eventID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -46,7 +57,7 @@ func (s *VolunteerService) UpsertSettings(ctx context.Context, eventID, organize
 		return db.VolunteerSetting{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotFound)
 	}
 
-	settings, err := s.queries.UpsertVolunteerSettings(ctx, db.UpsertVolunteerSettingsParams{
+	settings, err = s.queries.UpsertVolunteerSettings(ctx, db.UpsertVolunteerSettingsParams{
 		EventID:         eventID,
 		Enabled:         req.Enabled,
 		Description:     req.Description,
@@ -75,7 +86,21 @@ func (s *VolunteerService) GetSettings(ctx context.Context, eventID uuid.UUID) (
 // ---------------------------------------------------------------------------
 
 // CreateRole adds a volunteer role to an event. Verifies organizer.
-func (s *VolunteerService) CreateRole(ctx context.Context, eventID, organizerID uuid.UUID, req dto.CreateVolunteerRoleRequest) (db.VolunteerRole, error) {
+func (s *VolunteerService) CreateRole(ctx context.Context, eventID, organizerID uuid.UUID, req dto.CreateVolunteerRoleRequest) (role db.VolunteerRole, err error) {
+	log := s.logger(ctx)
+	log.Info("volunteer_role_create_start", "event_id", eventID, "organizer_id", organizerID)
+	defer func() {
+		attrs := []any{"event_id", eventID, "organizer_id", organizerID}
+		if role.ID != uuid.Nil {
+			attrs = append(attrs, "role_id", role.ID)
+		}
+		if err != nil {
+			logOpOutcome(log, "volunteer_role_create", err, attrs...)
+			return
+		}
+		log.Info("volunteer_role_create_ok", attrs...)
+	}()
+
 	event, err := s.queries.GetEventByID(ctx, eventID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -87,7 +112,7 @@ func (s *VolunteerService) CreateRole(ctx context.Context, eventID, organizerID 
 		return db.VolunteerRole{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotFound)
 	}
 
-	role, err := s.queries.CreateVolunteerRole(ctx, db.CreateVolunteerRoleParams{
+	role, err = s.queries.CreateVolunteerRole(ctx, db.CreateVolunteerRoleParams{
 		EventID: eventID,
 		Name:    req.Name,
 		IsAdmin: req.IsAdmin,
@@ -103,7 +128,18 @@ func (s *VolunteerService) CreateRole(ctx context.Context, eventID, organizerID 
 
 // DeleteRole removes a volunteer role. Verifies organizer and that the role
 // belongs to the event named in the request path.
-func (s *VolunteerService) DeleteRole(ctx context.Context, eventID, roleID, organizerID uuid.UUID) (db.VolunteerRole, error) {
+func (s *VolunteerService) DeleteRole(ctx context.Context, eventID, roleID, organizerID uuid.UUID) (deleted db.VolunteerRole, err error) {
+	log := s.logger(ctx)
+	log.Info("volunteer_role_delete_start", "event_id", eventID, "role_id", roleID, "organizer_id", organizerID)
+	defer func() {
+		attrs := []any{"event_id", eventID, "role_id", roleID, "organizer_id", organizerID}
+		if err != nil {
+			logOpOutcome(log, "volunteer_role_delete", err, attrs...)
+			return
+		}
+		log.Info("volunteer_role_delete_ok", attrs...)
+	}()
+
 	role, err := s.queries.GetVolunteerRoleByID(ctx, roleID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -126,7 +162,7 @@ func (s *VolunteerService) DeleteRole(ctx context.Context, eventID, roleID, orga
 		return db.VolunteerRole{}, fmt.Errorf("role %s: %w", roleID, ErrVolunteerRoleNotFound)
 	}
 
-	deleted, err := s.queries.DeleteVolunteerRole(ctx, db.DeleteVolunteerRoleParams{
+	deleted, err = s.queries.DeleteVolunteerRole(ctx, db.DeleteVolunteerRoleParams{
 		ID:      roleID,
 		EventID: role.EventID,
 	})
@@ -198,7 +234,21 @@ func (s *VolunteerService) ListStaffEventsByUser(ctx context.Context, userID uui
 // ---------------------------------------------------------------------------
 
 // Apply allows an authenticated user to apply to volunteer at an event.
-func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uuid.UUID, req dto.CreateVolunteerApplicationRequest) (dto.VolunteerApplicationResponse, error) {
+func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uuid.UUID, req dto.CreateVolunteerApplicationRequest) (resp dto.VolunteerApplicationResponse, err error) {
+	log := s.logger(ctx)
+	log.Info("volunteer_apply_start", "event_id", eventID, "user_id", user.ID)
+	defer func() {
+		attrs := []any{"event_id", eventID, "user_id", user.ID}
+		if resp.ID != uuid.Nil {
+			attrs = append(attrs, "application_id", resp.ID)
+		}
+		if err != nil {
+			logOpOutcome(log, "volunteer_apply", err, attrs...)
+			return
+		}
+		log.Info("volunteer_apply_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
@@ -378,7 +428,18 @@ func (s *VolunteerService) GetByID(ctx context.Context, appID, userID uuid.UUID)
 
 // Cancel cancels a user's own pending volunteer application.
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *VolunteerService) Cancel(ctx context.Context, appID, userID uuid.UUID) (dto.VolunteerApplicationResponse, error) {
+func (s *VolunteerService) Cancel(ctx context.Context, appID, userID uuid.UUID) (resp dto.VolunteerApplicationResponse, err error) {
+	log := s.logger(ctx)
+	log.Info("volunteer_cancel_start", "application_id", appID, "user_id", userID)
+	defer func() {
+		attrs := []any{"application_id", appID, "user_id", userID}
+		if err != nil {
+			logOpOutcome(log, "volunteer_cancel", err, attrs...)
+			return
+		}
+		log.Info("volunteer_cancel_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
@@ -565,7 +626,18 @@ func (s *VolunteerService) GetByIDAsAdmin(ctx context.Context, appID, actorID uu
 // the confirmed volunteer in the volunteers roster table. Both operations
 // run in a single transaction — if the roster insert fails, the approval
 // is rolled back.
-func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID) (dto.VolunteerApplicationResponse, error) {
+func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID) (resp dto.VolunteerApplicationResponse, err error) {
+	log := s.logger(ctx)
+	log.Info("volunteer_approve_start", "application_id", appID, "actor_id", actorID)
+	defer func() {
+		attrs := []any{"application_id", appID, "actor_id", actorID}
+		if err != nil {
+			logOpOutcome(log, "volunteer_approve", err, attrs...)
+			return
+		}
+		log.Info("volunteer_approve_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
@@ -639,7 +711,18 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 
 // Reject sets a pending application status to "rejected".
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *VolunteerService) Reject(ctx context.Context, appID, actorID uuid.UUID) (dto.VolunteerApplicationResponse, error) {
+func (s *VolunteerService) Reject(ctx context.Context, appID, actorID uuid.UUID) (resp dto.VolunteerApplicationResponse, err error) {
+	log := s.logger(ctx)
+	log.Info("volunteer_reject_start", "application_id", appID, "actor_id", actorID)
+	defer func() {
+		attrs := []any{"application_id", appID, "actor_id", actorID}
+		if err != nil {
+			logOpOutcome(log, "volunteer_reject", err, attrs...)
+			return
+		}
+		log.Info("volunteer_reject_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
@@ -726,7 +809,7 @@ func (s *VolunteerService) responseForApplication(ctx context.Context, app db.Vo
 	if role, err := s.queries.GetVolunteerRoleByID(ctx, app.RoleID); err == nil {
 		roleName, isAdmin = role.Name, role.IsAdmin
 	} else {
-		s.log.WarnContext(ctx, "load role for application response", "app_id", app.ID, "role_id", app.RoleID, "error", err)
+		s.logger(ctx).WarnContext(ctx, "load role for application response", "app_id", app.ID, "role_id", app.RoleID, "error", err)
 	}
 	return volunteerAppResponse(app, roleName, isAdmin)
 }

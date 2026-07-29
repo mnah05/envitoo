@@ -54,7 +54,17 @@ const maxEventSlugAttempts = 10
 // 7-character string — the caller never provides it. Uniqueness is enforced
 // by the DB UNIQUE constraint on slug; on collision a new slug is generated
 // and the insert is retried (up to maxEventSlugAttempts).
-func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dto.CreateEventRequest) (db.Event, error) {
+func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dto.CreateEventRequest) (created db.Event, err error) {
+	log := s.logger(ctx)
+	log.Info("event_create_start", "organizer_id", organizerID)
+	defer func() {
+		if err != nil {
+			logOpOutcome(log, "event_create", err, "organizer_id", organizerID)
+			return
+		}
+		log.Info("event_create_ok", "organizer_id", organizerID, "event_id", created.ID, "slug", created.Slug)
+	}()
+
 	event := db.CreateEventParams{
 		OrganizerID:      organizerID,
 		Title:            req.Title,
@@ -130,7 +140,7 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		}
 
 		qtx := s.queries.WithTx(tx)
-		created, err := qtx.CreateEvent(ctx, event)
+		created, err = qtx.CreateEvent(ctx, event)
 		if err == pgx.ErrNoRows {
 			_ = tx.Rollback(ctx)
 			continue
@@ -429,12 +439,12 @@ func (s *EventService) EventResponsesBestEffort(ctx context.Context, events []db
 		return items
 	}
 	if s.log != nil {
-		s.log.WarnContext(ctx, "event list enrichment failed", "error", err, "n", len(events))
+		s.logger(ctx).WarnContext(ctx, "event list enrichment failed", "error", err, "n", len(events))
 	}
 
 	counts, countErr := s.fetchRegistrationCounts(ctx, events)
 	if countErr != nil && s.log != nil {
-		s.log.WarnContext(ctx, "event registration counts failed", "error", countErr)
+		s.logger(ctx).WarnContext(ctx, "event registration counts failed", "error", countErr)
 	}
 	ids := make([]uuid.UUID, len(events))
 	for i, e := range events {
@@ -442,7 +452,7 @@ func (s *EventService) EventResponsesBestEffort(ctx context.Context, events []db
 	}
 	vis, visErr := s.fetchVisibilityMap(ctx, ids)
 	if visErr != nil && s.log != nil {
-		s.log.WarnContext(ctx, "event visibility map failed", "error", visErr)
+		s.logger(ctx).WarnContext(ctx, "event visibility map failed", "error", visErr)
 	}
 
 	out := make([]dto.EventResponse, 0, len(events))
@@ -468,7 +478,18 @@ func (s *EventService) EventResponsesBestEffort(ctx context.Context, events []db
 //
 // Field-level validation is performed by the handler. Cross-field
 // venue constraints are validated against the merged state here.
-func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UUID, req dto.UpdateEventRequest) (db.Event, error) {
+func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UUID, req dto.UpdateEventRequest) (event db.Event, err error) {
+	log := s.logger(ctx)
+	log.Info("event_update_start", "event_id", id, "actor_id", actorID)
+	defer func() {
+		attrs := []any{"event_id", id, "actor_id", actorID}
+		if err != nil {
+			logOpOutcome(log, "event_update", err, attrs...)
+			return
+		}
+		log.Info("event_update_ok", attrs...)
+	}()
+
 	role, err := s.access.ResolveStaffRole(ctx, id, actorID)
 	if err != nil {
 		return db.Event{}, err
@@ -607,7 +628,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		params.MeetingUrl = nil
 	}
 
-	event, err := s.queries.UpdateEvent(ctx, params)
+	event, err = s.queries.UpdateEvent(ctx, params)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return db.Event{}, fmt.Errorf("event %s not found: %w", id, ErrEventNotFound)
@@ -716,7 +737,18 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 // parameter enforces ownership in the SQL.
 //
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uuid.UUID) (db.Event, error) {
+func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uuid.UUID) (event db.Event, err error) {
+	log := s.logger(ctx)
+	log.Info("event_cancel_start", "event_id", id, "organizer_id", organizerID)
+	defer func() {
+		attrs := []any{"event_id", id, "organizer_id", organizerID}
+		if err != nil {
+			logOpOutcome(log, "event_cancel", err, attrs...)
+			return
+		}
+		log.Info("event_cancel_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Event{}, fmt.Errorf("begin tx: %w", err)
@@ -725,7 +757,7 @@ func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uui
 
 	qtx := s.queries.WithTx(tx)
 
-	event, err := qtx.CancelEvent(ctx, db.CancelEventParams{
+	event, err = qtx.CancelEvent(ctx, db.CancelEventParams{
 		ID:          id,
 		OrganizerID: organizerID,
 	})

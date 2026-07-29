@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -12,7 +12,7 @@ import (
 	"github.com/mnah05/envitoo/internal/db"
 )
 
-func runCleanup(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig) {
+func runCleanup(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig, log *slog.Logger) {
 	ticker := time.NewTicker(cfg.CleanupInterval)
 	defer ticker.Stop()
 
@@ -23,11 +23,11 @@ func runCleanup(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig
 		case <-ticker.C:
 			n, err := deleteStaleBatch(ctx, pool, cfg)
 			if err != nil {
-				log.Printf("cleanup: %v", err)
+				log.Error("outbox_cleanup_failed", "error", err)
 				continue
 			}
 			if n > 0 {
-				log.Printf("cleanup: deleted %d stale outbox rows", n)
+				log.Info("outbox_cleanup_ok", "deleted", n)
 			}
 		}
 	}

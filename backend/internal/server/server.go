@@ -57,17 +57,7 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustLoopback(true))
 	e.Use(echoMiddleware.Recover())
 	e.Use(echoMiddleware.RequestID())
-
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			log := s.log
-			if rid := c.Response().Header().Get(echo.HeaderXRequestID); rid != "" {
-				log = log.With("request_id", rid)
-			}
-			c.SetRequest(c.Request().WithContext(middleware.WithLogger(c.Request().Context(), log)))
-			return next(c)
-		}
-	})
+	e.Use(middleware.RequestLogger(s.log))
 
 	e.Use(echoMiddleware.BodyLimit("1MB"))
 	e.Use(echoMiddleware.TimeoutWithConfig(echoMiddleware.TimeoutConfig{

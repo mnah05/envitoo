@@ -52,7 +52,17 @@ type otpEmailTemplateData struct {
 
 // RequestGuestOTP validates the event, issues a 6-digit OTP, stores HMAC state
 // in Redis, and queues an email via email_outbox. It does not create a registration.
-func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.UUID, req dto.RequestGuestOTPRequest) (dto.RequestGuestOTPResponse, error) {
+func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.UUID, req dto.RequestGuestOTPRequest) (resp dto.RequestGuestOTPResponse, err error) {
+	log := s.logger(ctx)
+	log.Info("guest_otp_request_start", "event_id", eventID)
+	defer func() {
+		if err != nil {
+			logOpOutcome(log, "guest_otp_request", err, "event_id", eventID)
+			return
+		}
+		log.Info("guest_otp_request_ok", "event_id", eventID)
+	}()
+
 	if err := s.requireOTPDeps(); err != nil {
 		return dto.RequestGuestOTPResponse{}, err
 	}
@@ -148,7 +158,17 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 
 // VerifyGuestOTP checks the OTP against Redis state and writes a short-lived
 // verified marker. It does not create a registration.
-func (s *RegistrationService) VerifyGuestOTP(ctx context.Context, eventID uuid.UUID, req dto.VerifyGuestOTPRequest) (dto.VerifyGuestOTPResponse, error) {
+func (s *RegistrationService) VerifyGuestOTP(ctx context.Context, eventID uuid.UUID, req dto.VerifyGuestOTPRequest) (resp dto.VerifyGuestOTPResponse, err error) {
+	log := s.logger(ctx)
+	log.Info("guest_otp_verify_start", "event_id", eventID)
+	defer func() {
+		if err != nil {
+			logOpOutcome(log, "guest_otp_verify", err, "event_id", eventID)
+			return
+		}
+		log.Info("guest_otp_verify_ok", "event_id", eventID)
+	}()
+
 	if err := s.requireOTPDeps(); err != nil {
 		return dto.VerifyGuestOTPResponse{}, err
 	}
@@ -174,7 +194,7 @@ func (s *RegistrationService) VerifyGuestOTP(ctx context.Context, eventID uuid.U
 	if count == 1 {
 		// INCR does not set TTL; without Expire the key is permanent.
 		if err := s.cache.Expire(ctx, attemptsKey, guestOTPTTL); err != nil && !errors.Is(err, cache.ErrNotFound) {
-			s.log.WarnContext(ctx, "otp attempts expire failed", "error", err)
+			s.logger(ctx).WarnContext(ctx, "otp attempts expire failed", "error", err)
 		}
 	}
 	if count > guestOTPMaxTries {

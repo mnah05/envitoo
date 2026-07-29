@@ -17,11 +17,13 @@ import (
 	"github.com/mnah05/envitoo/internal/config"
 	"github.com/mnah05/envitoo/internal/database"
 	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/logging"
 	"github.com/mnah05/envitoo/internal/server"
 )
 
 func main() {
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	log := logging.New("api")
+	slog.SetDefault(log)
 
 	_ = godotenv.Load()
 	_ = godotenv.Load(".env.local")

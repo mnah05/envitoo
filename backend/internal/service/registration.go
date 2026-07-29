@@ -51,7 +51,17 @@ func NewRegistrationService(pool *pgxpool.Pool, queries *db.Queries, access *Eve
 // Requires a short-lived Redis marker from VerifyGuestOTP
 // (guest:verified:{event_id}:{email}). Status defaults to "approved" unless
 // the event requires approval.
-func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID, req dto.CreateGuestRegistrationRequest) (db.Registration, error) {
+func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID, req dto.CreateGuestRegistrationRequest) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_guest_create_start", "event_id", eventID)
+	defer func() {
+		if err != nil {
+			logOpOutcome(log, "registration_guest_create", err, "event_id", eventID)
+			return
+		}
+		log.Info("registration_guest_create_ok", "event_id", eventID, "registration_id", reg.ID, "status", reg.Status)
+	}()
+
 	if !s.cache.Available() {
 		return db.Registration{}, ErrDependencyUnavailable
 	}
@@ -113,7 +123,7 @@ func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID
 		TokenExpiresAt: tokenExpires,
 	}
 
-	reg, err := insertGuestRegistration(ctx, qtx, params)
+	reg, err = insertGuestRegistration(ctx, qtx, params)
 	if err != nil {
 		return db.Registration{}, err
 	}
@@ -143,7 +153,7 @@ func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID
 
 	// One-time use: consume verification after a successful create.
 	if err := s.cache.DeleteKeys(ctx, verifiedKey); err != nil {
-		s.log.WarnContext(ctx, "delete guest verified marker", "event_id", eventID, "error", err)
+		s.logger(ctx).WarnContext(ctx, "delete guest verified marker", "event_id", eventID, "error", err)
 	}
 
 	return reg, nil
@@ -163,7 +173,21 @@ func (s *RegistrationService) GetByAccessToken(ctx context.Context, token uuid.U
 
 // CancelGuest cancels a guest registration by its access token.
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_guest_cancel_start")
+	defer func() {
+		attrs := []any{}
+		if reg.ID != uuid.Nil {
+			attrs = append(attrs, "registration_id", reg.ID, "event_id", reg.EventID)
+		}
+		if err != nil {
+			logOpOutcome(log, "registration_guest_cancel", err, attrs...)
+			return
+		}
+		log.Info("registration_guest_cancel_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -172,7 +196,7 @@ func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) 
 
 	qtx := s.queries.WithTx(tx)
 
-	reg, err := qtx.CancelGuestRegistration(ctx, token)
+	reg, err = qtx.CancelGuestRegistration(ctx, token)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return db.Registration{}, fmt.Errorf("guest registration with token %s: %w", token, ErrRegistrationNotFound)
@@ -216,7 +240,17 @@ func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) 
 
 // Create registers an authenticated user for the given event. Name and
 // email fall back to the user's profile values when not provided in req.
-func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID uuid.UUID, req dto.CreateRegistrationRequest) (db.Registration, error) {
+func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID uuid.UUID, req dto.CreateRegistrationRequest) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_create_start", "event_id", eventID, "user_id", user.ID)
+	defer func() {
+		if err != nil {
+			logOpOutcome(log, "registration_create", err, "event_id", eventID, "user_id", user.ID)
+			return
+		}
+		log.Info("registration_create_ok", "event_id", eventID, "registration_id", reg.ID, "status", reg.Status, "user_id", user.ID)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -250,7 +284,7 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 		TokenExpiresAt: pgtype.Timestamptz{Valid: false},
 	}
 
-	reg, err := insertUserRegistration(ctx, qtx, params)
+	reg, err = insertUserRegistration(ctx, qtx, params)
 	if err != nil {
 		return db.Registration{}, err
 	}
@@ -404,7 +438,21 @@ func resolveName(user *db.User, override *string) string {
 
 // Cancel cancels a user's own registration.
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UUID, userID uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UUID, userID uuid.UUID) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_cancel_start", "registration_id", registrationID, "user_id", userID)
+	defer func() {
+		attrs := []any{"registration_id", registrationID, "user_id", userID}
+		if reg.EventID != uuid.Nil {
+			attrs = append(attrs, "event_id", reg.EventID)
+		}
+		if err != nil {
+			logOpOutcome(log, "registration_cancel", err, attrs...)
+			return
+		}
+		log.Info("registration_cancel_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -413,7 +461,7 @@ func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UU
 
 	qtx := s.queries.WithTx(tx)
 
-	reg, err := qtx.CancelRegistration(ctx, db.CancelRegistrationParams{
+	reg, err = qtx.CancelRegistration(ctx, db.CancelRegistrationParams{
 		ID:     registrationID,
 		UserID: pgtype.UUID{Valid: true, Bytes: userID},
 	})
@@ -566,8 +614,22 @@ func (s *RegistrationService) GetByIDAsAdmin(ctx context.Context, registrationID
 }
 
 // Approve sets a registration's status to "approved".
-func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (db.Registration, error) {
-	reg, err := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_approve_start", "registration_id", registrationID, "actor_id", actorID)
+	defer func() {
+		attrs := []any{"registration_id", registrationID, "actor_id", actorID}
+		if reg.EventID != uuid.Nil {
+			attrs = append(attrs, "event_id", reg.EventID)
+		}
+		if err != nil {
+			logOpOutcome(log, "registration_approve", err, attrs...)
+			return
+		}
+		log.Info("registration_approve_ok", attrs...)
+	}()
+
+	reg, err = s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 		ID:          registrationID,
 		OrganizerID: actorID,
 	})
@@ -660,7 +722,21 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 
 // Reject sets a registration's status to "rejected".
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_reject_start", "registration_id", registrationID, "actor_id", actorID)
+	defer func() {
+		attrs := []any{"registration_id", registrationID, "actor_id", actorID}
+		if reg.EventID != uuid.Nil {
+			attrs = append(attrs, "event_id", reg.EventID)
+		}
+		if err != nil {
+			logOpOutcome(log, "registration_reject", err, attrs...)
+			return
+		}
+		log.Info("registration_reject_ok", attrs...)
+	}()
+
 	existing, err := s.queries.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 		ID:          registrationID,
 		OrganizerID: actorID,
@@ -686,7 +762,7 @@ func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UU
 
 	qtx := s.queries.WithTx(tx)
 
-	reg, err := qtx.RejectRegistration(ctx, db.RejectRegistrationParams{
+	reg, err = qtx.RejectRegistration(ctx, db.RejectRegistrationParams{
 		ID:          registrationID,
 		OrganizerID: actorID,
 	})
@@ -761,7 +837,21 @@ func registrationStatusTransitionAllowed(from, to string) bool {
 
 // UpdateStatus sets a registration's status when the transition is legal.
 // Organizer-only: volunteer admins must use the approve/reject endpoints.
-func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID, status string) (db.Registration, error) {
+func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID, status string) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_status_update_start", "registration_id", registrationID, "organizer_id", organizerID, "status", status)
+	defer func() {
+		attrs := []any{"registration_id", registrationID, "organizer_id", organizerID, "status", status}
+		if reg.EventID != uuid.Nil {
+			attrs = append(attrs, "event_id", reg.EventID)
+		}
+		if err != nil {
+			logOpOutcome(log, "registration_status_update", err, attrs...)
+			return
+		}
+		log.Info("registration_status_update_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -772,7 +862,7 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 
 	// Staff-scoped fetch first (404 when no access at all), then require
 	// organizer so volunteer admins cannot no-op or mutate via this path.
-	reg, err := qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
+	reg, err = qtx.GetRegistrationByIDAdmin(ctx, db.GetRegistrationByIDAdminParams{
 		ID:          registrationID,
 		OrganizerID: organizerID,
 	})
@@ -867,7 +957,21 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 // CheckIn marks an attendee as checked in. If the attendee is already
 // checked in, the existing registration is returned idempotently.
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID, accessToken uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID, accessToken uuid.UUID) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_checkin_start", "registration_id", registrationID, "actor_id", actorID)
+	defer func() {
+		attrs := []any{"registration_id", registrationID, "actor_id", actorID}
+		if reg.EventID != uuid.Nil {
+			attrs = append(attrs, "event_id", reg.EventID)
+		}
+		if err != nil {
+			logOpOutcome(log, "registration_checkin", err, attrs...)
+			return
+		}
+		log.Info("registration_checkin_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -907,7 +1011,7 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 		return existing, nil
 	}
 
-	reg, err := qtx.CheckInRegistration(ctx, db.CheckInRegistrationParams{
+	reg, err = qtx.CheckInRegistration(ctx, db.CheckInRegistrationParams{
 		ID:          registrationID,
 		OrganizerID: actorID,
 		AccessToken: accessToken,
@@ -995,7 +1099,21 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 // token. Resolves the registration server-side so clients do not need the
 // full registration list loaded.
 // Outbox insert is transactional — failure rolls back the entire operation.
-func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, actorID, accessToken uuid.UUID) (db.Registration, error) {
+func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, actorID, accessToken uuid.UUID) (reg db.Registration, err error) {
+	log := s.logger(ctx)
+	log.Info("registration_checkin_by_token_start", "event_id", eventID, "actor_id", actorID)
+	defer func() {
+		attrs := []any{"event_id", eventID, "actor_id", actorID}
+		if reg.ID != uuid.Nil {
+			attrs = append(attrs, "registration_id", reg.ID)
+		}
+		if err != nil {
+			logOpOutcome(log, "registration_checkin_by_token", err, attrs...)
+			return
+		}
+		log.Info("registration_checkin_by_token_ok", attrs...)
+	}()
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
@@ -1004,7 +1122,7 @@ func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, 
 
 	qtx := s.queries.WithTx(tx)
 
-	reg, err := qtx.CheckInRegistrationByEventToken(ctx, db.CheckInRegistrationByEventTokenParams{
+	reg, err = qtx.CheckInRegistrationByEventToken(ctx, db.CheckInRegistrationByEventTokenParams{
 		EventID:     eventID,
 		OrganizerID: actorID,
 		AccessToken: accessToken,

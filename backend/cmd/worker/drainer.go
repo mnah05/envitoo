@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -17,9 +18,13 @@ import (
 	"github.com/mnah05/envitoo/internal/config"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/email"
+	"github.com/mnah05/envitoo/internal/logging"
 )
 
 func main() {
+	log := logging.New("worker")
+	slog.SetDefault(log)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -28,17 +33,20 @@ func main() {
 
 	cfg, err := config.LoadWorker()
 	if err != nil {
-		log.Fatal(err)
+		log.Error("load config", "error", err)
+		os.Exit(1)
 	}
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal("Unable to connect to database: ", err)
+		log.Error("connect database", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatal("Ping failed: ", err)
+		log.Error("ping database", "error", err)
+		os.Exit(1)
 	}
 
 	nc, err := nats.Connect(cfg.NATSURL,
@@ -46,40 +54,43 @@ func main() {
 		nats.ReconnectWait(2*time.Second),
 	)
 	if err != nil {
-		log.Fatalf("nats connect: %v", err)
+		log.Error("nats connect", "error", err)
+		os.Exit(1)
 	}
 	defer nc.Close()
 
 	js, err := jetstream.New(nc)
 	if err != nil {
-		log.Fatalf("jetstream init: %v", err)
+		log.Error("jetstream init", "error", err)
+		os.Exit(1)
 	}
 
 	if _, err := email.EnsureEmailsStream(ctx, js); err != nil {
-		log.Fatalf("ensure EMAILS stream: %v", err)
+		log.Error("ensure EMAILS stream", "error", err)
+		os.Exit(1)
 	}
 
-	go runCleanup(ctx, pool, cfg)
+	go runCleanup(ctx, pool, cfg, log)
 
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
 
-	log.Printf("outbox drainer ready: nats=%s batch=%d", cfg.NATSURL, cfg.BatchSize)
+	log.Info("outbox_drainer_ready", "nats", cfg.NATSURL, "batch_size", cfg.BatchSize)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("shutting down")
+			log.Info("worker_shutdown")
 			return
 		case <-ticker.C:
-			if err := publishBatch(ctx, pool, js, cfg); err != nil {
-				log.Printf("publish batch: %v", err)
+			if err := publishBatch(ctx, pool, js, cfg, log); err != nil {
+				log.Error("publish_batch_failed", "error", err)
 			}
 		}
 	}
 }
 
-func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStream, cfg config.WorkerConfig) error {
+func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStream, cfg config.WorkerConfig, log *slog.Logger) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -101,6 +112,8 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 		return nil
 	}
 
+	log.Info("outbox_batch_fetched", "count", len(batch))
+
 	// 2. Publish everything async — PublishAsync returns immediately with a
 	//    future you resolve later. Per-row failures are recorded and written
 	//    back so the rest of the batch can still commit.
@@ -108,10 +121,12 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 		id      uuid.UUID
 		retries int32
 		err     string
+		topic   string
 	}
 	type pending struct {
 		row    db.FetchPendingOutboxEmailsRow
 		future jetstream.PubAckFuture
+		topic  string
 	}
 
 	var succeeded []uuid.UUID
@@ -126,7 +141,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 			TemplateData: row.TemplateData,
 		})
 		if err != nil {
-			failed = append(failed, failure{id: row.ID, retries: row.Retries, err: err.Error()})
+			failed = append(failed, failure{id: row.ID, retries: row.Retries, err: err.Error(), topic: row.Topic})
 			continue
 		}
 
@@ -138,10 +153,10 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 		future, err := js.PublishAsync(subject, payload,
 			jetstream.WithMsgID(row.ID.String()))
 		if err != nil {
-			failed = append(failed, failure{id: row.ID, retries: row.Retries, err: err.Error()})
+			failed = append(failed, failure{id: row.ID, retries: row.Retries, err: err.Error(), topic: subject})
 			continue
 		}
-		futures = append(futures, pending{row: row, future: future})
+		futures = append(futures, pending{row: row, future: future, topic: subject})
 	}
 
 	// 3. Resolve acks and split into succeeded / failed.
@@ -152,10 +167,15 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 		select {
 		case <-p.future.Ok():
 			succeeded = append(succeeded, p.row.ID)
+			log.Info("outbox_publish_ok",
+				"outbox_id", p.row.ID,
+				"template", p.row.Template,
+				"topic", p.topic,
+			)
 		case err := <-p.future.Err():
-			failed = append(failed, failure{id: p.row.ID, retries: p.row.Retries, err: err.Error()})
+			failed = append(failed, failure{id: p.row.ID, retries: p.row.Retries, err: err.Error(), topic: p.topic})
 		case <-ctxAck.Done():
-			failed = append(failed, failure{id: p.row.ID, retries: p.row.Retries, err: "ack timeout"})
+			failed = append(failed, failure{id: p.row.ID, retries: p.row.Retries, err: "ack timeout", topic: p.topic})
 		}
 	}
 
@@ -171,9 +191,19 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	for _, f := range failed {
 		permanentlyFailed := f.retries+1 >= int32(cfg.MaxRetries)
 		if permanentlyFailed {
-			log.Printf("publish permanently failed for %s after %d attempts: %s", f.id, cfg.MaxRetries, f.err)
+			log.Error("outbox_publish_permanent_fail",
+				"outbox_id", f.id,
+				"topic", f.topic,
+				"attempts", cfg.MaxRetries,
+				"error", f.err,
+			)
 		} else {
-			log.Printf("publish failed for %s: %s", f.id, f.err)
+			log.Warn("outbox_publish_failed",
+				"outbox_id", f.id,
+				"topic", f.topic,
+				"retries", f.retries+1,
+				"error", f.err,
+			)
 		}
 
 		lastErr := f.err
@@ -186,5 +216,6 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 		}
 	}
 
+	log.Info("outbox_batch_done", "succeeded", len(succeeded), "failed", len(failed))
 	return tx.Commit(ctx)
 }

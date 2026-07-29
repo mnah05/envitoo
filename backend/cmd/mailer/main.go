@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
+	"os"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -16,9 +17,13 @@ import (
 
 	"github.com/mnah05/envitoo/internal/config"
 	"github.com/mnah05/envitoo/internal/email"
+	"github.com/mnah05/envitoo/internal/logging"
 )
 
 func main() {
+	log := logging.New("mailer")
+	slog.SetDefault(log)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -27,17 +32,20 @@ func main() {
 
 	cfg, err := config.LoadMailer()
 	if err != nil {
-		log.Fatal(err)
+		log.Error("load config", "error", err)
+		os.Exit(1)
 	}
 
 	renderer, err := email.NewRenderer(cfg.AppPublicURL)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("init renderer", "error", err)
+		os.Exit(1)
 	}
 
 	sender, err := email.NewSender(cfg.ResendAPIKey, cfg.EmailFrom)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("init sender", "error", err)
+		os.Exit(1)
 	}
 
 	nc, err := nats.Connect(cfg.NATSURL,
@@ -45,58 +53,71 @@ func main() {
 		nats.ReconnectWait(2*time.Second),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
 			if err != nil {
-				log.Printf("nats disconnected: %v", err)
+				log.Warn("nats_disconnected", "error", err)
 			}
 		}),
 		nats.ReconnectHandler(func(_ *nats.Conn) {
-			log.Printf("nats reconnected")
+			log.Info("nats_reconnected")
 		}),
 	)
 	if err != nil {
-		log.Fatalf("nats connect: %v", err)
+		log.Error("nats connect", "error", err)
+		os.Exit(1)
 	}
 	defer nc.Close()
 
 	js, err := jetstream.New(nc)
 	if err != nil {
-		log.Fatalf("jetstream init: %v", err)
+		log.Error("jetstream init", "error", err)
+		os.Exit(1)
 	}
 
 	consumer, err := email.EnsureMailerConsumer(ctx, js)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("ensure mailer consumer", "error", err)
+		os.Exit(1)
 	}
 
-	log.Printf("mailer ready: stream=%s consumer=%s from=%s", email.StreamName, email.ConsumerName, cfg.EmailFrom)
+	log.Info("mailer_ready",
+		"stream", email.StreamName,
+		"consumer", email.ConsumerName,
+	)
 
 	consCtx, err := consumer.Consume(func(msg jetstream.Msg) {
-		handleMsg(ctx, msg, renderer, sender)
+		handleMsg(ctx, msg, renderer, sender, log)
 	})
 	if err != nil {
-		log.Fatalf("consume: %v", err)
+		log.Error("consume", "error", err)
+		os.Exit(1)
 	}
 	defer consCtx.Stop()
 
 	<-ctx.Done()
-	log.Println("shutting down mailer")
+	log.Info("mailer_shutdown")
 }
 
-func handleMsg(ctx context.Context, msg jetstream.Msg, renderer *email.Renderer, sender *email.Sender) {
+func handleMsg(ctx context.Context, msg jetstream.Msg, renderer *email.Renderer, sender *email.Sender, log *slog.Logger) {
 	// Bound each send so a hung Resend call cannot block AckWait forever.
 	sendCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
 	var payload email.EmailMessage
 	if err := json.Unmarshal(msg.Data(), &payload); err != nil {
-		log.Printf("mailer: invalid payload subject=%s: %v", msg.Subject(), err)
+		log.Error("mailer_invalid_payload", "subject", msg.Subject(), "error", err)
 		// Poison message — acknowledge so it does not retry forever.
 		_ = msg.Ack()
 		return
 	}
 
+	msgLog := log.With(
+		"outbox_id", payload.OutboxID,
+		"template", payload.Template,
+		"topic", msg.Subject(),
+	)
+
 	rendered, err := renderer.Render(payload.Template, payload.TemplateData)
 	if err != nil {
-		log.Printf("mailer: render failed outbox_id=%s template=%s: %v", payload.OutboxID, payload.Template, err)
+		msgLog.Error("mailer_render_failed", "error", err)
 		if isPermanentRenderErr(err) {
 			_ = msg.Ack()
 			return
@@ -113,7 +134,7 @@ func handleMsg(ctx context.Context, msg jetstream.Msg, renderer *email.Renderer,
 		IdempotencyKey: payload.OutboxID.String(),
 	})
 	if err != nil {
-		log.Printf("mailer: send failed outbox_id=%s recipient=%s: %v", payload.OutboxID, redactEmail(payload.Recipient), err)
+		msgLog.Error("mailer_send_failed", "error", err)
 		if isPermanentSendErr(err) {
 			_ = msg.Term()
 			return
@@ -123,8 +144,10 @@ func handleMsg(ctx context.Context, msg jetstream.Msg, renderer *email.Renderer,
 	}
 
 	if err := msg.Ack(); err != nil {
-		log.Printf("mailer: ack failed outbox_id=%s: %v", payload.OutboxID, err)
+		msgLog.Error("mailer_ack_failed", "error", err)
+		return
 	}
+	msgLog.Info("mailer_send_ok")
 }
 
 func isPermanentRenderErr(err error) bool {
@@ -161,13 +184,4 @@ func isPermanentSendErr(err error) bool {
 		}
 	}
 	return false
-}
-
-func redactEmail(addr string) string {
-	addr = strings.TrimSpace(addr)
-	at := strings.LastIndex(addr, "@")
-	if at <= 1 {
-		return "***"
-	}
-	return addr[:1] + "***" + addr[at:]
 }
