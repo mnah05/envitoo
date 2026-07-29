@@ -1,5 +1,6 @@
 .PHONY: help dev stop backend frontend install install-backend install-frontend \
-        build build-frontend build-backend clean test logs worker mailer
+        build build-frontend build-backend build-docker clean test logs worker mailer \
+        dc-up dc-stop dc-down dc-logs dc-ps
 
 # Configurable paths and commands
 GO        ?= go
@@ -77,9 +78,28 @@ build-backend: ## Build the Go backend binary
 build-frontend: ## Build the frontend for production
 	@cd $(FRONTEND) && $(NPM) run build
 
+build-docker: ## Build the backend Docker image
+	docker build -t envitoo/backend:latest ./backend
+
 ## Misc
 test: ## Run backend tests
 	@cd $(BACKEND) && $(GO) test ./...
+
+## Docker Compose (infra: redis + nats — postgres is remote Supabase)
+dc-up: ## Start infrastructure services (redis, nats) in background
+	docker compose up -d --wait
+
+dc-stop: ## Stop infrastructure services
+	docker compose stop
+
+dc-down: ## Stop and remove containers, networks, volumes
+	docker compose down
+
+dc-logs: ## Tail logs from infrastructure services
+	docker compose logs -f
+
+dc-ps: ## List running infrastructure services
+	docker compose ps
 
 clean: ## Remove build artifacts
 	@rm -rf $(BACKEND)/bin $(FRONTEND)/dist
