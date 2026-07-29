@@ -1,5 +1,6 @@
 .PHONY: help dev stop backend frontend install install-backend install-frontend \
-        build build-frontend build-backend clean test logs worker mailer
+        build build-frontend build-backend clean test check check-backend \
+        check-frontend ci logs worker mailer
 
 # Configurable paths and commands
 GO        ?= go
@@ -80,6 +81,20 @@ build-frontend: ## Build the frontend for production
 ## Misc
 test: ## Run backend tests
 	@cd $(BACKEND) && $(GO) test ./...
+
+check: check-backend check-frontend ## Run all lint, format, test, and build checks
+
+check-backend: ## Run backend format, vet, and test checks
+	@cd $(BACKEND) && test -z "$$(gofmt -l .)"
+	@cd $(BACKEND) && $(GO) vet ./...
+	@cd $(BACKEND) && $(GO) test ./...
+
+check-frontend: ## Run frontend lint, typecheck, and build checks
+	@cd $(FRONTEND) && $(NPM) run lint
+	@cd $(FRONTEND) && $(NPM) run typecheck
+	@cd $(FRONTEND) && $(NPM) run build
+
+ci: check ## Alias for check (CI / pre-commit entry point)
 
 clean: ## Remove build artifacts
 	@rm -rf $(BACKEND)/bin $(FRONTEND)/dist

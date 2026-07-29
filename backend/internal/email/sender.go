@@ -32,10 +32,10 @@ func NewSender(apiKey, from string) (*Sender, error) {
 
 // SendRequest is a fully rendered outbound email.
 type SendRequest struct {
-	To           string
-	Subject      string
-	HTML         string
-	Text         string
+	To             string
+	Subject        string
+	HTML           string
+	Text           string
 	IdempotencyKey string
 }
 

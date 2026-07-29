@@ -21,12 +21,12 @@ const (
 // Safe to call from both the outbox drainer and the mailer on startup.
 func EnsureEmailsStream(ctx context.Context, js jetstream.JetStream) (jetstream.Stream, error) {
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:      StreamName,
-		Subjects:  []string{StreamSubjects},
-		Retention: jetstream.WorkQueuePolicy,
-		Storage:   jetstream.FileStorage,
-		Discard:   jetstream.DiscardOld,
-		MaxAge:    7 * 24 * time.Hour,
+		Name:       StreamName,
+		Subjects:   []string{StreamSubjects},
+		Retention:  jetstream.WorkQueuePolicy,
+		Storage:    jetstream.FileStorage,
+		Discard:    jetstream.DiscardOld,
+		MaxAge:     7 * 24 * time.Hour,
 		Duplicates: time.Minute, // aligns with MsgID dedup on PublishAsync
 	})
 	if err != nil {

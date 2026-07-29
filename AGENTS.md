@@ -39,12 +39,13 @@ Optional email pipeline: `make worker` and `make mailer` (need NATS + Resend).
 
 | Target | Command |
 |--------|---------|
+| All checks (CI / pre-commit) | `make check` (alias: `make ci`) |
 | Backend tests | `make test` (or `cd backend && go test ./...`) |
 | Frontend lint | `cd client && npm run lint` |
 | Frontend typecheck | `cd client && npm run typecheck` |
 | Production build | `make build` |
 
-Pre-commit hooks (via `make setup`): gitleaks, gofmt, go vet — gitleaks is optional if not installed.
+Pre-commit hooks (via `make setup`): runs `make check` plus staged gitleaks scan, binary check, and `.env` guard. Gitleaks is optional locally if not installed; GitHub Actions runs gitleaks on every push and pull request (see `.github/workflows/ci.yml`).
 
 ### Gotchas
 
