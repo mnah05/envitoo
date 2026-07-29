@@ -44,4 +44,5 @@ paths = [
     '''\.env$''',
     '''\.env\.local$''',
     '''\.env\.production$''',
+    '''docker-compose\.ya?ml$''',
 ]
