@@ -18,6 +18,8 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222"
+    volumes:
+      - nats_data:/data
     healthcheck:
       test: ["CMD-SHELL", "wget -q http://localhost:8222/healthz -O /dev/null || exit 1"]
       interval: 5s
@@ -26,3 +28,4 @@ services:
 
 volumes:
   redis_data:
+  nats_data:
