@@ -1,5 +1,5 @@
 .PHONY: help dev stop backend frontend install install-backend install-frontend \
-        build build-frontend build-backend clean test check check-backend \
+        build build-frontend build-backend build-docker clean test check check-backend \
         check-frontend ci logs worker mailer \
         dc-up dc-stop dc-down dc-logs dc-ps dc-full
 
@@ -78,6 +78,9 @@ build-backend: ## Build the Go backend binary
 
 build-frontend: ## Build the frontend for production
 	@cd $(FRONTEND) && $(NPM) run build
+
+build-docker: ## Build the backend Docker image
+	docker build -t envitoo/backend:latest ./backend
 
 ## Docker Compose
 dc-up: ## Start infrastructure services (postgres, redis, nats) in background
