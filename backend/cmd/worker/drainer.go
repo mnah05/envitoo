@@ -97,7 +97,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	if _, err := email.EnsureEmailsStream(ctx, js); err != nil {
+	for attempt := 0; attempt < 10; attempt++ {
+		_, err = email.EnsureEmailsStream(ctx, js)
+		if err == nil {
+			break
+		}
+		log.Warn("emails_stream_retry", "attempt", attempt+1, "error", err)
+		select {
+		case <-ctx.Done():
+			log.Error("ensure EMAILS stream cancelled", "error", ctx.Err())
+			os.Exit(1)
+		case <-time.After(time.Duration(attempt+1) * time.Second):
+		}
+	}
+	if err != nil {
 		log.Error("ensure EMAILS stream", "error", err)
 		os.Exit(1)
 	}

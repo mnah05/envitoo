@@ -6,6 +6,8 @@
 # Go build artifacts
 /bin/
 /server
+/mailer
+/worker
 *.exe
 *.exe~
 *.dll

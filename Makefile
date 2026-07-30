@@ -1,9 +1,9 @@
 # ============================================================
-# Pulse — Makefile
+# EnviToo — Makefile
 # ============================================================
 
 .PHONY: help \
-        dev stop backend frontend worker mailer \
+        dev stop backend frontend worker mailer email \
         setup install install-backend install-frontend \
         build build-backend build-frontend build-docker \
         dc-up dc-stop dc-down dc-logs dc-ps dc-full \
@@ -55,6 +55,12 @@ mailer: ## Run the NATS → Resend email mailer
 	@echo "email mailer starting…"
 	@cd $(BACKEND) && $(GO) run $(MAILER_PKG)
 
+email: dc-up ## Run infra + outbox worker + mailer (email pipeline)
+	@echo "Email pipeline starting (worker + mailer)… (Ctrl-C to stop)"
+	@cd $(BACKEND) && $(GO) run $(WORKER_PKG) &
+	@cd $(BACKEND) && $(GO) run $(MAILER_PKG) &
+	@wait
+
 stop: ## Kill anything bound to the frontend/backend dev ports
 	@for port in $(FRONTEND_PORT) $(BACKEND_PORT); do \
 		pids=$$(lsof -ti :$$port 2>/dev/null || true); \
@@ -71,8 +77,13 @@ stop: ## Kill anything bound to the frontend/backend dev ports
 # ============================================================
 
 setup: ## Install git hooks, then all dependencies
-	@git config core.hooksPath .githooks
-	@echo "✓ git hooks configured (.githooks/)"
+	@CURRENT=$$(git config core.hooksPath 2>/dev/null || echo ""); \
+	if [ "$$CURRENT" != ".githooks" ]; then \
+		git config core.hooksPath .githooks; \
+		echo "✓ git hooks configured (.githooks/)"; \
+	else \
+		echo "✓ git hooks already configured (.githooks/)"; \
+	fi
 	@$(MAKE) install
 
 install: install-backend install-frontend ## Install all dependencies
@@ -90,7 +101,8 @@ install-frontend: ## Install frontend npm dependencies
 build: build-backend build-frontend ## Build both backend and frontend
 
 build-backend: ## Build the Go backend binary
-	@cd $(BACKEND) && $(GO) build -o bin/pulse-server $(BACKEND_PKG)
+	@mkdir -p $(BACKEND)/bin
+	@cd $(BACKEND) && $(GO) build -o bin/server $(BACKEND_PKG)
 
 build-frontend: ## Build the frontend for production
 	@cd $(FRONTEND) && $(NPM) run build

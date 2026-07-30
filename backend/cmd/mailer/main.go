@@ -79,7 +79,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	consumer, err := email.EnsureMailerConsumer(ctx, js)
+	var consumer jetstream.Consumer
+	for attempt := 0; attempt < 10; attempt++ {
+		consumer, err = email.EnsureMailerConsumer(ctx, js)
+		if err == nil {
+			break
+		}
+		log.Warn("mailer_consumer_retry", "attempt", attempt+1, "error", err)
+		select {
+		case <-ctx.Done():
+			log.Error("ensure mailer consumer cancelled", "error", ctx.Err())
+			os.Exit(1)
+		case <-time.After(time.Duration(attempt+1) * time.Second):
+		}
+	}
 	if err != nil {
 		log.Error("ensure mailer consumer", "error", err)
 		os.Exit(1)
