@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
+	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/helper"
 )
@@ -78,7 +80,7 @@ type GuestRegistrationInvalidator func(ctx context.Context, userID uuid.UUID, em
 
 // Auth must run before LoadUser so that SessionClaims are available in
 // the request context.
-func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestRegistrationInvalidator) echo.MiddlewareFunc {
+func LoadUser(pool *pgxpool.Pool, queries *db.Queries, cacheStore *cache.Store, onGuestRegsChanged GuestRegistrationInvalidator) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
@@ -91,9 +93,12 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 				return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 			}
 
-			// Hot path: SELECT from the local users table. No Clerk API call.
+			// Hot path: SELECT from the local users table, cached in Redis.
+			// No Clerk API call.
 			// claims.Subject is the Clerk auth_user_id (e.g. "user_2abc...").
-			localUser, err := queries.GetUserByAuthUserID(ctx, claims.Subject)
+			localUser, err := cache.GetJSON(ctx, cacheStore, "user:auth:"+claims.Subject, 2*time.Minute, func(ctx context.Context) (db.User, error) {
+				return queries.GetUserByAuthUserID(ctx, claims.Subject)
+			})
 			switch {
 			case err == nil:
 				// Normalize for guest-link matching (guest emails are stored lowercase).
@@ -145,7 +150,7 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 				// Race loser: another request (or webhook) inserted the
 				// user first. Roll back (defer) and re-fetch the winning
 				// row; skip onboarding — the winner already did it.
-				return refetchAndContinue(ctx, c, queries, claims.Subject, log, onGuestRegsChanged, next)
+				return refetchAndContinue(ctx, c, queries, cacheStore, claims.Subject, log, onGuestRegsChanged, next)
 			}
 			if err != nil {
 				log.ErrorContext(ctx, "create local user", "clerk_user_id", claims.Subject, "error", err)
@@ -230,12 +235,15 @@ func refetchAndContinue(
 	ctx context.Context,
 	c echo.Context,
 	queries *db.Queries,
+	cacheStore *cache.Store,
 	authUserID string,
 	log *slog.Logger,
 	onGuestRegsChanged GuestRegistrationInvalidator,
 	next echo.HandlerFunc,
 ) error {
-	localUser, err := queries.GetUserByAuthUserID(ctx, authUserID)
+	localUser, err := cache.GetJSON(ctx, cacheStore, "user:auth:"+authUserID, 2*time.Minute, func(ctx context.Context) (db.User, error) {
+		return queries.GetUserByAuthUserID(ctx, authUserID)
+	})
 	if err != nil {
 		log.ErrorContext(ctx, "refetch local user after race", "clerk_user_id", authUserID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
@@ -249,7 +257,21 @@ func refetchAndContinue(
 // guest rows superseded by an existing user registration for the same event.
 // Errors are logged but do not fail the request — linking is best-effort on
 // the returning-user hot path.
+//
+// On the hot path, >99% of users have no orphaned guest registrations, so we
+// check first with a cheap EXISTS query and skip entirely when there's nothing
+// to do. This avoids two UPDATE round-trips on nearly every authenticated
+// request.
 func linkGuestRegistrations(ctx context.Context, queries *db.Queries, log *slog.Logger, userID uuid.UUID, email string, onGuestRegsChanged GuestRegistrationInvalidator) {
+	hasOrphans, err := queries.CheckOrphanedGuestRegistrations(ctx, email)
+	if err != nil {
+		log.ErrorContext(ctx, "check orphaned guest registrations", "user_id", userID, "error", err)
+		return
+	}
+	if !hasOrphans {
+		return
+	}
+
 	linked, cancelled, err := linkGuestRegistrationsTx(ctx, queries, userID, email)
 	if err != nil {
 		log.ErrorContext(ctx, "link guest registrations", "user_id", userID, "error", err)
@@ -266,23 +288,7 @@ func linkGuestRegistrations(ctx context.Context, queries *db.Queries, log *slog.
 
 func linkGuestRegistrationsTx(ctx context.Context, queries *db.Queries, userID uuid.UUID, email string) (linked, cancelled int64, err error) {
 	userIDParam := pgtype.UUID{Bytes: userID, Valid: true}
-
-	linked, err = queries.LinkGuestRegistrations(ctx, db.LinkGuestRegistrationsParams{
-		Email:  email,
-		UserID: userIDParam,
-	})
-	if err != nil {
-		return 0, 0, err
-	}
-
-	cancelled, err = queries.CancelSupersededGuestRegistrations(ctx, db.CancelSupersededGuestRegistrationsParams{
-		Email:  email,
-		UserID: userIDParam,
-	})
-	if err != nil {
-		return linked, 0, err
-	}
-	return linked, cancelled, nil
+	return queries.LinkGuestRegistrationsCombined(ctx, email, userIDParam)
 }
 
 // defaultCalendarSlugName derives a slug and display name for the

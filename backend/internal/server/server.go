@@ -103,7 +103,7 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	public.GET("/events/:id/volunteer/settings", s.GetVolunteerSettings)
 	public.GET("/events/:id/volunteer/roles", s.ListVolunteerRoles)
 
-	protected := e.Group("/api", middleware.Auth(), middleware.LoadUser(s.pool, s.queries, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(ctx, middleware.DefaultAuthConfig))
+	protected := e.Group("/api", middleware.Auth(), middleware.LoadUser(s.pool, s.queries, s.cache, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(ctx, middleware.DefaultAuthConfig))
 	protected.GET("/me", s.Me)
 
 	// Host-only event management
