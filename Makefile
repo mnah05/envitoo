@@ -3,20 +3,26 @@
 # ============================================================
 
 .PHONY: help \
-        dev stop backend frontend worker mailer email \
-        setup install install-backend install-frontend \
-        build build-backend build-frontend build-docker \
-        dc-up dc-stop dc-down dc-logs dc-ps dc-full \
-        test check check-backend check-frontend ci clean
+	dev stop backend frontend worker mailer email \
+	setup install install-backend install-frontend \
+	build build-backend build-frontend build-docker \
+	dc-up dc-stop dc-down dc-logs dc-ps dc-full \
+	test check check-backend check-frontend ci clean
 
-# ---- Config --------------------------------------------------
+# ------------------------------------------------------------
+# Config
+# ------------------------------------------------------------
+
 GO            ?= go
 NPM           ?= npm
+
 BACKEND       := backend
 FRONTEND      := client
+
 BACKEND_PKG   := ./cmd/server
 WORKER_PKG    := ./cmd/worker
 MAILER_PKG    := ./cmd/mailer
+
 BACKEND_PORT  := 8080
 FRONTEND_PORT := 5173
 
@@ -24,44 +30,44 @@ FRONTEND_PORT := 5173
 # Help
 # ============================================================
 
-help: ## Show this help
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make <target>\n\nTargets:\n"} \
-	/^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+help: ## Show available targets
+	@awk 'BEGIN {FS=":.*##"; printf "Usage:\n  make <target>\n\nTargets:\n"} \
+	/^[a-zA-Z0-9_.-]+:.*##/ {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # ============================================================
 # Development
 # ============================================================
 
-dev: stop dc-up ## Run infra (docker) + backend + frontend together
+dev: stop dc-up ## Run backend + frontend with infra
 	@trap 'kill 0' EXIT; \
 	echo "Starting backend and frontend… (Ctrl-C to stop)"; \
 	$(MAKE) -s backend & \
 	$(MAKE) -s frontend & \
 	wait
 
-backend: ## Run the Go backend on :8080
+backend: ## Run Go backend on :8080
 	@echo "backend → http://localhost:$(BACKEND_PORT)"
 	@cd $(BACKEND) && $(GO) run $(BACKEND_PKG)
 
-frontend: ## Run the Vite frontend on :5173
+frontend: ## Run Vite frontend on :5173
 	@echo "frontend → http://localhost:$(FRONTEND_PORT)"
 	@cd $(FRONTEND) && $(NPM) run dev -- --port $(FRONTEND_PORT) --strictPort
 
-worker: ## Run the email outbox → NATS drainer
-	@echo "outbox worker starting…"
+worker: ## Run outbox → NATS drainer
+	@echo "Starting email worker..."
 	@cd $(BACKEND) && $(GO) run $(WORKER_PKG)
 
-mailer: ## Run the NATS → Resend email mailer
-	@echo "email mailer starting…"
+mailer: ## Run NATS → Resend mailer
+	@echo "Starting email mailer..."
 	@cd $(BACKEND) && $(GO) run $(MAILER_PKG)
 
-email: dc-up ## Run infra + outbox worker + mailer (email pipeline)
+email: dc-up ## Run infra + worker + mailer (email pipeline)
 	@echo "Email pipeline starting (worker + mailer)… (Ctrl-C to stop)"
 	@cd $(BACKEND) && $(GO) run $(WORKER_PKG) &
 	@cd $(BACKEND) && $(GO) run $(MAILER_PKG) &
 	@wait
 
-stop: ## Kill anything bound to the frontend/backend dev ports
+stop: ## Kill processes on frontend/backend dev ports
 	@for port in $(FRONTEND_PORT) $(BACKEND_PORT); do \
 		pids=$$(lsof -ti :$$port 2>/dev/null || true); \
 		[ -z "$$pids" ] && continue; \

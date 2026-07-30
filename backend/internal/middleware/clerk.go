@@ -52,7 +52,7 @@ func (b *jwksCachingBackend) Call(ctx context.Context, req *clerk.APIRequest, re
 }
 
 var (
-	jwksWarmOnce   sync.Once
+	jwksWarmOnce      sync.Once
 	warmedJWKSBackend *jwksCachingBackend
 )
 
