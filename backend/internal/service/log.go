@@ -8,6 +8,8 @@ import (
 	"github.com/mnah05/envitoo/internal/middleware"
 )
 
+// Service-level loggers attach a "component" attribute so log entries from
+// different services are distinguishable in the aggregated log stream.
 func (s *RegistrationService) logger(ctx context.Context) *slog.Logger {
 	return middleware.LoggerFromContext(ctx).With("component", "registration")
 }
@@ -21,8 +23,9 @@ func (s *VolunteerService) logger(ctx context.Context) *slog.Logger {
 }
 
 // logOpOutcome records success or a classified failure for a mutating op.
-// Domain errors are Warn; unexpected errors are Error. Call only when err != nil
-// for failures, or use logOpOK for success.
+// Domain errors (expected business-rule violations) are logged at Warn level;
+// unexpected errors (DB down, etc.) are logged at Error level.
+// Call with err == nil for success, err != nil for failure.
 func logOpOutcome(log *slog.Logger, op string, err error, attrs ...any) {
 	if err == nil {
 		log.Info(op+"_ok", attrs...)
@@ -37,6 +40,9 @@ func logOpOutcome(log *slog.Logger, op string, err error, attrs ...any) {
 	log.Error(op+"_failed", a...)
 }
 
+// domainFailReason classifies a sentinel error into a short string for
+// structured logging. The second return value is false for unrecognised
+// errors (which should be logged at Error level instead of Warn).
 func domainFailReason(err error) (string, bool) {
 	switch {
 	case errors.Is(err, ErrEventNotFound):

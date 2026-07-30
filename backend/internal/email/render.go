@@ -11,6 +11,10 @@ import (
 )
 
 // Renderer turns EmailMessage payloads into subject + HTML/text bodies.
+//
+// Note 1: Go's html/template package auto-escapes HTML in template values
+// (preventing XSS), while text/template does not. Using both gives us safe
+// HTML output and plain-text fallback for email clients that don't render HTML.
 type Renderer struct {
 	publicURL string
 	html      *template.Template
@@ -19,6 +23,10 @@ type Renderer struct {
 
 // NewRenderer parses embedded templates. publicURL is the SPA origin
 // (e.g. https://envitoo.app) used for ticket and home links.
+//
+// Note 2: ParseFS loads templates from the embedded filesystem (embed.FS).
+// The templates directory lives next to this Go file and is compiled into the
+// binary at build time — no external template files needed at runtime.
 func NewRenderer(publicURL string) (*Renderer, error) {
 	publicURL = strings.TrimRight(strings.TrimSpace(publicURL), "/")
 	if publicURL == "" {
@@ -74,6 +82,11 @@ func (r *Renderer) Render(templateName string, data json.RawMessage) (Rendered, 
 }
 
 // view is the template context shared by HTML and text templates.
+//
+// Note 3: This struct aggregates data from multiple template types. Fields
+// that do not apply to a given template (e.g. OTP in a cancellation email)
+// are left as zero values but never rendered because the corresponding
+// template does not reference them.
 type view struct {
 	Name        string
 	EventTitle  string
@@ -254,6 +267,11 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 	return v, nil
 }
 
+// subjectFor returns the email subject line for each template type.
+//
+// Note 4: The subject is determined by template name rather than embedded in
+// the template file because subject lines need different formatting (no HTML,
+// no line breaks) and are rendered in email client preview panes.
 func subjectFor(templateName string, v view) string {
 	switch templateName {
 	case TemplateOTP:
@@ -279,11 +297,13 @@ func subjectFor(templateName string, v view) string {
 	}
 }
 
+// isUsableToken checks whether the access token is a real UUID or a zero
+// value. Zero UUIDs are used for authenticated (non-guest) registrations
+// where no ticket token is issued.
 func isUsableToken(token string) bool {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return false
 	}
-	// Zero UUID means no guest token (signed-in registration).
 	return token != "00000000-0000-0000-0000-000000000000"
 }

@@ -2,6 +2,10 @@ package service
 
 import "errors"
 
+// Sentinel errors used throughout the service layer. Callers (handlers)
+// use errors.Is to classify failures and map them to HTTP status codes.
+// Each error wraps a static string so the same sentinel can carry dynamic
+// context via fmt.Errorf("%s: %w", id, ErrEventNotFound).
 var (
 	ErrEventNotFound                = errors.New("event not found")
 	ErrRegistrationNotFound         = errors.New("registration not found")

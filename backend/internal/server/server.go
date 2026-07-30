@@ -19,7 +19,10 @@ import (
 	"github.com/mnah05/envitoo/internal/service"
 )
 
-// Server holds the HTTP handlers and their dependencies.
+// Server holds the HTTP handlers and their dependencies. Each exported
+// method on Server is an echo.HandlerFunc wired to a route in Register.
+// Dependencies are injected via New rather than constructed internally,
+// making the handlers easy to unit test with a mock pool.
 type Server struct {
 	pool          *pgxpool.Pool
 	queries       *db.Queries
@@ -35,6 +38,9 @@ type Server struct {
 // New creates a Server with all services initialized.
 // otpSecret is the HMAC key for guest email OTP (OTP_SECRET env).
 // healthToken, when non-empty, must be supplied as ?pass= on /healthz.
+//
+// The Service layer wraps queries with business logic and is split
+// across EventService, RegistrationService, and VolunteerService.
 func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, healthToken string, log *slog.Logger) *Server {
 	validate := dto.NewValidator()
 	access := service.NewEventAccessService(queries)
@@ -51,7 +57,9 @@ func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, hea
 	}
 }
 
-// Register wires all routes onto the given Echo instance.
+// Register wires all routes onto the given Echo instance. Routes are
+// grouped by auth level: public (no auth), OTP (tightly rate-limited),
+// and protected (Clerk JWT + local user provisioning).
 // ctx is used to stop rate-limiter cleanup goroutines on shutdown.
 func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustLoopback(true))
@@ -137,8 +145,10 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	protected.POST("/volunteer-applications/:id/reject", s.RejectVolunteerApplication)
 }
 
-// Health handles GET /healthz.
-// If HEALTHZ_TOKEN is set, requires matching ?pass=. Otherwise public liveness.
+// Health handles GET /healthz. A simple liveness probe —
+// returns {"status":"ok"} with HTTP 200.
+// If HEALTHZ_TOKEN is set, the caller must supply a matching ?pass=
+// query parameter (constant-time comparison to avoid timing attacks).
 func (s *Server) Health(c echo.Context) error {
 	if s.healthToken != "" {
 		got := c.QueryParam("pass")
@@ -149,7 +159,9 @@ func (s *Server) Health(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// Me handles GET /api/me and returns the authenticated user.
+// Me handles GET /api/me and returns the authenticated user's profile.
+// This is the canonical way for the frontend to retrieve who the
+// current session belongs to after Clerk auth + LoadUser onboarding.
 func (s *Server) Me(c echo.Context) error {
 	u, ok := middleware.UserFromContext(c)
 	if !ok {

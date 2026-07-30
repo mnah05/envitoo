@@ -9,6 +9,10 @@ import (
 )
 
 // Sender delivers rendered emails through Resend.
+//
+// Note 1: Resend (resend.com) is the email sending provider. It replaces
+// older services like SendGrid or SMTP with a modern REST API. The SDK
+// handles retries and rate limiting internally.
 type Sender struct {
 	client *resend.Client
 	from   string
@@ -31,6 +35,10 @@ func NewSender(apiKey, from string) (*Sender, error) {
 }
 
 // SendRequest is a fully rendered outbound email.
+//
+// Note 2: The email is pre-rendered (HTML and Text are supplied) — the sender
+// only handles delivery, not templating. This separates concerns: the
+// Renderer handles templates, the Sender handles the API call.
 type SendRequest struct {
 	To             string
 	Subject        string
@@ -41,6 +49,11 @@ type SendRequest struct {
 
 // Send delivers one email. IdempotencyKey should be the outbox UUID so NATS
 // redeliveries do not create duplicate Resend sends.
+//
+// Note 3: The IdempotencyKey is passed through to Resend's API. If the same
+// key is sent again within a dedup window, Resend returns the previous
+// response instead of sending a duplicate email. This is critical for NATS
+// at-least-once delivery semantics.
 func (s *Sender) Send(ctx context.Context, req SendRequest) error {
 	if req.To == "" {
 		return fmt.Errorf("recipient is required")

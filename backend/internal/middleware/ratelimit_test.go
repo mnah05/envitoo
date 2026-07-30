@@ -19,6 +19,8 @@ func TestGetVisitorNoRaceAndUpdatesLastSeen(t *testing.T) {
 		MaxVisitors:     100,
 	})
 
+	// 50 concurrent calls to getVisitor with the same key should produce
+	// exactly one visitor entry (the mutex serializes creation).
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
@@ -81,6 +83,6 @@ func TestCleanupLoopStopsOnCancel(t *testing.T) {
 	_ = l.getVisitor("x")
 
 	cancel()
-	// Give the goroutine a moment to observe cancellation.
+	// Give the goroutine a moment to observe cancellation and exit.
 	time.Sleep(50 * time.Millisecond)
 }

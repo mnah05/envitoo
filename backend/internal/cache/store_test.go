@@ -35,6 +35,7 @@ func TestGetJSON_CacheHit(t *testing.T) {
 	store, cleanup := openTestStore(t)
 	defer cleanup()
 
+	// atomic.Int32 tracks how many times the loader is called
 	var loads atomic.Int32
 	load := func(context.Context) (string, error) {
 		loads.Add(1)
@@ -45,6 +46,7 @@ func TestGetJSON_CacheHit(t *testing.T) {
 	if err != nil || v1 != "cached-value" {
 		t.Fatalf("first read: %q err=%v", v1, err)
 	}
+	// Second read should hit cache, not call load()
 	v2, err := GetJSON(ctx, store, "test:key", time.Minute, load)
 	if err != nil || v2 != "cached-value" {
 		t.Fatalf("second read: %q err=%v", v2, err)
@@ -61,6 +63,7 @@ func TestGetJSON_NilStoreBypassesCache(t *testing.T) {
 		loads.Add(1)
 		return 1, nil
 	}
+	// With a nil store, the loader is called every time (no caching)
 	_, _ = GetJSON(ctx, nil, "x", time.Minute, load)
 	_, _ = GetJSON(ctx, nil, "x", time.Minute, load)
 	if loads.Load() != 2 {
@@ -73,6 +76,7 @@ func TestGetSetDelete(t *testing.T) {
 	store, cleanup := openTestStore(t)
 	defer cleanup()
 
+	// Use a URL-like cache key matching the production pattern
 	key := "GET:/api/events/123"
 	data := []byte(`{"id":"123"}`)
 
@@ -94,6 +98,7 @@ func TestGetSetDelete(t *testing.T) {
 }
 
 func TestNilStoreIsNoop(t *testing.T) {
+	// Verify all soft methods tolerate a nil *Store receiver
 	ctx := context.Background()
 	var nilStore *Store
 
@@ -116,6 +121,7 @@ func TestDeletePrefix(t *testing.T) {
 	store.Set(ctx, "GET:/api/events?limit=10", []byte("b"), time.Minute)
 	store.Set(ctx, "GET:/api/events/123", []byte("c"), time.Minute)
 
+	// DeletePrefix should remove all list variants but leave the single event
 	store.DeletePrefix(ctx, "GET:/api/events?")
 
 	if _, err := store.Get(ctx, "GET:/api/events?limit=20"); !errors.Is(err, ErrNotFound) {

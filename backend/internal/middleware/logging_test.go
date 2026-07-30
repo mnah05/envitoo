@@ -41,6 +41,7 @@ func TestRequestLogger_EmitsAccessLogWithRequestID(t *testing.T) {
 		t.Fatalf("response request id=%q", got)
 	}
 
+	// The log buffer should contain both the handler log and the access log
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if len(lines) < 2 {
 		t.Fatalf("expected handler + access log lines, got %q", buf.String())
@@ -90,6 +91,7 @@ func TestRequestLogger_SkipsHealthz(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
+	// Healthcheck should NOT produce an access log entry
 	if strings.Contains(buf.String(), "http_request") {
 		t.Fatalf("healthz should not emit access log, got %q", buf.String())
 	}

@@ -8,6 +8,16 @@ import (
 
 // EmailMessage is the JetStream payload published by the outbox drainer.
 // It is self-contained so the mailer does not need to hit Postgres.
+//
+// Note 1: The outbox drainer reads from the email_outbox table in Postgres
+// and publishes EmailMessage to NATS JetStream. The mailer process then
+// consumes these messages and sends them via Resend. This decoupling means
+// the API server never blocks on email delivery.
+//
+// Note 2: TemplateData uses json.RawMessage to defer JSON decoding. The
+// mailer interprets this data based on the template name, so different
+// templates can have different data shapes without changing the message
+// envelope.
 type EmailMessage struct {
 	OutboxID     uuid.UUID       `json:"outbox_id"`
 	Recipient    string          `json:"recipient"`
@@ -16,6 +26,10 @@ type EmailMessage struct {
 }
 
 // Template name constants — must match producers in internal/service.
+//
+// Note 3: These constants are the glue between the service layer (which
+// enqueues outbox rows with a template name) and the mailer (which renders
+// and sends). Both sides import the same package to stay in sync.
 const (
 	TemplateOTP                   = "otp"
 	TemplateTicketConfirm         = "ticket_confirm"
@@ -29,6 +43,11 @@ const (
 )
 
 // NATS subject constants — must match producers in internal/service.
+//
+// Note 4: NATS subjects use dot-separated segments (emails.ticket.confirmed).
+// This is NATS' native topic hierarchy, which allows consumers to subscribe
+// with wildcards like "emails.>" (all email topics) or "emails.ticket.*"
+// (all ticket-related emails).
 const (
 	TopicOTP                   = "emails.otp"
 	TopicTicketConfirm         = "emails.ticket.confirmed"
@@ -44,6 +63,9 @@ const (
 
 // TopicForTemplate maps a template name to its NATS subject.
 // Unknown templates fall back to TopicUnknown so publishes never use an empty subject.
+//
+// Note 5: A map is used instead of a switch so callers can also iterate or
+// check membership at runtime, which is useful for testing and observability.
 var TopicForTemplate = map[string]string{
 	TemplateOTP:                   TopicOTP,
 	TemplateTicketConfirm:         TopicTicketConfirm,

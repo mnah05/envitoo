@@ -20,6 +20,10 @@ import (
 	"github.com/mnah05/envitoo/internal/logging"
 )
 
+// main is the mailer worker entry point. It subscribes to the EMAILS
+// JetStream consumer, renders HTML emails from templates, and sends them
+// via the Resend API. Each email is processed in a per-message handler
+// with a 45-second timeout.
 func main() {
 	log := logging.New("mailer")
 	slog.SetDefault(log)
@@ -48,6 +52,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// NATS connection with infinite reconnect. The DisconnectErrHandler
+	// and ReconnectHandler log state transitions so operators can observe
+	// transient broker issues.
 	nc, err := nats.Connect(cfg.NATSURL,
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2*time.Second),
@@ -97,7 +104,9 @@ func main() {
 }
 
 func handleMsg(ctx context.Context, msg jetstream.Msg, renderer *email.Renderer, sender *email.Sender, log *slog.Logger) {
-	// Bound each send so a hung Resend call cannot block AckWait forever.
+	// handleMsg processes a single email message from the JetStream consumer.
+	// Bound each send with a 45s timeout so a hung Resend call cannot block
+	// the ack deadline forever.
 	sendCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
@@ -150,6 +159,9 @@ func handleMsg(ctx context.Context, msg jetstream.Msg, renderer *email.Renderer,
 	msgLog.Info("mailer_send_ok")
 }
 
+// isPermanentRenderErr returns true for template errors that will never
+// succeed on retry (e.g. unknown template name, decode failure). The
+// message is Ack'd (not Nak'd) so it is removed from the stream.
 func isPermanentRenderErr(err error) bool {
 	if err == nil {
 		return false
@@ -159,6 +171,10 @@ func isPermanentRenderErr(err error) bool {
 		strings.Contains(msg, "decode ")
 }
 
+// isPermanentSendErr returns true for Resend API errors that indicate a
+// bad request (4xx) rather than a transient failure (5xx/timeout).
+// Permanent errors call msg.Term() to move them to the terminal backlog;
+// transient errors call msg.Nak() for redelivery.
 func isPermanentSendErr(err error) bool {
 	if err == nil {
 		return false

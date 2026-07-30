@@ -21,6 +21,9 @@ import (
 	"github.com/mnah05/envitoo/internal/helper"
 )
 
+// Context key for storing the local user in Echo's per-request storage.
+// Echo's c.Set/c.Get use a map[string]any; a typed constant prevents
+// collisions with other middleware that might use the same string key.
 const userContextKey = "user"
 
 // UserFromContext returns the authenticated local user stored by the
@@ -31,11 +34,14 @@ func UserFromContext(c echo.Context) (*db.User, bool) {
 	return u, ok
 }
 
-// Auth verifies the Clerk session JWT from the Authorization header and
-// places *clerk.SessionClaims in the request context. It performs no
-// database access and no Clerk Backend API calls — JWT verification is
-// local crypto against cached JWKS. clerk.SetKey must be called once at
-// startup before this middleware is used.
+// Auth is the first gate: it verifies the Clerk session JWT from the
+// Authorization header and stores *clerk.SessionClaims in the request
+// context. The verification uses local RSA/EC crypto against a cached
+// JWKS (JSON Web Key Set) that Clerk publishes — no outbound HTTP call
+// to Clerk happens on every request.
+//
+// clerk.SetKey must be called once at startup before this middleware
+// is used.
 func Auth() echo.MiddlewareFunc {
 	return echo.WrapMiddleware(clerkhttp.RequireHeaderAuthorization())
 }
@@ -45,24 +51,29 @@ func Auth() echo.MiddlewareFunc {
 // local user row, link any prior guest registrations matched by email,
 // and create a default calendar.
 //
-// Hot path (returning user): one SELECT by auth_user_id. No Clerk API
-// call, no database write, no onboarding.
+// --- Design: hot path vs cold path ---
 //
-// First login (no local row): calls Clerk user.Get once, then opens a
-// transaction and (a) inserts the local user row with ON CONFLICT DO
-// NOTHING, (b) links guest registrations, (c) creates a default
-// calendar. A concurrent first-login racing on the same auth_user_id is
-// handled via ON CONFLICT DO NOTHING — the loser's CreateUser returns
-// pgx.ErrNoRows, the transaction rolls back, and the loser re-fetches
-// the winning row via GetUserByAuthUserID without running onboarding
-// (the winner already did).
+// Returning-user hot path (most requests): one SELECT by auth_user_id.
+// No Clerk API call, no database write, no onboarding.
+//
+// First-login cold path: calls Clerk user.Get once, then opens a
+// database transaction that (a) inserts the local user row with ON
+// CONFLICT DO NOTHING, (b) links guest registrations, (c) creates a
+// default calendar.
+//
+// If two first-login requests race on the same Clerk user (rare but
+// possible with retries or client-side double-submit), ON CONFLICT DO
+// NOTHING ensures only one succeeds. The loser's CreateUser returns
+// pgx.ErrNoRows, the transaction rolls back (via defer), and control
+// flows to refetchAndContinue which re-fetches the winning row without
+// re-running onboarding.
 //
 // The logger is retrieved from the request context via slog.FromContext;
 // a logger-injecting middleware must run before this one.
 //
-// GuestRegistrationInvalidator is invoked after guest registrations are
-// linked or cancelled during auth. Used to invalidate affected cache keys
-// for the email and the local user who received the links.
+// GuestRegistrationInvalidator is called after guest registrations are
+// linked or cancelled, so the cache layer can invalidate stale entries
+// for the affected email and user.
 type GuestRegistrationInvalidator func(ctx context.Context, userID uuid.UUID, email string)
 
 // Auth must run before LoadUser so that SessionClaims are available in
@@ -73,11 +84,15 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 			ctx := c.Request().Context()
 			log := LoggerFromContext(ctx)
 
+			// clerk.SessionClaimsFromContext reads the verified JWT claims that
+			// the Auth middleware placed in the request context earlier.
 			claims, ok := clerk.SessionClaimsFromContext(ctx)
 			if !ok {
 				return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 			}
 
+			// Hot path: SELECT from the local users table. No Clerk API call.
+			// claims.Subject is the Clerk auth_user_id (e.g. "user_2abc...").
 			localUser, err := queries.GetUserByAuthUserID(ctx, claims.Subject)
 			switch {
 			case err == nil:
@@ -90,17 +105,23 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, onGuestRegsChanged GuestR
 				return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 			}
 
+			// Cold path: first login for this Clerk user — no local row exists.
+			// Fetch user profile from Clerk's Backend API (one outbound HTTP call).
 			clerkUser, err := user.Get(ctx, claims.Subject)
 			if err != nil {
 				log.ErrorContext(ctx, "fetch clerk user", "clerk_user_id", claims.Subject, "error", err)
 				return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 			}
 
+			// We require at least one verified email address. Unverified
+			// or missing emails return 403 so the frontend can prompt the
+			// user to verify their email in Clerk's account portal.
 			email := helper.NormalizeEmail(primaryEmail(clerkUser))
 			if email == "" {
 				return echo.NewHTTPError(http.StatusForbidden, "no verified email address")
 			}
 
+			// Everything from here through Commit must succeed atomically.
 			tx, err := pool.Begin(ctx)
 			if err != nil {
 				log.ErrorContext(ctx, "begin onboarding tx", "clerk_user_id", claims.Subject, "error", err)
@@ -281,14 +302,26 @@ func defaultCalendarSlugName(u db.User) (slug, name string) {
 	return s, *u.Username + "'s Calendar"
 }
 
+// Pre-compiled regexes used by sanitizeSlug. Compiling once at package
+// init avoids re-parsing on every call and is goroutine-safe (Regexp is
+// immutable after Compile).
+// The first replaces non-alphanumeric chars with hyphens; the second
+// strips leading/trailing hyphens.
 var (
-	slugNonAlnum    = regexp.MustCompile(`[^a-z0-9]+`)
-	slugEdgeHyphens = regexp.MustCompile(`^-+|-+$`)
+	slugNonAlnum    = regexp.MustCompile(`[^a-z0-9]+`) // runs of non-alphanumeric chars
+	slugEdgeHyphens = regexp.MustCompile(`^-+|-+$`)    // leading or trailing hyphens
 )
 
-// sanitizeSlug lowercases s, collapses runs of non-[a-z0-9] characters
-// into a single hyphen, trims leading/trailing hyphens, and truncates
-// to 63 characters. Returns "" if s contains no alphanumeric ASCII.
+// sanitizeSlug converts a free-text string into a URL-safe slug suitable
+// for use in paths like /calendar/<slug>. The algorithm:
+//  1. Lowercase the input.
+//  2. Replace every run of one or more non-alphanumeric characters with a
+//     single hyphen (e.g. "John's Faves!!" → "john-s-faves-").
+//  3. Strip leading/trailing hyphens (→ "john-s-faves").
+//  4. Truncate to 63 characters (a common DB/URL length limit), removing
+//     any trailing hyphen the truncation might leave.
+//
+// Returns "" when the input has no alphanumeric characters at all.
 func sanitizeSlug(s string) string {
 	s = strings.ToLower(s)
 	s = slugNonAlnum.ReplaceAllString(s, "-")

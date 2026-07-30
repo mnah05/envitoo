@@ -17,7 +17,9 @@ import (
 	"github.com/mnah05/envitoo/internal/service"
 )
 
-// CreateEvent handles POST /api/events.
+// CreateEvent handles POST /api/events. The handler follows a standard
+// pattern: bind JSON → validate → load auth user → call service →
+// invalidate cache → return response.
 func (s *Server) CreateEvent(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -43,12 +45,16 @@ func (s *Server) CreateEvent(c echo.Context) error {
 		log.ErrorContext(ctx, "create event", "organizer_id", u.ID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
+	// Invalidate the public event listing cache so newly created events
+	// appear without waiting for the TTL to expire.
 	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
 	return c.JSON(http.StatusCreated, s.events.EventResponseBestEffort(ctx, event))
 }
 
-// GetEvent handles GET /api/events/:id.
+// GetEvent handles GET /api/events/:id. Uses cache.GetJSON to implement
+// the cache-aside pattern: on cache miss, the callback populates the
+// cache and the response is served from the returned value.
 func (s *Server) GetEvent(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -76,7 +82,9 @@ func (s *Server) GetEvent(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// GetEventBySlug handles GET /api/events/slug/:slug.
+// GetEventBySlug handles GET /api/events/slug/:slug. Same pattern as
+// GetEvent but looks up by slug (a human-readable URL path) instead
+// of the internal UUID. Guests share the slug via event links.
 func (s *Server) GetEventBySlug(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -104,7 +112,11 @@ func (s *Server) GetEventBySlug(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// ListPublicEvents handles GET /api/events (public discovery).
+// ListPublicEvents handles GET /api/events (public discovery). Supports
+// optional query-parameter filters: limit, offset, is_virtual,
+// starts_after, starts_before, category, and q (text search).
+// The result is cached under a key derived from the full query string:
+// two identical requests within PublicListTTL share a single DB query.
 func (s *Server) ListPublicEvents(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -159,7 +171,10 @@ func (s *Server) ListPublicEvents(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// ListMyEvents handles GET /api/me/events.
+// ListMyEvents handles GET /api/me/events. Returns events owned by the
+// authenticated user. Unlike the public listing, this is NOT cached
+// (each request reads the DB directly) since organizers expect their
+// own event list to reflect recent changes immediately.
 func (s *Server) ListMyEvents(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -185,7 +200,10 @@ func (s *Server) ListMyEvents(c echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewEventListResponse(items, limit, offset, total))
 }
 
-// UpdateEvent handles PATCH /api/events/:id.
+// UpdateEvent handles PATCH /api/events/:id. Mapped to PATCH (partial
+// update) rather than PUT (full replacement). The handler invalidates
+// the cache for both the old slug (which may have changed) and the new
+// slug so stale data is never served.
 func (s *Server) UpdateEvent(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -236,7 +254,10 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 	return c.JSON(http.StatusOK, s.events.EventResponseBestEffort(ctx, event))
 }
 
-// CancelEvent handles DELETE /api/events/:id.
+// CancelEvent handles DELETE /api/events/:id. Soft-deletes the event
+// (sets status to cancelled; the row stays in the DB). A cancelled
+// event is excluded from public listings but still accessible by
+// direct ID for existing ticket holders.
 func (s *Server) CancelEvent(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -272,9 +293,10 @@ func (s *Server) CancelEvent(c echo.Context) error {
 	return c.JSON(http.StatusOK, s.events.EventResponseBestEffort(ctx, event))
 }
 
-// validationError converts a validator.ValidationErrors into a 400
-// response with a structured error body. Each field error includes the
-// field name, the tag that failed, and the tag's param if any.
+// validationError converts go-playground/validator ValidationErrors into
+// a user-friendly 400 JSON response. Instead of "validation failed on
+// field 'Title' on tag 'required'", it returns [{field, tag, reason}]
+// where reason is a human sentence (see validationReason below).
 func validationError(c echo.Context, err error) error {
 	var valErrs validator.ValidationErrors
 	if !errors.As(err, &valErrs) {
@@ -369,6 +391,8 @@ func toInt64(v any) int64 {
 
 // parseLimit parses a limit query parameter, applying a default and a
 // maximum cap. Returns the default if the param is empty or invalid.
+// Used throughout the server to prevent unbounded result sets while
+// allowing the caller to control page size up to a known ceiling.
 func parseLimit(raw string, defaultVal, max int32) int32 {
 	if raw == "" {
 		return defaultVal
@@ -384,7 +408,8 @@ func parseLimit(raw string, defaultVal, max int32) int32 {
 }
 
 // parseOffset parses an offset query parameter. Returns 0 if the param
-// is empty, invalid, or negative.
+// is empty, invalid, or negative. Combined with parseLimit to implement
+// standard offset-based pagination.
 func parseOffset(raw string) int32 {
 	if raw == "" {
 		return 0
@@ -397,7 +422,9 @@ func parseOffset(raw string) int32 {
 }
 
 // parseTime parses an ISO 8601 timestamp from a query parameter. Returns
-// the zero time if the param is empty or invalid.
+// the zero time if the param is empty or invalid. The zero time is a
+// convenient sentinel: filters like "starts_after" skip zero values
+// instead of requiring a separate "unset" flag.
 // Handles both RFC3339 (no fractional seconds) and RFC3339Nano (with
 // fractional seconds), e.g. "2026-06-29T11:09:08Z" or "2026-06-29T11:09:08.875Z".
 func parseTime(raw string) time.Time {

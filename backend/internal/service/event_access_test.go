@@ -77,5 +77,9 @@ func TestHasDisallowedStaffUpdateFields(t *testing.T) {
 	}
 }
 
+// strPtr is a test helper that returns a pointer to its string argument.
+// Go does not have a literal syntax for &"string", so this helper is
+// needed when constructing test data with optional *string fields.
+//
 //go:fix inline
 func strPtr(s string) *string { return new(s) }

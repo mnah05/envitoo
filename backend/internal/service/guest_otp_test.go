@@ -69,6 +69,8 @@ func TestNormalizeGuestEmail(t *testing.T) {
 	}
 }
 
+// The Redis key format encodes the event ID and email so keys are scoped
+// per event+email pair. There is no cross-event OTP collision possible.
 func TestGuestRedisKeys(t *testing.T) {
 	id := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	email := "a@b.co"

@@ -12,7 +12,15 @@ import (
 // Settings Request/Response
 // ---------------------------------------------------------------------------
 
+// Note 1: The volunteer feature has a three-tier model: Settings (per-event
+// toggle), Roles (named positions like "barista" or "MC"), and Applications
+// (user submissions to fill roles). Each tier has its own request/response
+// DTO pair.
+
 // UpsertVolunteerSettingsRequest is the request body for PUT /api/events/:id/volunteer/settings.
+//
+// Note 2: "Upsert" means INSERT or UPDATE — the service layer uses
+// ON CONFLICT to create-or-replace in a single query.
 type UpsertVolunteerSettingsRequest struct {
 	Enabled         bool    `json:"enabled"`
 	Description     *string `json:"description" validate:"omitempty,max=2000"`
@@ -46,6 +54,9 @@ func NewVolunteerSettingsResponse(s db.VolunteerSetting) VolunteerSettingsRespon
 // ---------------------------------------------------------------------------
 
 // CreateVolunteerRoleRequest is the request body for POST /api/events/:id/volunteer/roles.
+//
+// Note 3: IsAdmin roles have elevated permissions like editing event details.
+// Non-admin roles are for task-specific volunteers who cannot modify the event.
 type CreateVolunteerRoleRequest struct {
 	Name    string `json:"name" validate:"required,min=1,max=100"`
 	IsAdmin bool   `json:"is_admin"`
@@ -76,6 +87,10 @@ func NewVolunteerRoleResponse(r db.VolunteerRole) VolunteerRoleResponse {
 // ---------------------------------------------------------------------------
 
 // CreateVolunteerApplicationRequest is the request body for POST /api/events/:id/volunteer/apply.
+//
+// Note 4: Name and Email are optional because authenticated users fill these
+// from their profile. Guest applicants would need to provide them explicitly,
+// though the current flow requires authentication for volunteer applications.
 type CreateVolunteerApplicationRequest struct {
 	RoleID      uuid.UUID `json:"role_id" validate:"required"`
 	Name        *string   `json:"name" validate:"omitempty,min=1,max=200"`
@@ -85,6 +100,10 @@ type CreateVolunteerApplicationRequest struct {
 }
 
 // VolunteerApplicationResponse is the JSON representation of a volunteer application.
+//
+// Note 5: RoleName is joined from the volunteer_roles table in the database
+// query so the API client doesn't need a separate request to resolve role IDs
+// to display names.
 type VolunteerApplicationResponse struct {
 	ID          uuid.UUID `json:"id"`
 	EventID     uuid.UUID `json:"event_id"`
@@ -110,6 +129,10 @@ type VolunteerApplicationListResponse struct {
 }
 
 // EventStaffItemResponse is one event where the user is an approved volunteer admin.
+//
+// Note 6: This is used for the "my staff events" endpoint. It joins events,
+// applications, and roles to show a volunteer admin which events they manage
+// and what their role is called.
 type EventStaffItemResponse struct {
 	EventID       uuid.UUID `json:"event_id"`
 	Title         string    `json:"title"`
@@ -138,6 +161,11 @@ type EventStaffListResponse struct {
 
 // VolunteerResponse is the JSON representation of a confirmed volunteer
 // from the volunteers roster table.
+//
+// Note 7: The volunteers roster is a materialized view (or join) that
+// represents confirmed, active volunteers. It differs from applications
+// — an application is pending until approved, then the volunteer appears
+// in the roster.
 type VolunteerResponse struct {
 	ID        uuid.UUID `json:"id"`
 	EventID   uuid.UUID `json:"event_id"`

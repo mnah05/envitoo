@@ -21,6 +21,9 @@ import (
 )
 
 // RegistrationService provides business logic for registration operations.
+// It handles two registration paths: guest (via email OTP, no db.User row)
+// and authenticated user (via Clerk JWT). Both paths share the same
+// underlying registration table but differ in user_id nullability.
 type RegistrationService struct {
 	pool      *pgxpool.Pool
 	queries   *db.Queries
@@ -50,7 +53,8 @@ func NewRegistrationService(pool *pgxpool.Pool, queries *db.Queries, access *Eve
 // CreateGuest registers a guest for the given event after email OTP verification.
 // Requires a short-lived Redis marker from VerifyGuestOTP
 // (guest:verified:{event_id}:{email}). Status defaults to "approved" unless
-// the event requires approval.
+// the event requires approval. The registration is created with user_id=NULL
+// — guest rows are identified by their email and access token only.
 func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID, req dto.CreateGuestRegistrationRequest) (reg db.Registration, err error) {
 	log := s.logger(ctx)
 	log.Info("registration_guest_create_start", "event_id", eventID)
@@ -226,7 +230,8 @@ func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) 
 
 // Create registers an authenticated user for the given event. Name falls
 // back to the user's profile when not provided in req. Email always comes
-// from the authenticated account.
+// from the authenticated account (never from the client, preventing email
+// spoofing on registrations).
 func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID uuid.UUID, req dto.CreateRegistrationRequest) (reg db.Registration, err error) {
 	log := s.logger(ctx)
 	log.Info("registration_create_start", "event_id", eventID, "user_id", user.ID)
@@ -287,8 +292,9 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 }
 
 // enqueueRegistrationCreatedEmail queues ticket_confirm only for approved
-// creates. Pending (requires_approval) uses ticket_status_change instead so
-// attendees are not told they are already registered.
+// creates. Pending (requires_approval) uses ticket_status_change instead
+// so pending attendees receive "your registration is pending review" rather
+// than "your ticket is confirmed".
 func enqueueRegistrationCreatedEmail(ctx context.Context, qtx *db.Queries, reg db.Registration, event db.Event) error {
 	template, topic := registrationCreatedEmailTemplate(reg.Status)
 	var templateData []byte
@@ -453,8 +459,10 @@ func resolveName(user *db.User, override *string) string {
 	return parts[0]
 }
 
-// Cancel cancels a user's own registration.
-// Outbox insert is transactional — failure rolls back the entire operation.
+// Cancel cancels a user's own registration. Scoped to user_id so one user
+// cannot cancel another's registration (the SQL WHERE clause includes both
+// id and user_id). Outbox insert is transactional — failure rolls back the
+// entire operation.
 func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UUID, userID uuid.UUID) (reg db.Registration, err error) {
 	log := s.logger(ctx)
 	log.Info("registration_cancel_start", "registration_id", registrationID, "user_id", userID)
@@ -630,7 +638,10 @@ func (s *RegistrationService) GetByIDAsAdmin(ctx context.Context, registrationID
 	return reg, nil
 }
 
-// Approve sets a registration's status to "approved".
+// Approve sets a registration's status to "approved". Guards against
+// over-capacity approval via validateCapacityForApproval. The event row
+// is locked (FOR UPDATE) within the transaction so concurrent approvals
+// cannot exceed capacity.
 func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (reg db.Registration, err error) {
 	log := s.logger(ctx)
 	log.Info("registration_approve_start", "registration_id", registrationID, "actor_id", actorID)
@@ -737,7 +748,8 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 	return approved, nil
 }
 
-// Reject sets a registration's status to "rejected".
+// Reject sets a registration's status to "rejected". Only pending
+// registrations may be rejected (pre-check done outside the transaction).
 // Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID) (reg db.Registration, err error) {
 	log := s.logger(ctx)
@@ -852,8 +864,11 @@ func registrationStatusTransitionAllowed(from, to string) bool {
 	return ok
 }
 
-// UpdateStatus sets a registration's status when the transition is legal.
-// Organizer-only: volunteer admins must use the approve/reject endpoints.
+// UpdateStatus sets a registration's status when the transition is legal,
+// as defined by allowedRegistrationStatusTransitions. Organizer-only:
+// volunteer admins must use the approve/reject endpoints. This enforces the
+// status state machine: pending→approved, pending→rejected, approved→cancelled,
+// approved→rejected, rejected→approved (re-approval path).
 func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID uuid.UUID, organizerID uuid.UUID, status string) (reg db.Registration, err error) {
 	log := s.logger(ctx)
 	log.Info("registration_status_update_start", "registration_id", registrationID, "organizer_id", organizerID, "status", status)
@@ -971,8 +986,10 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 	return updated, nil
 }
 
-// CheckIn marks an attendee as checked in. If the attendee is already
-// checked in, the existing registration is returned idempotently.
+// CheckIn marks an attendee as checked in. Uses GET FOR UPDATE to lock
+// the registration row, preventing double check-in races. If the attendee
+// is already checked in, the existing registration is returned idempotently
+// (after verifying staff access + access token match).
 // Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.UUID, actorID uuid.UUID, accessToken uuid.UUID) (reg db.Registration, err error) {
 	log := s.logger(ctx)
@@ -1114,7 +1131,8 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 
 // CheckInByEventToken checks in an attendee using the event id and QR access
 // token. Resolves the registration server-side so clients do not need the
-// full registration list loaded.
+// full registration list loaded. The QR code encodes the access_token; the
+// scanner knows which event it's scanning for, so no registration ID is needed.
 // Outbox insert is transactional — failure rolls back the entire operation.
 func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, actorID, accessToken uuid.UUID) (reg db.Registration, err error) {
 	log := s.logger(ctx)

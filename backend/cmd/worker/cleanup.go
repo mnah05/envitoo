@@ -12,6 +12,10 @@ import (
 	"github.com/mnah05/envitoo/internal/db"
 )
 
+// runCleanup periodically deletes email outbox rows that have been
+// PUBLISHED or FAILED for longer than cfg.RetentionPeriod. This prevents
+// the outbox table from growing indefinitely. Runs every
+// cfg.CleanupInterval on a ticker.
 func runCleanup(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig, log *slog.Logger) {
 	ticker := time.NewTicker(cfg.CleanupInterval)
 	defer ticker.Stop()
@@ -33,6 +37,9 @@ func runCleanup(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig
 	}
 }
 
+// deleteStaleBatch performs a single batch deletion of stale outbox rows.
+// The batch size is capped by cfg.CleanupBatchSize to keep each deletion
+// fast and avoid long-held locks on the outbox table.
 func deleteStaleBatch(ctx context.Context, pool *pgxpool.Pool, cfg config.WorkerConfig) (int64, error) {
 	cutoff := time.Now().Add(-cfg.RetentionPeriod)
 

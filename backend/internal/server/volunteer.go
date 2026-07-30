@@ -19,6 +19,8 @@ import (
 // ---------------------------------------------------------------------------
 
 // GetVolunteerSettings handles GET /api/events/:id/volunteer/settings.
+// Returns whether volunteer applications are open for the event and
+// the description shown to prospective volunteers. Public endpoint.
 func (s *Server) GetVolunteerSettings(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -47,6 +49,8 @@ func (s *Server) GetVolunteerSettings(c echo.Context) error {
 }
 
 // ListVolunteerRoles handles GET /api/events/:id/volunteer/roles.
+// Returns the role catalog for the event (e.g. "Usher", "Stage Crew").
+// Each role can allow multiple volunteers. Public endpoint.
 func (s *Server) ListVolunteerRoles(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -80,6 +84,10 @@ func (s *Server) ListVolunteerRoles(c echo.Context) error {
 // ---------------------------------------------------------------------------
 
 // CreateVolunteerApplication handles POST /api/events/:id/volunteer/apply.
+// Submits a volunteer application for the authenticated user. The
+// request body selects one or more roles and may include a free-text
+// message. The application starts in "pending" status until an
+// organizer or volunteer admin reviews it.
 func (s *Server) CreateVolunteerApplication(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -117,7 +125,9 @@ func (s *Server) CreateVolunteerApplication(c echo.Context) error {
 	return c.JSON(http.StatusCreated, app)
 }
 
-// ListMyEventStaff handles GET /api/me/event-staff.
+// ListMyEventStaff handles GET /api/me/event-staff. Returns events where
+// the authenticated user is an organizer or approved volunteer admin.
+// Distinct from ListMyEvents which only returns owned events.
 func (s *Server) ListMyEventStaff(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -158,6 +168,9 @@ func (s *Server) ListMyEventStaff(c echo.Context) error {
 }
 
 // ListMyVolunteerApplications handles GET /api/me/volunteer-applications.
+// Cached per-user with MyVolunteerAppsTTL. The cache is invalidated
+// when the user submits, cancels, or receives an approval/rejection on
+// an application.
 func (s *Server) ListMyVolunteerApplications(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -198,6 +211,8 @@ func (s *Server) ListMyVolunteerApplications(c echo.Context) error {
 }
 
 // GetMyVolunteerApplication handles GET /api/volunteer-applications/:id.
+// Scoped to the authenticated user: returns 404 for applications owned
+// by a different user.
 func (s *Server) GetMyVolunteerApplication(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -224,6 +239,9 @@ func (s *Server) GetMyVolunteerApplication(c echo.Context) error {
 }
 
 // CancelVolunteerApplication handles DELETE /api/volunteer-applications/:id.
+// Only pending applications can be cancelled. Once approved or rejected,
+// the organizer's action stands and the applicant cannot unilaterally
+// withdraw.
 func (s *Server) CancelVolunteerApplication(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -261,6 +279,9 @@ func (s *Server) CancelVolunteerApplication(c echo.Context) error {
 // ---------------------------------------------------------------------------
 
 // UpsertVolunteerSettings handles PUT /api/events/:id/volunteer/settings.
+// Creates or updates the volunteer settings for an event. Uses PUT
+// (idempotent; same body produces the same result) rather than PATCH.
+// Only the event organizer may update settings.
 func (s *Server) UpsertVolunteerSettings(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -297,6 +318,8 @@ func (s *Server) UpsertVolunteerSettings(c echo.Context) error {
 }
 
 // CreateVolunteerRole handles POST /api/events/:id/volunteer/roles.
+// Adds a new role to the event's volunteer role catalog. Role names
+// must be unique per event (DB unique constraint enforces this).
 func (s *Server) CreateVolunteerRole(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -336,6 +359,9 @@ func (s *Server) CreateVolunteerRole(c echo.Context) error {
 }
 
 // DeleteVolunteerRole handles DELETE /api/events/:id/volunteer/roles/:roleId.
+// Removes a role from the catalog. Roles that already have applications
+// attached cannot be deleted (ErrVolunteerRoleInUse) to preserve
+// referential integrity and audit history.
 func (s *Server) DeleteVolunteerRole(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -375,6 +401,9 @@ func (s *Server) DeleteVolunteerRole(c echo.Context) error {
 }
 
 // ListEventVolunteerApplications handles GET /api/events/:id/volunteer/applications.
+// Organizer/volunteer-admin view of all applications for the event.
+// Not cached because these lists are reviewed interactively and must
+// reflect real-time approval/rejection decisions.
 func (s *Server) ListEventVolunteerApplications(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -412,8 +441,9 @@ func (s *Server) ListEventVolunteerApplications(c echo.Context) error {
 }
 
 // ListEventVolunteers handles GET /api/events/:id/volunteers.
-// Returns the confirmed volunteer roster for the event. Accessible by
-// the organizer and approved volunteer admins.
+// Returns the confirmed volunteer roster for the event — the list of
+// approved applications. Accessible by the organizer and approved
+// volunteer admins.
 func (s *Server) ListEventVolunteers(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -451,6 +481,9 @@ func (s *Server) ListEventVolunteers(c echo.Context) error {
 }
 
 // GetVolunteerApplicationAsAdmin handles GET /api/volunteer-applications/:id/admin.
+// Returns the full application including the applicant's identity and
+// contact info. The user-facing GetMyVolunteerApplication returns a
+// subset (no personal data of other users).
 func (s *Server) GetVolunteerApplicationAsAdmin(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -477,6 +510,10 @@ func (s *Server) GetVolunteerApplicationAsAdmin(c echo.Context) error {
 }
 
 // ApproveVolunteerApplication handles POST /api/volunteer-applications/:id/approve.
+// Transitions a pending application to approved. The applicant's
+// my/event-staff cache is invalidated so their dashboard immediately
+// reflects the new staff status. Applications with admin-level roles
+// can only be approved by the event organizer (not volunteer admins).
 func (s *Server) ApproveVolunteerApplication(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -515,6 +552,9 @@ func (s *Server) ApproveVolunteerApplication(c echo.Context) error {
 }
 
 // RejectVolunteerApplication handles POST /api/volunteer-applications/:id/reject.
+// Transitions a pending application to rejected. Same admin-level role
+// restriction as Approve. The applicant's application-list cache is
+// invalidated so the rejection shows up promptly.
 func (s *Server) RejectVolunteerApplication(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 

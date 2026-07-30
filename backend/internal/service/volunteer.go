@@ -33,7 +33,9 @@ func NewVolunteerService(pool *pgxpool.Pool, queries *db.Queries, access *EventA
 // ---------------------------------------------------------------------------
 
 // UpsertSettings creates or updates volunteer settings for an event.
-// Verifies that the requester is the event organizer.
+// Verifies that the requester is the event organizer. Uses UPSERT
+// semantics (INSERT … ON CONFLICT DO UPDATE) so the first call creates
+// and subsequent calls update the same row.
 func (s *VolunteerService) UpsertSettings(ctx context.Context, eventID, organizerID uuid.UUID, req dto.UpsertVolunteerSettingsRequest) (settings db.VolunteerSetting, err error) {
 	log := s.logger(ctx)
 	log.Info("volunteer_settings_upsert_start", "event_id", eventID, "organizer_id", organizerID)
@@ -69,7 +71,9 @@ func (s *VolunteerService) UpsertSettings(ctx context.Context, eventID, organize
 	return settings, nil
 }
 
-// GetSettings returns volunteer settings for an event.
+// GetSettings returns volunteer settings for an event. Returns
+// ErrVolunteerSettingsNotFound when no settings exist — the caller
+// should treat this as "volunteer programme not configured".
 func (s *VolunteerService) GetSettings(ctx context.Context, eventID uuid.UUID) (db.VolunteerSetting, error) {
 	settings, err := s.queries.GetVolunteerSettingsByEvent(ctx, eventID)
 	if err != nil {
@@ -86,6 +90,8 @@ func (s *VolunteerService) GetSettings(ctx context.Context, eventID uuid.UUID) (
 // ---------------------------------------------------------------------------
 
 // CreateRole adds a volunteer role to an event. Verifies organizer.
+// Role names are unique per event (DB unique constraint); duplicate
+// names produce ErrVolunteerRoleDuplicate.
 func (s *VolunteerService) CreateRole(ctx context.Context, eventID, organizerID uuid.UUID, req dto.CreateVolunteerRoleRequest) (role db.VolunteerRole, err error) {
 	log := s.logger(ctx)
 	log.Info("volunteer_role_create_start", "event_id", eventID, "organizer_id", organizerID)
@@ -127,7 +133,9 @@ func (s *VolunteerService) CreateRole(ctx context.Context, eventID, organizerID 
 }
 
 // DeleteRole removes a volunteer role. Verifies organizer and that the role
-// belongs to the event named in the request path.
+// belongs to the event named in the request path. If the role has any
+// applications attached, a foreign key constraint prevents deletion and
+// the error is mapped to ErrVolunteerRoleInUse.
 func (s *VolunteerService) DeleteRole(ctx context.Context, eventID, roleID, organizerID uuid.UUID) (deleted db.VolunteerRole, err error) {
 	log := s.logger(ctx)
 	log.Info("volunteer_role_delete_start", "event_id", eventID, "role_id", roleID, "organizer_id", organizerID)
@@ -178,7 +186,8 @@ func (s *VolunteerService) DeleteRole(ctx context.Context, eventID, roleID, orga
 	return deleted, nil
 }
 
-// ListRolesByEvent returns all volunteer roles for an event.
+// ListRolesByEvent returns all volunteer roles for an event. Public
+// endpoint — no auth check needed (roles are part of the event catalog).
 func (s *VolunteerService) ListRolesByEvent(ctx context.Context, eventID uuid.UUID) ([]db.VolunteerRole, error) {
 	roles, err := s.queries.ListVolunteerRolesByEvent(ctx, eventID)
 	if err != nil {
@@ -187,7 +196,9 @@ func (s *VolunteerService) ListRolesByEvent(ctx context.Context, eventID uuid.UU
 	return roles, nil
 }
 
-// ListStaffEventsByUser returns events where the user is an approved volunteer admin.
+// ListStaffEventsByUser returns events where the user is an approved
+// volunteer admin. This powers the "My Staff Events" dashboard tab,
+// distinct from "My Events" (owned) and "My Applications" (pending).
 func (s *VolunteerService) ListStaffEventsByUser(ctx context.Context, userID uuid.UUID, params ListParams) ([]dto.EventStaffItemResponse, int32, error) {
 	limit := params.Limit
 	if limit <= 0 {
@@ -234,6 +245,10 @@ func (s *VolunteerService) ListStaffEventsByUser(ctx context.Context, userID uui
 // ---------------------------------------------------------------------------
 
 // Apply allows an authenticated user to apply to volunteer at an event.
+// Validates: event is published, volunteer settings exist and are enabled,
+// max applications cap is respected, role belongs to the event, and the
+// user has not already applied (ErrVolunteerDuplicate). All checks run
+// inside a transaction with FOR UPDATE on the event row.
 func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uuid.UUID, req dto.CreateVolunteerApplicationRequest) (resp dto.VolunteerApplicationResponse, err error) {
 	log := s.logger(ctx)
 	log.Info("volunteer_apply_start", "event_id", eventID, "user_id", user.ID)
@@ -353,6 +368,7 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 }
 
 // ListByUser returns paginated volunteer applications for the given user.
+// Scoped to user_id so one user cannot view another's applications.
 func (s *VolunteerService) ListByUser(ctx context.Context, userID uuid.UUID, params ListParams) ([]dto.VolunteerApplicationResponse, int32, error) {
 	limit := params.Limit
 	if limit <= 0 {
@@ -396,7 +412,9 @@ func (s *VolunteerService) ListByUser(ctx context.Context, userID uuid.UUID, par
 	return items, total, nil
 }
 
-// GetByID returns a single application owned by the given user.
+// GetByID returns a single application owned by the given user. Returns
+// ErrVolunteerAppNotFound if the app does not exist OR belongs to a
+// different user (no information leak about other users' applications).
 func (s *VolunteerService) GetByID(ctx context.Context, appID, userID uuid.UUID) (dto.VolunteerApplicationResponse, error) {
 	row, err := s.queries.GetVolunteerApplicationByID(ctx, db.GetVolunteerApplicationByIDParams{
 		ID:     appID,
@@ -426,7 +444,9 @@ func (s *VolunteerService) GetByID(ctx context.Context, appID, userID uuid.UUID)
 	}, nil
 }
 
-// Cancel cancels a user's own pending volunteer application.
+// Cancel cancels a user's own pending volunteer application. Only pending
+// applications can be cancelled (status pre-check via volunteerCancelError
+// provides a clear ErrVolunteerInvalidStatus message for non-pending apps).
 // Outbox insert is transactional — failure rolls back the entire operation.
 func (s *VolunteerService) Cancel(ctx context.Context, appID, userID uuid.UUID) (resp dto.VolunteerApplicationResponse, err error) {
 	log := s.logger(ctx)
@@ -625,7 +645,8 @@ func (s *VolunteerService) GetByIDAsAdmin(ctx context.Context, appID, actorID uu
 // Approve sets a pending application status to "approved" and records
 // the confirmed volunteer in the volunteers roster table. Both operations
 // run in a single transaction — if the roster insert fails, the approval
-// is rolled back.
+// is rolled back. Admin-role applications can only be approved by the
+// event organizer (enforced in the SQL WHERE clause + volunteerModerationError).
 func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID) (resp dto.VolunteerApplicationResponse, err error) {
 	log := s.logger(ctx)
 	log.Info("volunteer_approve_start", "application_id", appID, "actor_id", actorID)
@@ -709,8 +730,9 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 	return volunteerAppResponse(app, role.Name, role.IsAdmin), nil
 }
 
-// Reject sets a pending application status to "rejected".
-// Outbox insert is transactional — failure rolls back the entire operation.
+// Reject sets a pending application status to "rejected". Same admin-role
+// restriction as Approve. Outbox insert is transactional — failure rolls
+// back the entire operation.
 func (s *VolunteerService) Reject(ctx context.Context, appID, actorID uuid.UUID) (resp dto.VolunteerApplicationResponse, err error) {
 	log := s.logger(ctx)
 	log.Info("volunteer_reject_start", "application_id", appID, "actor_id", actorID)

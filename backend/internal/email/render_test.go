@@ -12,6 +12,11 @@ func TestRenderer_AllTemplates(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Note 1: Table-driven test covering every email template. Each case
+	// specifies the template name, mock data, and expected substrings in both
+	// the subject line and the HTML/text body. The body is not matched exactly
+	// because Go templates add whitespace and formatting.
+
 	cases := []struct {
 		name    string
 		data    any
@@ -37,6 +42,7 @@ func TestRenderer_AllTemplates(t *testing.T) {
 		},
 		{
 			name: TemplateTicketConfirm,
+			// Zero UUID = authenticated registration, should link to /home
 			data: map[string]string{
 				"name": "Ada", "event_title": "Hack Night", "event_id": "e1",
 				"access_token": "00000000-0000-0000-0000-000000000000",

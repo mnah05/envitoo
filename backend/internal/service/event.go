@@ -17,7 +17,10 @@ import (
 	"github.com/mnah05/envitoo/internal/helper"
 )
 
-// EventService provides business logic for event operations.
+// EventService provides business logic for event operations. It wraps
+// the raw sqlc queries with validation, enrichment, and transactional
+// guarantees. Methods return domain sentinel errors (ErrEventNotFound,
+// ErrInvalidEvent, etc.) that the handler layer maps to HTTP statuses.
 type EventService struct {
 	pool    *pgxpool.Pool
 	queries *db.Queries
@@ -30,7 +33,9 @@ func NewEventService(pool *pgxpool.Pool, queries *db.Queries, access *EventAcces
 	return &EventService{pool: pool, queries: queries, access: access, log: log}
 }
 
-// ListParams controls pagination and filtering for list queries.
+// ListParams controls pagination and filtering for list queries. Shared
+// across event, registration, and volunteer list methods so the handler
+// layer can construct one params struct.
 type ListParams struct {
 	Limit            int32
 	Offset           int32
@@ -38,6 +43,8 @@ type ListParams struct {
 }
 
 // PublicListParams controls filtering for public event discovery.
+// VirtualMode uses a three-valued int (0=all, 1=virtual only, 2=physical
+// only) because the zero value of bool cannot express "unset".
 type PublicListParams struct {
 	Limit        int32
 	Offset       int32
@@ -50,10 +57,12 @@ type PublicListParams struct {
 
 const maxEventSlugAttempts = 10
 
-// Create inserts a new event owned by organizerID. The slug is a random
-// 7-character string — the caller never provides it. Uniqueness is enforced
-// by the DB UNIQUE constraint on slug; on collision a new slug is generated
-// and the insert is retried (up to maxEventSlugAttempts).
+// Create inserts a new event owned by organizerID. The event slug is
+// randomly generated (7 alphanumeric chars) — the caller never provides
+// it. Uniqueness is enforced by the DB UNIQUE constraint on slug; on
+// collision (pgx.ErrNoRows) the transaction rolls back and a new slug
+// is tried, up to maxEventSlugAttempts (10). After 10 consecutive
+// collisions the method gives up — astronomically unlikely with 7 chars.
 func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dto.CreateEventRequest) (created db.Event, err error) {
 	log := s.logger(ctx)
 	log.Info("event_create_start", "organizer_id", organizerID)
@@ -170,8 +179,9 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 	return db.Event{}, fmt.Errorf("create event: failed to allocate unique slug after %d attempts", maxEventSlugAttempts)
 }
 
-// GetByID returns a single event by its UUID. Returns ErrEventNotFound if the
-// event does not exist.
+// GetByID returns a single event by its UUID. Unlike GetViewableByID, this
+// does not filter by status — it returns any event regardless of status.
+// Used internally by the staff/admin endpoints.
 func (s *EventService) GetByID(ctx context.Context, id uuid.UUID) (db.Event, error) {
 	event, err := s.queries.GetEventByID(ctx, id)
 	if err != nil {
@@ -187,9 +197,9 @@ func isViewableEventStatus(status string) bool {
 	return status == "published" || status == "cancelled" || status == "completed"
 }
 
-// GetViewableByID returns an event the public may view (published, cancelled,
-// or completed). Returns ErrEventNotFound if the event does not exist or is
-// not viewable.
+// GetViewableByID returns an event the public may view. Viewable statuses
+// are published (upcoming/active), cancelled (refund info), and completed
+// (past event archive). Draft or deleted events return ErrEventNotFound.
 func (s *EventService) GetViewableByID(ctx context.Context, id uuid.UUID) (db.Event, error) {
 	event, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -202,6 +212,8 @@ func (s *EventService) GetViewableByID(ctx context.Context, id uuid.UUID) (db.Ev
 }
 
 // GetViewableBySlug returns an event the public may view by slug.
+// Same status filtering as GetViewableByID but looked up by slug
+// (the human-readable path component used in shared links).
 func (s *EventService) GetViewableBySlug(ctx context.Context, slug string) (db.Event, error) {
 	event, err := s.queries.GetEventBySlug(ctx, slug)
 	if err != nil {
@@ -244,7 +256,8 @@ func (s *EventService) GetBySlug(ctx context.Context, slug string) (db.Event, er
 
 // ListByOrganizer returns a paginated list of events owned by the given
 // organizer, ordered by starts_at descending. The second return value is the
-// total count matching the filter.
+// total count matching the filter (for calculating page count in the UI).
+// Limits are clamped to [0, 100] and offsets are floored to 0.
 func (s *EventService) ListByOrganizer(ctx context.Context, organizerID uuid.UUID, params ListParams) ([]db.Event, int32, error) {
 	limit := params.Limit
 	if limit <= 0 {
@@ -279,7 +292,9 @@ func (s *EventService) ListByOrganizer(ctx context.Context, organizerID uuid.UUI
 
 // ListPublic returns a paginated list of published events for public
 // discovery, ordered by starts_at ascending. The second return value is the
-// total count matching the filters.
+// total count matching the filters. Results are enriched with registration
+// counts and visibility via EventResponsesBestEffort (best-effort only;
+// enrichment failures degrade gracefully).
 func (s *EventService) ListPublic(ctx context.Context, params PublicListParams) ([]dto.EventResponse, int32, error) {
 	limit := params.Limit
 	if limit <= 0 {
@@ -379,7 +394,9 @@ func (s *EventService) fetchVisibilityMap(ctx context.Context, eventIDs []uuid.U
 	return visibility, nil
 }
 
-// EventResponsesWithCounts converts events to responses with active registration counts.
+// EventResponsesWithCounts converts events to responses with active
+// registration counts. Uses two batched queries (counts + visibility)
+// instead of N+1 individual queries per event.
 func (s *EventService) EventResponsesWithCounts(ctx context.Context, events []db.Event) ([]dto.EventResponse, error) {
 	counts, err := s.fetchRegistrationCounts(ctx, events)
 	if err != nil {
@@ -414,9 +431,9 @@ func (s *EventService) EventResponseWithCount(ctx context.Context, event db.Even
 	return items[0], nil
 }
 
-// EventResponseBestEffort enriches an event for API responses. If count or
-// visibility queries fail, it still returns the core event fields so a
-// successful create/update/cancel is never reported as HTTP 500.
+// EventResponseBestEffort enriches a single event for API responses. If
+// count or visibility queries fail, it still returns the core event
+// fields so a successful mutation never causes an HTTP 500 response.
 func (s *EventService) EventResponseBestEffort(ctx context.Context, event db.Event) dto.EventResponse {
 	items := s.EventResponsesBestEffort(ctx, []db.Event{event})
 	if len(items) == 0 {
@@ -476,8 +493,14 @@ func (s *EventService) EventResponsesBestEffort(ctx context.Context, events []db
 // event does not exist or belongs to a different organizer, the query
 // returns pgx.ErrNoRows and this method returns ErrEventNotFound.
 //
-// Field-level validation is performed by the handler. Cross-field
-// venue constraints are validated against the merged state here.
+// Volunteer admins take a restricted path (updateStaffFields) that only
+// allows non-structural fields. The organizer gets the full update path
+// which includes capacity shrinkage checks (LOCK FOR UPDATE + count),
+// visibility changes, and category updates.
+//
+// Field-level validation is performed by the handler; cross-field
+// venue constraints (virtual vs. physical) are validated here against
+// the merged state after applying patches.
 func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UUID, req dto.UpdateEventRequest) (event db.Event, err error) {
 	log := s.logger(ctx)
 	log.Info("event_update_start", "event_id", id, "actor_id", actorID)
@@ -746,10 +769,13 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 }
 
 // Cancel soft-cancels an event (sets status='cancelled'). Preserves all
-// registrations, volunteers, kanban, and payment rows. The organizerID
-// parameter enforces ownership in the SQL.
+// registrations, volunteers, and payment rows in the DB — they remain
+// visible for audit/history but the event is excluded from public listings.
+// The organizerID parameter enforces ownership in the SQL.
 //
-// Outbox insert is transactional — failure rolls back the entire operation.
+// The method also inserts email outbox rows for the organizer and every
+// active registrant, all inside the same transaction. If the outbox insert
+// fails, the cancel rolls back — no cancellation without notification.
 func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uuid.UUID) (event db.Event, err error) {
 	log := s.logger(ctx)
 	log.Info("event_cancel_start", "event_id", id, "organizer_id", organizerID)

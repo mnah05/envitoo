@@ -1,6 +1,8 @@
 package service
 
-// Template names
+// Template names used for email outbox. Each template corresponds to an
+// HTML template file on the mailer worker side. The template name stored
+// in the outbox row tells the mailer which template to render.
 const (
 	EmailTemplateOTP                   = "otp"
 	EmailTemplateTicketConfirm         = "ticket_confirm"
@@ -13,7 +15,10 @@ const (
 	EmailTemplateEventCancellation     = "event_cancellation"
 )
 
-// NATS topics
+// NATS topics for the async email pipeline. The backend writes an outbox
+// row + publishes to NATS; the mailer worker consumes the NATS message
+// and sends via Resend. Separating topic from template allows consumers
+// to subscribe to a subset of email types.
 const (
 	EmailTopicOTP                   = "emails.otp"
 	EmailTopicTicketConfirm         = "emails.ticket.confirmed"
@@ -26,6 +31,9 @@ const (
 	EmailTopicEventCancellation     = "emails.event.cancelled"
 )
 
+// Data structs serialised to JSON and stored in the outbox template_data
+// column. The mailer worker unmarshals these and passes them to the
+// appropriate HTML template for rendering.
 type ticketConfirmData struct {
 	Name        string `json:"name"`
 	EventTitle  string `json:"event_title"`

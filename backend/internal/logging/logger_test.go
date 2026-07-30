@@ -8,7 +8,14 @@ import (
 	"testing"
 )
 
+// Note 1: These tests use t.Setenv instead of os.Setenv because t.Setenv
+// automatically restores the original environment variable when the test
+// finishes. This prevents test pollution where one test's env var change
+// leaks into another test.
+
 func TestNew_Constructs(t *testing.T) {
+	// Verify the logger constructor works for both output formats and
+	// that the returned logger is non-nil.
 	t.Setenv("LOG_FORMAT", "json")
 	t.Setenv("LOG_LEVEL", "info")
 	if New("api") == nil {
@@ -23,6 +30,9 @@ func TestNew_Constructs(t *testing.T) {
 }
 
 func TestNew_TextFormatAndDebugLevel(t *testing.T) {
+	// Verify that debug-level messages actually appear in the output.
+	// This catches regressions where the level filter might silently hide
+	// debug messages.
 	t.Setenv("LOG_LEVEL", "debug")
 
 	var buf bytes.Buffer
@@ -35,6 +45,9 @@ func TestNew_TextFormatAndDebugLevel(t *testing.T) {
 }
 
 func TestParseLevel(t *testing.T) {
+	// Table-driven test covering all valid inputs, aliases ("warning"),
+	// empty string, and an unrecognized value. All edge cases should
+	// fall back to LevelInfo.
 	tests := []struct {
 		in   string
 		want slog.Level
@@ -55,6 +68,9 @@ func TestParseLevel(t *testing.T) {
 }
 
 func TestNew_EmitsJSONWithService(t *testing.T) {
+	// Verify the JSON structure is valid and includes the expected fields.
+	// This is important because log aggregators depend on consistent
+	// field names and valid JSON.
 	var buf bytes.Buffer
 	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
 	log := slog.New(h).With("service", "api")

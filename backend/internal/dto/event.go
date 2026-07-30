@@ -13,7 +13,18 @@ import (
 // Request DTOs
 // ---------------------------------------------------------------------------
 
+// Note 1: DTOs (Data Transfer Objects) are the explicit shape of data over
+// the wire. They decouple the API contract from internal database models so
+// changes to one do not silently break the other.
+
 // CreateEventRequest is the request body for POST /api/events.
+//
+// Note 2: Validate tags use the go-playground/validator library. Each tag
+// expresses a constraint: "required" means the field must be non-zero,
+// "min=1,max=200" constrains string length, "gtfield=StartsAt" ensures
+// EndsAt is strictly after StartsAt, and "oneof=..." restricts to an
+// enumerated set of allowed values. Pointer fields (*string, *float64)
+// use "omitempty" so the validator skips them if nil.
 type CreateEventRequest struct {
 	Title            string     `json:"title" validate:"required,min=1,max=200"`
 	Description      *string    `json:"description" validate:"omitempty,max=5000"`
@@ -39,6 +50,12 @@ type CreateEventRequest struct {
 // PATCH semantics: partial update. Only send the fields you want to
 // change. title, slug, status, organizer_id, created_at, and updated_at
 // are immutable via this endpoint.
+//
+// Note 3: Every field is a pointer (*string, *time.Time, *int32). This
+// distinguishes "not sent" (nil) from "send zero value" (e.g. setting
+// price_in_paise to 0). For PATCH endpoints this is critical — without
+// pointers you cannot tell whether the client wants to clear a field or
+// simply omitted it.
 type UpdateEventRequest struct {
 	Description      *string    `json:"description" validate:"omitempty,max=5000"`
 	StartsAt         *time.Time `json:"starts_at"`
@@ -61,6 +78,10 @@ type UpdateEventRequest struct {
 // ---------------------------------------------------------------------------
 // Response DTOs
 // ---------------------------------------------------------------------------
+
+// Note 4: Response structs use `json:",omitempty"` on pointer fields so
+// null values are excluded from the JSON output. This keeps responses
+// clean — a physical event won't include "meeting_url": null.
 
 type EventResponse struct {
 	ID                uuid.UUID  `json:"id"`
@@ -92,6 +113,11 @@ type EventResponse struct {
 
 // EventListResponse wraps a paginated list of events with pagination
 // metadata.
+//
+// Note 5: The pagination fields (limit, offset, total) are included in every
+// list response so the client knows what page it's on and how many results
+// exist. This is essential for building paginated UIs — the frontend uses
+// total + limit to calculate page count.
 type EventListResponse struct {
 	Events []EventResponse `json:"events"`
 	Limit  int32           `json:"limit"`
@@ -100,6 +126,15 @@ type EventListResponse struct {
 }
 
 // NewEventResponse converts a db.Event row into an EventResponse.
+//
+// Note 6: sqlc-generated db.Event uses pgtype types (like pgtype.UUID,
+// pgtype.Numeric) which have a .Valid field to distinguish null from zero.
+// The DTO layer converts these to standard Go types (*uuid.UUID, *float64)
+// so API consumers get clean JSON with proper null handling.
+//
+// Note 7: CalendarID and lat/lng use conditional conversion because they are
+// nullable database columns. The .Bytes field on pgtype.UUID provides raw
+// bytes that can be cast directly to uuid.UUID when Valid is true.
 func NewEventResponse(e db.Event) EventResponse {
 	resp := EventResponse{
 		ID:               e.ID,
@@ -148,11 +183,19 @@ func NewEventResponse(e db.Event) EventResponse {
 
 // NewEventListResponse converts a slice of EventResponse rows into a
 // paginated EventListResponse.
+//
+// Note 8: The caller (server handler) passes limit, offset, and total from
+// the database query result. This function simply wraps them into the
+// response shape — it doesn't perform any pagination logic itself.
 func NewEventListResponse(events []EventResponse, limit, offset, total int32) EventListResponse {
 	return EventListResponse{Events: events, Limit: limit, Offset: offset, Total: total}
 }
 
 // ToEventResponses converts a slice of db.Event to a slice of EventResponse.
+//
+// Note 9: The slice is pre-allocated with len(events) capacity to avoid
+// multiple append-driven reallocations. This is a common Go performance
+// pattern when the final size is known in advance.
 func ToEventResponses(events []db.Event) []EventResponse {
 	items := make([]EventResponse, 0, len(events))
 	for _, e := range events {

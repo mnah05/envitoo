@@ -50,8 +50,13 @@ type otpEmailTemplateData struct {
 	EventID    string `json:"event_id"`
 }
 
-// RequestGuestOTP validates the event, issues a 6-digit OTP, stores HMAC state
-// in Redis, and queues an email via email_outbox. It does not create a registration.
+// RequestGuestOTP validates the event, generates a 6-digit OTP, stores its
+// HMAC in Redis, and queues an email via the outbox table. No registration
+// is created at this stage — only after the caller successfully verifies
+// the OTP via VerifyGuestOTP and then calls CreateGuestRegistration.
+//
+// The flow is: request OTP → receive email → verify OTP → create registration.
+// A 60-second cooldown prevents resend spam.
 func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.UUID, req dto.RequestGuestOTPRequest) (resp dto.RequestGuestOTPResponse, err error) {
 	log := s.logger(ctx)
 	log.Info("guest_otp_request_start", "event_id", eventID)
@@ -156,8 +161,14 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 	}, nil
 }
 
-// VerifyGuestOTP checks the OTP against Redis state and writes a short-lived
-// verified marker. It does not create a registration.
+// VerifyGuestOTP checks the submitted OTP against the HMAC stored in Redis.
+// On success it writes a short-lived verified marker and returns a
+// verification token. The subsequent CreateGuestRegistration endpoint
+// reads this marker to confirm the email was verified.
+//
+// Brute-force protection: after guestOTPMaxTries (5) failed attempts both
+// the OTP state and the attempt counter are deleted, forcing a new OTP
+// request.
 func (s *RegistrationService) VerifyGuestOTP(ctx context.Context, eventID uuid.UUID, req dto.VerifyGuestOTPRequest) (resp dto.VerifyGuestOTPResponse, err error) {
 	log := s.logger(ctx)
 	log.Info("guest_otp_verify_start", "event_id", eventID)
@@ -267,6 +278,10 @@ func guestVerifiedKey(eventID uuid.UUID, email string) string {
 	return "guest:verified:" + eventID.String() + ":" + email
 }
 
+// generateGuestOTP returns a cryptographically-random 6-digit string,
+// zero-padded on the left. crypto/rand is used (not math/rand) so the
+// output is unpredictable — important because the OTP is the only auth
+// factor for guest registration.
 func generateGuestOTP() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(guestOTPCodeBound))
 	if err != nil {
@@ -275,6 +290,10 @@ func generateGuestOTP() (string, error) {
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
+// hmacGuestOTP computes an HMAC-SHA256 digest of the tuple
+// (eventID | email | otp). The secret is the application's OTP_SECRET
+// env var. Storing only the digest in Redis (never the plaintext OTP)
+// means a Redis compromise does not leak valid OTP values.
 func hmacGuestOTP(secret []byte, eventID uuid.UUID, email, otp string) string {
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte(eventID.String()))

@@ -3,6 +3,9 @@ package helper
 import "testing"
 
 func TestNormalizeEmail(t *testing.T) {
+	// Table-driven test: each entry specifies an input and the expected
+	// normalized output. The test covers trimming whitespace, lowercasing,
+	// empty input, and already-normal input.
 	tests := []struct {
 		in, want string
 	}{

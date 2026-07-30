@@ -21,6 +21,9 @@ import (
 	"github.com/mnah05/envitoo/internal/server"
 )
 
+// main is the API server entry point. It initialises the database pool,
+// Redis cache (if configured), Clerk SDK, and the Echo HTTP server, then
+// blocks on SIGINT/SIGTERM for graceful shutdown.
 func main() {
 	log := logging.New("api")
 	slog.SetDefault(log)
@@ -36,6 +39,8 @@ func main() {
 
 	clerk.SetKey(cfg.ClerkSecretKey)
 
+	// signal.NotifyContext creates a context that is cancelled when the
+	// process receives SIGINT (Ctrl+C) or SIGTERM (Docker stop / kill).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -46,6 +51,8 @@ func main() {
 	}
 	defer database.Close()
 
+	// sqlc-generated queries need a *pgxpool.Pool (or a tx wrapper).
+	// db.New creates the query struct; each method call maps to a SQL query.
 	queries := db.New(database.Pool())
 	if _, err := queries.Test(ctx); err != nil {
 		log.Error("database test query failed", "error", err)
@@ -57,6 +64,8 @@ func main() {
 		"min_conns", cfg.DBMinConns,
 	)
 
+	// Redis is optional. When unavailable, cache.GetJSON falls through to
+	// the fallback function on every call (no caching).
 	var appCache *cache.Store
 	if cfg.RedisURL != "" {
 		redis, closeRedis, err := cache.Open(ctx, cfg.RedisURL)
@@ -79,6 +88,9 @@ func main() {
 	e.HidePort = false
 	server.New(database.Pool(), queries, appCache, cfg.OTPSecret, cfg.HealthzToken, log).Register(ctx, e)
 
+	// Start the HTTP server in a goroutine so we can listen for shutdown
+	// signals concurrently. The server is configured with explicit timeouts
+	// to prevent slow-client attacks and resource leaks.
 	serveErr := make(chan error, 1)
 	go func() {
 		log.Info("server starting", "addr", ":8080")
@@ -99,6 +111,8 @@ func main() {
 		}
 	}
 
+	// Graceful shutdown: stop accepting new requests and wait up to 10s
+	// for in-flight requests to complete before force-closing.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {

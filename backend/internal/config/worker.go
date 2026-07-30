@@ -11,6 +11,10 @@ import (
 )
 
 // WorkerConfig holds configuration for the email outbox drainer worker.
+//
+// Note 1: The email outbox pattern uses the database as a queue table and NATS
+// as a notification channel. This config controls how aggressively the worker
+// polls, retries, and cleans up old records.
 type WorkerConfig struct {
 	DatabaseURL      string
 	NATSURL          string
@@ -24,6 +28,15 @@ type WorkerConfig struct {
 }
 
 // LoadWorker reads environment variables for the outbox drainer worker.
+//
+// Note 2: Unlike Load() for the API server, this function uses the WORKER_
+// prefix instead of DB_/CLERK_. This keeps the worker's env namespace
+// separate so the same machine can run both processes with different .env
+// files.
+//
+// Note 3: NATS_URL defaults to nats.DefaultURL ("nats://localhost:4222")
+// which matches the local docker-compose setup. In production this would be
+// overridden to point at a NATS cluster.
 func LoadWorker() (WorkerConfig, error) {
 	k := koanf.New(".")
 
@@ -60,6 +73,15 @@ func LoadWorker() (WorkerConfig, error) {
 	}, nil
 }
 
+// intOr is a config helper similar to int32Or in server.go — returns the env
+// var if set, otherwise the provided default. The int type is used here
+// (instead of int32) because batch sizes and counts are small enough that
+// the wider type is unnecessary.
+//
+// Note 4: Both intOr and durationOr are unexported duplicates of the helpers
+// in server.go. In a larger project these would live in a shared helper
+// package, but keeping them local avoids cross-package dependencies for
+// something this small.
 func intOr(k *koanf.Koanf, key string, def int) int {
 	if !k.Exists(key) {
 		return def

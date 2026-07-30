@@ -26,12 +26,11 @@ import (
 // the wait deadline. Kept as a sentinel so callers can compare / use Error().
 var errAckTimeout = errors.New("ack timeout")
 
-// resolvePubAck waits for a JetStream PubAckFuture result.
-//
-// A plain select on Ok/Err/ctx.Done is unsafe: when the deadline fires, Ok
-// (or Err) may already be ready too, and Go picks among ready cases at random.
-// That can mark a successful publish as timed out. After Done fires we do a
-// non-blocking nested select that prefers Ok/Err when either is ready.
+// resolvePubAck waits for a JetStream PubAckFuture result. Uses a two-phase
+// select to avoid the Go runtime's random-select pitfall: when both ctx.Done
+// and Ok/Err channels are ready simultaneously, a naive select may choose
+// ctx.Done and report a false timeout. After ctx fires we try Ok/Err once
+// more in a non-blocking select before giving up.
 func resolvePubAck(ctx context.Context, ok <-chan *jetstream.PubAck, errCh <-chan error) error {
 	select {
 	case <-ok:
@@ -50,6 +49,10 @@ func resolvePubAck(ctx context.Context, ok <-chan *jetstream.PubAck, errCh <-cha
 	}
 }
 
+// main is the outbox drainer worker entry point. On a poll interval it
+// reads PENDING rows from the email_outbox table, publishes them to NATS
+// JetStream, and records the outcome (PUBLISHED or retry/FAILED). It also
+// runs a background cleanup goroutine that deletes stale outbox rows.
 func main() {
 	log := logging.New("worker")
 	slog.SetDefault(log)
@@ -119,6 +122,13 @@ func main() {
 	}
 }
 
+// publishBatch implements the transactional outbox pattern:
+// 1. SELECT a batch of PENDING rows with SKIP LOCKED (avoids worker contention).
+// 2. Publish each row to JetStream (async, deduplicated by msg ID).
+// 3. Resolve publish acks and split into succeeded/failed.
+// 4. UPDATE succeeded rows to PUBLISHED, failed rows to retry+1 (or FAILED).
+// All DB writes run in a single transaction so partial failures do not
+// lose rows or double-publish.
 func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStream, cfg config.WorkerConfig, log *slog.Logger) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {

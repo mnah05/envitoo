@@ -9,6 +9,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 )
 
+// Note 1: Tests use miniredis — an in-memory Redis implementation written
+// in pure Go. No actual Redis server is needed to run the test suite.
+
 func TestRedis_GetSetDelete(t *testing.T) {
 	ctx := context.Background()
 	mr, err := miniredis.Run()
@@ -57,15 +60,18 @@ func TestRedis_SetNXIncrExpire(t *testing.T) {
 	}
 	defer closeRedis()
 
+	// First SetNX should succeed (key does not exist)
 	ok, err := c.SetNX(ctx, "cooldown", []byte("1"), time.Minute)
 	if err != nil || !ok {
 		t.Fatalf("setnx first: ok=%v err=%v", ok, err)
 	}
+	// Second SetNX with the same key should return false
 	ok, err = c.SetNX(ctx, "cooldown", []byte("1"), time.Minute)
 	if err != nil || ok {
 		t.Fatalf("setnx second: ok=%v err=%v", ok, err)
 	}
 
+	// Incr creates key at 0, increments to 1
 	n, err := c.Incr(ctx, "attempts")
 	if err != nil || n != 1 {
 		t.Fatalf("incr: n=%d err=%v", n, err)
@@ -101,12 +107,15 @@ func TestRedis_DeleteByPrefix(t *testing.T) {
 			t.Fatalf("set %s: %v", key, err)
 		}
 	}
+	// Delete all keys with prefix "envito:v1:events:public:"
 	if err := c.DeleteByPrefix(ctx, "envito:v1:events:public:"); err != nil {
 		t.Fatalf("delete by prefix: %v", err)
 	}
+	// Public list keys should be gone
 	if _, err := c.Get(ctx, "envito:v1:events:public:1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected public list key deleted")
 	}
+	// The unrelated key should still exist
 	if _, err := c.Get(ctx, "envito:v1:other"); err != nil {
 		t.Fatalf("expected unrelated key to remain: %v", err)
 	}

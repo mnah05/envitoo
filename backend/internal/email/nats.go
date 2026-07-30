@@ -19,6 +19,18 @@ const (
 
 // EnsureEmailsStream creates or updates the EMAILS stream.
 // Safe to call from both the outbox drainer and the mailer on startup.
+//
+// Note 1: JetStream is NATS' persistent messaging layer. Unlike core NATS
+// (at-most-once), JetStream provides at-least-once delivery with persistence
+// to disk. If the mailer crashes, messages survive restart.
+//
+// Note 2: WorkQueuePolicy means each message is delivered to exactly one
+// consumer. This prevents the mailer from sending duplicate emails if
+// multiple mailer instances are running for high availability.
+//
+// Note 3: Duplicates dedup window is set to 1 minute. If a message with the
+// same MsgID is published within that window, JetStream silently drops the
+// duplicate. This aligns with the PublishAsync MsgId used by the drainer.
 func EnsureEmailsStream(ctx context.Context, js jetstream.JetStream) (jetstream.Stream, error) {
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:       StreamName,
@@ -27,7 +39,7 @@ func EnsureEmailsStream(ctx context.Context, js jetstream.JetStream) (jetstream.
 		Storage:    jetstream.FileStorage,
 		Discard:    jetstream.DiscardOld,
 		MaxAge:     7 * 24 * time.Hour,
-		Duplicates: time.Minute, // aligns with MsgID dedup on PublishAsync
+		Duplicates: time.Minute,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ensure EMAILS stream: %w", err)
@@ -36,6 +48,15 @@ func EnsureEmailsStream(ctx context.Context, js jetstream.JetStream) (jetstream.
 }
 
 // EnsureMailerConsumer creates or updates the durable mailer consumer on EMAILS.
+//
+// Note 4: CreateOrUpdateConsumer is idempotent — if the consumer already
+// exists with matching config, it is a no-op. This lets both the drainer
+// and mailer safely call this on startup without error handling for "already
+// exists."
+//
+// Note 5: DeliverAllPolicy ensures that any messages published while the
+// mailer was offline are delivered when it comes back. This prevents
+// message loss during deployments or crashes.
 func EnsureMailerConsumer(ctx context.Context, js jetstream.JetStream) (jetstream.Consumer, error) {
 	if _, err := EnsureEmailsStream(ctx, js); err != nil {
 		return nil, err
@@ -46,7 +67,6 @@ func EnsureMailerConsumer(ctx context.Context, js jetstream.JetStream) (jetstrea
 		AckWait:       60 * time.Second,
 		MaxDeliver:    10,
 		FilterSubject: StreamSubjects,
-		// DeliverAll so messages published before the mailer starts are not lost.
 		DeliverPolicy: jetstream.DeliverAllPolicy,
 	})
 	if err != nil {

@@ -24,6 +24,14 @@ const (
 // Store wraps Redis with cache-aside reads and delete helpers.
 // A nil Store (or no Redis) means caching is off — every call becomes a no-op
 // or falls through to the database.
+//
+// Note 1: The nil-safety pattern (checking s == nil || s.redis == nil at the
+// start of every method) means callers do not need a nil check before calling
+// cache operations. Passing a nil *Store is safe and simply bypasses caching.
+//
+// Note 2: singleflight.Group coalesces concurrent GetJSON calls for the same
+// key — only one goroutine runs the load function; the rest wait for its
+// result. This prevents a thundering herd when a popular cache key expires.
 type Store struct {
 	redis *Redis
 	log   *slog.Logger
@@ -36,6 +44,12 @@ func New(redis *Redis, log *slog.Logger) *Store {
 	}
 	return &Store{redis: redis, log: log}
 }
+
+// Note 3: The "soft" methods (Get, Set, Delete) treat Redis errors as soft
+// failures — they return ErrNotFound for reads and silently ignore write
+// errors. This keeps the application running when Redis is down rather than
+// failing every request. The "hard" methods (GetBytes, SetBytes, etc.) use
+// requireRedis() to return ErrUnavailable when Redis is required.
 
 func (s *Store) Get(ctx context.Context, key string) ([]byte, error) {
 	if s == nil || s.redis == nil {
@@ -216,6 +230,14 @@ func (s *Store) DeletePrefix(ctx context.Context, prefix string) {
 }
 
 // GetJSON is a cache-aside read: try cache, on miss call load, cache result.
+//
+// Note 4: This is a generic function (Go 1.18+) parameterized on any type T.
+// The JSON serialization is handled transparently — the caller provides a
+// strongly-typed load function and gets the same type back.
+//
+// Note 5: The singleflight.Do call ensures that when multiple requests miss
+// cache simultaneously, only one calls load() while the others wait. This
+// protects the database from a spike in reads when a popular key expires.
 func GetJSON[T any](ctx context.Context, s *Store, key string, ttl time.Duration, load func(context.Context) (T, error)) (T, error) {
 	if s == nil || s.redis == nil || !s.redis.IsHealthy() {
 		return load(ctx)

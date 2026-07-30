@@ -20,6 +20,9 @@ import (
 // ---------------------------------------------------------------------------
 
 // RequestGuestOTP handles POST /api/events/:id/register/guest/otp.
+// Generates a time-limited OTP and sends it via the email pipeline
+// (NATS → mailer worker → Resend API). Each event/email pair has a
+// configurable resend cooldown defined in the OTP config.
 func (s *Server) RequestGuestOTP(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -50,6 +53,9 @@ func (s *Server) RequestGuestOTP(c echo.Context) error {
 }
 
 // VerifyGuestOTP handles POST /api/events/:id/register/guest/otp/verify.
+// Validates the HMAC-based OTP and returns a registration token that
+// the guest uses to manage their registration (the token acts as their
+// "session" since they have no Clerk JWT).
 func (s *Server) VerifyGuestOTP(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -97,6 +103,9 @@ func guestOTPError(err error) *echo.HTTPError {
 }
 
 // CreateGuestRegistration handles POST /api/events/:id/register/guest.
+// Creates a registration row linked to the guest's verified email (no
+// local db.User — user_id IS NULL). The response includes an access
+// token used for subsequent GET/DELETE operations on this registration.
 func (s *Server) CreateGuestRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -128,6 +137,9 @@ func (s *Server) CreateGuestRegistration(c echo.Context) error {
 }
 
 // GetGuestRegistration handles GET /api/guest-registrations?token=.
+// Guests authenticate via a UUID query parameter rather than a session
+// cookie or JWT header — this is a bearer token approach designed for
+// the email-link flow where no traditional auth mechanism exists.
 func (s *Server) GetGuestRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -161,6 +173,9 @@ func (s *Server) GetGuestRegistration(c echo.Context) error {
 }
 
 // CancelGuestRegistration handles DELETE /api/guest-registrations?token=.
+// Soft-deletes the guest registration and returns the cancelled row.
+// Cache invalidation ensures the event's ticket count is updated for
+// subsequent requests.
 func (s *Server) CancelGuestRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -193,6 +208,9 @@ func (s *Server) CancelGuestRegistration(c echo.Context) error {
 // ---------------------------------------------------------------------------
 
 // CreateRegistration handles POST /api/events/:id/register.
+// Authenticated-user variant of the guest flow. The user's identity is
+// taken from the Clerk JWT (via LoadUser middleware) rather than an
+// email OTP flow.
 func (s *Server) CreateRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -228,7 +246,9 @@ func (s *Server) CreateRegistration(c echo.Context) error {
 	return c.JSON(http.StatusCreated, dto.NewRegistrationResponse(reg))
 }
 
-// GetRegistration handles GET /api/registrations/:id.
+// GetRegistration handles GET /api/registrations/:id. Scoped to the
+// authenticated user: the service layer filters by user_id so one
+// user cannot view another's registration.
 func (s *Server) GetRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -254,7 +274,9 @@ func (s *Server) GetRegistration(c echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewRegistrationResponse(reg))
 }
 
-// CancelRegistration handles DELETE /api/registrations/:id.
+// CancelRegistration handles DELETE /api/registrations/:id. Only the
+// registration owner (user_id match) can cancel. An organizer/admin
+// should use RejectRegistration instead.
 func (s *Server) CancelRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -282,7 +304,10 @@ func (s *Server) CancelRegistration(c echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewRegistrationResponse(reg))
 }
 
-// ListMyRegistrations handles GET /api/me/registrations.
+// ListMyRegistrations handles GET /api/me/registrations. Cached per-user
+// so that repeated fetches from the frontend navigation do not hit the
+// DB each time. The cache is invalidated on any registration create,
+// cancel, or status change via forgetRegistration.
 func (s *Server) ListMyRegistrations(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -322,6 +347,10 @@ func (s *Server) ListMyRegistrations(c echo.Context) error {
 // ---------------------------------------------------------------------------
 
 // ListEventRegistrations handles GET /api/events/:id/registrations.
+// Returns the attendee roster for an event. Access is gated by
+// EnsureEventStaff — the organizer or an approved volunteer admin may
+// view this list. Authorization is checked BEFORE the cache lookup to
+// prevent a non-staff caller from receiving a cached staff response.
 func (s *Server) ListEventRegistrations(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -376,6 +405,9 @@ func (s *Server) ListEventRegistrations(c echo.Context) error {
 }
 
 // GetRegistrationAsAdmin handles GET /api/registrations/:id/admin.
+// Returns full registration details for an organizer/volunteer-admin,
+// including the attendee's identity that the user-facing endpoint
+// deliberately omits.
 func (s *Server) GetRegistrationAsAdmin(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -402,6 +434,10 @@ func (s *Server) GetRegistrationAsAdmin(c echo.Context) error {
 }
 
 // ApproveRegistration handles POST /api/registrations/:id/approve.
+// Transitions a pending registration to approved. This is the organizer's
+// explicit confirmation — the attendee receives a spot and can later be
+// checked in. If the event has reached its capacity, ErrEventFull is
+// returned and no change is made.
 func (s *Server) ApproveRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -442,6 +478,8 @@ func (s *Server) ApproveRegistration(c echo.Context) error {
 }
 
 // RejectRegistration handles POST /api/registrations/:id/reject.
+// Transitions a pending registration to rejected. Once rejected, the
+// registration cannot be re-approved; the attendee must re-apply.
 func (s *Server) RejectRegistration(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -482,6 +520,8 @@ func (s *Server) RejectRegistration(c echo.Context) error {
 }
 
 // UpdateRegistrationStatus handles PATCH /api/registrations/:id/status.
+// A flexible status endpoint for bulk or programmatic transitions.
+// The allowed transitions are validated by the service layer.
 func (s *Server) UpdateRegistrationStatus(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -530,6 +570,10 @@ func (s *Server) UpdateRegistrationStatus(c echo.Context) error {
 }
 
 // CheckInAttendee handles POST /api/registrations/:id/check-in.
+// Marks an approved registration as checked in at the event door.
+// The access_token in the request body is validated against the stored
+// token; for organizers checking in via the dashboard the token is
+// optional (they have event-level access already).
 func (s *Server) CheckInAttendee(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -574,7 +618,10 @@ func (s *Server) CheckInAttendee(c echo.Context) error {
 	return c.JSON(http.StatusOK, dto.NewRegistrationResponse(reg))
 }
 
-// CheckInByEventToken handles POST /api/events/:id/check-in.
+// CheckInByEventToken handles POST /api/events/:id/check-in. Scans
+// registrations by event ID + access token without requiring the
+// registration ID. Convenient for QR-code scanners where the event
+// context is known but the specific registration ID is not.
 func (s *Server) CheckInByEventToken(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -642,7 +689,12 @@ func registrationCreateError(err error) *echo.HTTPError {
 // Cache invalidation helpers
 // ---------------------------------------------------------------------------
 
-// forgetRegistration needs a DB slug lookup before it can delete keys.
+// forgetRegistration deletes all cache keys that might be affected by
+// a change to the given registration. This includes the direct
+// guest-registration token key, the event detail page, the event's
+// registration list (including its page-variant prefix), and the
+// user's my-registrations key.
+// Needs a DB slug lookup before it can delete slug-based keys.
 func (s *Server) forgetRegistration(ctx context.Context, reg db.Registration) {
 	if s.cache == nil {
 		return
@@ -669,7 +721,11 @@ func (s *Server) forgetRegistration(ctx context.Context, reg db.Registration) {
 }
 
 // forgetRegistrationsByEmail looks up every registration for an email
-// and invalidates each one. Called during auth-based guest linking.
+// and invalidates each one. This is the callback passed to LoadUser as
+// GuestRegistrationInvalidator. When a guest authenticates for the
+// first time, their guest registrations are linked to the new local
+// user; this function clears the stale cache entries so the user's
+// dashboard immediately shows their newly-linked tickets.
 // userID is the local user who received the linked rows; their
 // me/registrations cache must be dropped so newly linked tickets appear.
 func (s *Server) forgetRegistrationsByEmail(ctx context.Context, userID uuid.UUID, email string) {
@@ -716,6 +772,9 @@ func (s *Server) forgetRegistrationsByEmail(ctx context.Context, userID uuid.UUI
 	}
 }
 
+// lookupEventSlug is a cache-invalidation helper that fetches a single
+// event's slug from the DB. The result is NOT cached because this is
+// only called on mutation paths where the cache is being invalidated anyway.
 func (s *Server) lookupEventSlug(ctx context.Context, eventID uuid.UUID) string {
 	event, err := s.queries.GetEventByID(ctx, eventID)
 	if err != nil {
