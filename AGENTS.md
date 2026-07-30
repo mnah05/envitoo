@@ -17,7 +17,7 @@ Copy templates and fill in secrets (never commit `.env` files):
 
 | File | Required vars |
 |------|----------------|
-| `backend/.env` | `DB_URL` (remote Supabase for prod), `CLERK_SECRET_KEY`; optional `REDIS_URL`, `OTP_SECRET` |
+| `backend/.env` | `DB_URL` (remote Supabase for prod), `CLERK_SECRET_KEY`; optional `REDIS_URL`, `OTP_SECRET`, `TEST_DB_URL` |
 | `backend/.env.local` | Overrides `DB_URL`, `REDIS_URL`, `NATS_URL` to point at local docker services (provided; gitignored) |
 | `client/.env` | `VITE_CLERK_PUBLISHABLE_KEY` |
 
@@ -49,6 +49,73 @@ Optional email pipeline: `make worker` and `make mailer` (need NATS + Resend).
 | Production build | `make build` |
 
 Pre-commit hooks (via `make setup`): runs `make check` plus staged gitleaks scan, binary check, and `.env` guard. Gitleaks is optional locally if not installed; GitHub Actions runs gitleaks on every push and pull request (see `.github/workflows/ci.yml`).
+
+### Architecture: `GET /api/me` hot path
+
+`GET /api/me` goes through three middleware layers before the handler:
+
+1. **`Auth()`** — Clerk JWT verification (local JWKS, pre-warmed at server startup via `InitJWKSClient`; zero outbound HTTP)
+2. **`LoadUser()`** — User provisioning + guest registration linking (see below)
+3. **`AuthRateLimiter`** — Per-user rate limit
+
+The handler itself is a trivial context read + JSON serialize.
+
+**Optimized `LoadUser` flow:**
+
+```
+Request → Cache lookup (key: "user:auth:<clerk_user_id>")
+  ├─ Cache HIT → user found, skip DB
+  └─ Cache MISS → SELECT FROM users WHERE auth_user_id = $1
+       ├─ Found → cache in Redis (TTL 2m), continue
+       └─ Not found → cold path (Clerk API + onboarding transaction)
+```
+
+After user resolution, `linkGuestRegistrations` runs (only on cache miss / DB load):
+
+```
+SELECT EXISTS (1 FROM registrations WHERE email=$1 AND user_id IS NULL)
+  ├─ False → skip writes (>99% of requests)
+  └─ True → single CTE (combines link + cancel in one round-trip)
+       └─ If rows affected → fire cache invalidation callback
+```
+
+**Result for a returning user with no orphaned guest registrations:**
+- Cache hit: **0 DB round-trips** before the handler
+- Cache miss: **1 DB round-trip** (SELECT) — no UPDATEs
+
+### Cache conventions
+
+Redis cache keys follow `METHOD:path` patterns (e.g. `GET:/api/events/123`). All reside in `internal/cache/store.go`:
+
+| Key pattern | TTL | Invalidated by |
+|-------------|-----|---------------|
+| `user:auth:<clerk_id>` | 2m | No mutation endpoint exists yet — add invalidation when creating PATCH /api/me |
+| `GET:/api/events/<id>` | 5m | Registration mutations |
+| `GET:/api/events/slug/<slug>` | 5m | Registration mutations |
+| `GET:/api/events?...` | 2m | `DeletePrefix` on any registration change |
+| `GET:/api/guest-registrations?token=<token>` | 2m | Guest registration create/cancel |
+| `GET:/api/events/<id>/registrations...` | 2m | Registration status changes |
+| `GET:/api/me/registrations:user:<uid>...` | 2m | Registration create/cancel/status |
+
+The cache is **nil-safe**: passing a nil `*cache.Store` bypasses caching entirely without panicking.
+
+### Testing with a local database
+
+Auth middleware tests require a real Postgres. Set `TEST_DB_URL` in `backend/.env`:
+
+```
+TEST_DB_URL=postgresql://envitoo:envitoo@localhost:5432/envitoo
+```
+
+The test harness reads `TEST_DB_URL` first, then falls back to `DB_URL` only if it points at localhost. Remote/Supabase `DB_URL` is never used for tests.
+
+```bash
+make dc-up          # start postgres (migrations run on first init)
+export PATH="/usr/local/go/bin:$PATH"
+cd backend && go test -count=1 ./...
+```
+
+Auth-specific tests: `go test -run TestLoadUser ./internal/middleware/`.
 
 ### Gotchas
 

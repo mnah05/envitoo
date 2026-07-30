@@ -18,6 +18,7 @@ import (
 	"github.com/mnah05/envitoo/internal/database"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/logging"
+	"github.com/mnah05/envitoo/internal/middleware"
 	"github.com/mnah05/envitoo/internal/server"
 )
 
@@ -39,8 +40,15 @@ func main() {
 
 	clerk.SetKey(cfg.ClerkSecretKey)
 
+	// Pre-warm the Clerk JWKS cache at startup so the first authenticated
+	// request doesn't pay the ~1s latency of fetching JWKS from Clerk's API.
+	jwksClient := middleware.InitJWKSClient(context.Background())
+	if jwksClient != nil {
+		log.Info("jwks cache pre-warmed")
+	}
+
 	// signal.NotifyContext creates a context that is cancelled when the
-	// process receives SIGINT (Ctrl+C) or SIGTERM (Docker stop / kill).
+	// process receives SIGINT (SIGTERM) (Docker stop / kill).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -86,7 +94,7 @@ func main() {
 	e := echo.New()
 	e.HideBanner = false
 	e.HidePort = false
-	server.New(database.Pool(), queries, appCache, cfg.OTPSecret, cfg.HealthzToken, log).Register(ctx, e)
+	server.New(database.Pool(), queries, appCache, cfg.OTPSecret, cfg.HealthzToken, log, jwksClient).Register(ctx, e)
 
 	// Start the HTTP server in a goroutine so we can listen for shutdown
 	// signals concurrently. The server is configured with explicit timeouts

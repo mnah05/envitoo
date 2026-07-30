@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 
+	"github.com/clerk/clerk-sdk-go/v2/jwks"
 	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
@@ -33,6 +34,7 @@ type Server struct {
 	registrations *service.RegistrationService
 	volunteers    *service.VolunteerService
 	healthToken   string
+	jwksClient    *jwks.Client
 }
 
 // New creates a Server with all services initialized.
@@ -41,7 +43,7 @@ type Server struct {
 //
 // The Service layer wraps queries with business logic and is split
 // across EventService, RegistrationService, and VolunteerService.
-func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, healthToken string, log *slog.Logger) *Server {
+func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, healthToken string, log *slog.Logger, jwksClient *jwks.Client) *Server {
 	validate := dto.NewValidator()
 	access := service.NewEventAccessService(queries)
 	return &Server{
@@ -54,6 +56,7 @@ func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, hea
 		registrations: service.NewRegistrationService(pool, queries, access, c, otpSecret, log),
 		volunteers:    service.NewVolunteerService(pool, queries, access, log),
 		healthToken:   healthToken,
+		jwksClient:    jwksClient,
 	}
 }
 
@@ -103,7 +106,7 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	public.GET("/events/:id/volunteer/settings", s.GetVolunteerSettings)
 	public.GET("/events/:id/volunteer/roles", s.ListVolunteerRoles)
 
-	protected := e.Group("/api", middleware.Auth(), middleware.LoadUser(s.pool, s.queries, s.cache, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(ctx, middleware.DefaultAuthConfig))
+	protected := e.Group("/api", middleware.Auth(s.jwksClient), middleware.LoadUser(s.pool, s.queries, s.cache, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(ctx, middleware.DefaultAuthConfig))
 	protected.GET("/me", s.Me)
 
 	// Host-only event management

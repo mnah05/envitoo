@@ -11,6 +11,7 @@ import (
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+	"github.com/clerk/clerk-sdk-go/v2/jwks"
 	"github.com/clerk/clerk-sdk-go/v2/user"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -44,8 +45,12 @@ func UserFromContext(c echo.Context) (*db.User, bool) {
 //
 // clerk.SetKey must be called once at startup before this middleware
 // is used.
-func Auth() echo.MiddlewareFunc {
-	return echo.WrapMiddleware(clerkhttp.RequireHeaderAuthorization())
+func Auth(jwksClient *jwks.Client) echo.MiddlewareFunc {
+	opts := []clerkhttp.AuthorizationOption{}
+	if jwksClient != nil {
+		opts = append(opts, clerkhttp.JWKSClient(jwksClient))
+	}
+	return echo.WrapMiddleware(clerkhttp.RequireHeaderAuthorization(opts...))
 }
 
 // LoadUser provisions the local user for the authenticated request and
@@ -97,12 +102,14 @@ func LoadUser(pool *pgxpool.Pool, queries *db.Queries, cacheStore *cache.Store, 
 			// No Clerk API call.
 			// claims.Subject is the Clerk auth_user_id (e.g. "user_2abc...").
 			localUser, err := cache.GetJSON(ctx, cacheStore, "user:auth:"+claims.Subject, 2*time.Minute, func(ctx context.Context) (db.User, error) {
-				return queries.GetUserByAuthUserID(ctx, claims.Subject)
+				user, err := queries.GetUserByAuthUserID(ctx, claims.Subject)
+				if err == nil {
+					linkGuestRegistrations(ctx, queries, log, user.ID, helper.NormalizeEmail(user.Email), onGuestRegsChanged)
+				}
+				return user, err
 			})
 			switch {
 			case err == nil:
-				// Normalize for guest-link matching (guest emails are stored lowercase).
-				linkGuestRegistrations(ctx, queries, log, localUser.ID, helper.NormalizeEmail(localUser.Email), onGuestRegsChanged)
 				c.Set(userContextKey, &localUser)
 				return next(c)
 			case !errors.Is(err, pgx.ErrNoRows):
@@ -242,26 +249,31 @@ func refetchAndContinue(
 	next echo.HandlerFunc,
 ) error {
 	localUser, err := cache.GetJSON(ctx, cacheStore, "user:auth:"+authUserID, 2*time.Minute, func(ctx context.Context) (db.User, error) {
-		return queries.GetUserByAuthUserID(ctx, authUserID)
+		user, err := queries.GetUserByAuthUserID(ctx, authUserID)
+		if err == nil {
+			linkGuestRegistrations(ctx, queries, log, user.ID, user.Email, onGuestRegsChanged)
+		}
+		return user, err
 	})
 	if err != nil {
 		log.ErrorContext(ctx, "refetch local user after race", "clerk_user_id", authUserID, "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
-	linkGuestRegistrations(ctx, queries, log, localUser.ID, localUser.Email, onGuestRegsChanged)
 	c.Set(userContextKey, &localUser)
 	return next(c)
 }
 
 // linkGuestRegistrations links orphaned guest rows to the user and cancels
 // guest rows superseded by an existing user registration for the same event.
-// Errors are logged but do not fail the request — linking is best-effort on
-// the returning-user hot path.
+// Errors are logged but do not fail the request — linking is best-effort.
 //
-// On the hot path, >99% of users have no orphaned guest registrations, so we
-// check first with a cheap EXISTS query and skip entirely when there's nothing
-// to do. This avoids two UPDATE round-trips on nearly every authenticated
-// request.
+// >99% of users have no orphaned guest registrations, so we check first with
+// a cheap EXISTS query and skip entirely when there's nothing to do. This
+// avoids two UPDATE round-trips on nearly every database-load path.
+//
+// This function is only called when the user record is loaded from the
+// database (cache MISS), not on every request. The cache TTL (2 min) bounds
+// how stale the "no orphans" state can be.
 func linkGuestRegistrations(ctx context.Context, queries *db.Queries, log *slog.Logger, userID uuid.UUID, email string, onGuestRegsChanged GuestRegistrationInvalidator) {
 	hasOrphans, err := queries.CheckOrphanedGuestRegistrations(ctx, email)
 	if err != nil {
