@@ -1,26 +1,45 @@
-package main
+package email
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/mnah05/envitoo/internal/config"
 	"github.com/mnah05/envitoo/internal/db"
-	"github.com/mnah05/envitoo/internal/email"
-	"github.com/mnah05/envitoo/internal/logging"
 )
+
+// OutboxConfig holds the tunables for the outbox drainer.
+type OutboxConfig struct {
+	BatchSize        int
+	MaxRetries       int
+	AckWaitLimit     time.Duration
+	RetentionPeriod  time.Duration
+	CleanupBatchSize int
+}
+
+// Drainer implements the transactional outbox pattern: it reads PENDING
+// rows from the email_outbox table, publishes them to NATS JetStream, and
+// records the outcome (PUBLISHED or retry/FAILED). It also deletes stale
+// outbox rows so the table does not grow indefinitely.
+type Drainer struct {
+	pool *pgxpool.Pool
+	js   jetstream.JetStream
+	cfg  OutboxConfig
+	log  *slog.Logger
+}
+
+// NewDrainer builds the outbox drainer. js must be the same JetStream
+// context the EMAILS stream was ensured on.
+func NewDrainer(pool *pgxpool.Pool, js jetstream.JetStream, cfg OutboxConfig, log *slog.Logger) *Drainer {
+	return &Drainer{pool: pool, js: js, cfg: cfg, log: log}
+}
 
 // errAckTimeout is returned when an async publish ack does not arrive before
 // the wait deadline. Kept as a sentinel so callers can compare / use Error().
@@ -49,101 +68,15 @@ func resolvePubAck(ctx context.Context, ok <-chan *jetstream.PubAck, errCh <-cha
 	}
 }
 
-// main is the outbox drainer worker entry point. On a poll interval it
-// reads PENDING rows from the email_outbox table, publishes them to NATS
-// JetStream, and records the outcome (PUBLISHED or retry/FAILED). It also
-// runs a background cleanup goroutine that deletes stale outbox rows.
-func main() {
-	log := logging.New("worker")
-	slog.SetDefault(log)
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	_ = godotenv.Load()
-	_ = godotenv.Overload(".env.local")
-
-	cfg, err := config.LoadWorker()
-	if err != nil {
-		log.Error("load config", "error", err)
-		os.Exit(1)
-	}
-
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
-	if err != nil {
-		log.Error("connect database", "error", err)
-		os.Exit(1)
-	}
-	defer pool.Close()
-
-	if err := pool.Ping(ctx); err != nil {
-		log.Error("ping database", "error", err)
-		os.Exit(1)
-	}
-
-	nc, err := nats.Connect(cfg.NATSURL,
-		nats.MaxReconnects(-1),
-		nats.ReconnectWait(2*time.Second),
-	)
-	if err != nil {
-		log.Error("nats connect", "error", err)
-		os.Exit(1)
-	}
-	defer nc.Close()
-
-	js, err := jetstream.New(nc)
-	if err != nil {
-		log.Error("jetstream init", "error", err)
-		os.Exit(1)
-	}
-
-	for attempt := 0; attempt < 10; attempt++ {
-		_, err = email.EnsureEmailsStream(ctx, js)
-		if err == nil {
-			break
-		}
-		log.Warn("emails_stream_retry", "attempt", attempt+1, "error", err)
-		select {
-		case <-ctx.Done():
-			log.Error("ensure EMAILS stream cancelled", "error", ctx.Err())
-			os.Exit(1)
-		case <-time.After(time.Duration(attempt+1) * time.Second):
-		}
-	}
-	if err != nil {
-		log.Error("ensure EMAILS stream", "error", err)
-		os.Exit(1)
-	}
-
-	go runCleanup(ctx, pool, cfg, log)
-
-	ticker := time.NewTicker(cfg.PollInterval)
-	defer ticker.Stop()
-
-	log.Info("outbox_drainer_ready", "nats", cfg.NATSURL, "batch_size", cfg.BatchSize)
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info("worker_shutdown")
-			return
-		case <-ticker.C:
-			if err := publishBatch(ctx, pool, js, cfg, log); err != nil {
-				log.Error("publish_batch_failed", "error", err)
-			}
-		}
-	}
-}
-
-// publishBatch implements the transactional outbox pattern:
+// PublishBatch implements one drain cycle of the transactional outbox:
 // 1. SELECT a batch of PENDING rows with SKIP LOCKED (avoids worker contention).
 // 2. Publish each row to JetStream (async, deduplicated by msg ID).
 // 3. Resolve publish acks and split into succeeded/failed.
 // 4. UPDATE succeeded rows to PUBLISHED, failed rows to retry+1 (or FAILED).
 // All DB writes run in a single transaction so partial failures do not
 // lose rows or double-publish.
-func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStream, cfg config.WorkerConfig, log *slog.Logger) error {
-	tx, err := pool.Begin(ctx)
+func (d *Drainer) PublishBatch(ctx context.Context) error {
+	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -154,8 +87,8 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	// 1. Grab a batch of pending rows. SKIP LOCKED means concurrent workers
 	//    won't fight over the same rows.
 	batch, err := queries.FetchPendingOutboxEmails(ctx, db.FetchPendingOutboxEmailsParams{
-		Limit:   int32(cfg.BatchSize),
-		Retries: int32(cfg.MaxRetries),
+		Limit:   int32(d.cfg.BatchSize),
+		Retries: int32(d.cfg.MaxRetries),
 	})
 	if err != nil {
 		return err
@@ -164,7 +97,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 		return nil
 	}
 
-	log.Info("outbox_batch_fetched", "count", len(batch))
+	d.log.Info("outbox_batch_fetched", "count", len(batch))
 
 	// 2. Publish everything async — PublishAsync returns immediately with a
 	//    future you resolve later. Per-row failures are recorded and written
@@ -186,7 +119,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	futures := make([]pending, 0, len(batch))
 
 	for _, row := range batch {
-		payload, err := json.Marshal(email.EmailMessage{
+		payload, err := json.Marshal(EmailMessage{
 			OutboxID:     row.ID,
 			Recipient:    row.Recipient,
 			Template:     row.Template,
@@ -199,10 +132,10 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 
 		subject := row.Topic
 		if subject == "" {
-			subject = email.DefaultTopicFor(row.Template)
+			subject = DefaultTopicFor(row.Template)
 		}
 
-		future, err := js.PublishAsync(subject, payload,
+		future, err := d.js.PublishAsync(subject, payload,
 			jetstream.WithMsgID(row.ID.String()))
 		if err != nil {
 			failed = append(failed, failure{id: row.ID, retries: row.Retries, err: err.Error(), topic: subject})
@@ -212,7 +145,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	}
 
 	// 3. Resolve acks and split into succeeded / failed.
-	ctxAck, cancel := context.WithTimeout(ctx, cfg.AckWaitLimit)
+	ctxAck, cancel := context.WithTimeout(ctx, d.cfg.AckWaitLimit)
 	defer cancel()
 
 	for _, p := range futures {
@@ -221,7 +154,7 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 			continue
 		}
 		succeeded = append(succeeded, p.row.ID)
-		log.Info("outbox_publish_ok",
+		d.log.Info("outbox_publish_ok",
 			"outbox_id", p.row.ID,
 			"template", p.row.Template,
 			"topic", p.topic,
@@ -238,16 +171,16 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 	// 5. Bump retries + record last_error for failures. Rows stay PENDING
 	//    and are retried until retries reaches maxRetries, then FAILED.
 	for _, f := range failed {
-		permanentlyFailed := f.retries+1 >= int32(cfg.MaxRetries)
+		permanentlyFailed := f.retries+1 >= int32(d.cfg.MaxRetries)
 		if permanentlyFailed {
-			log.Error("outbox_publish_permanent_fail",
+			d.log.Error("outbox_publish_permanent_fail",
 				"outbox_id", f.id,
 				"topic", f.topic,
-				"attempts", cfg.MaxRetries,
+				"attempts", d.cfg.MaxRetries,
 				"error", f.err,
 			)
 		} else {
-			log.Warn("outbox_publish_failed",
+			d.log.Warn("outbox_publish_failed",
 				"outbox_id", f.id,
 				"topic", f.topic,
 				"retries", f.retries+1,
@@ -259,12 +192,26 @@ func publishBatch(ctx context.Context, pool *pgxpool.Pool, js jetstream.JetStrea
 		if err := queries.IncrementOutboxEmailRetries(ctx, db.IncrementOutboxEmailRetriesParams{
 			ID:        f.id,
 			LastError: &lastErr,
-			Retries:   int32(cfg.MaxRetries),
+			Retries:   int32(d.cfg.MaxRetries),
 		}); err != nil {
 			return err
 		}
 	}
 
-	log.Info("outbox_batch_done", "succeeded", len(succeeded), "failed", len(failed))
+	d.log.Info("outbox_batch_done", "succeeded", len(succeeded), "failed", len(failed))
 	return tx.Commit(ctx)
+}
+
+// DeleteStaleBatch performs a single batch deletion of outbox rows that
+// have been PUBLISHED or FAILED for longer than the retention period. The
+// batch size is capped by cfg.CleanupBatchSize to keep each deletion fast
+// and avoid long-held locks on the outbox table.
+func (d *Drainer) DeleteStaleBatch(ctx context.Context) (int64, error) {
+	cutoff := time.Now().Add(-d.cfg.RetentionPeriod)
+
+	queries := db.New(d.pool)
+	return queries.DeleteStaleOutboxEmails(ctx, db.DeleteStaleOutboxEmailsParams{
+		PublishedAt: pgtype.Timestamp{Time: cutoff, Valid: true},
+		Limit:       int32(d.cfg.CleanupBatchSize),
+	})
 }

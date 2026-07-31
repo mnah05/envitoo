@@ -17,6 +17,7 @@ import (
 	"github.com/mnah05/envitoo/internal/cache"
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/email"
 	"github.com/mnah05/envitoo/internal/helper"
 )
 
@@ -201,21 +202,12 @@ func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) 
 		}
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(ticketCancelData{
+	if err := enqueueEmail(ctx, qtx, reg.Email, email.TicketCancelData{
 		Name:       reg.Name,
 		EventTitle: event.Title,
 		EventID:    reg.EventID.String(),
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    reg.Email,
-		Template:     EmailTemplateTicketCancel,
-		TemplateData: templateData,
-		Topic:        EmailTopicTicketCancel,
 	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -291,50 +283,31 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 	return reg, nil
 }
 
-// enqueueRegistrationCreatedEmail queues ticket_confirm only for approved
-// creates. Pending (requires_approval) uses ticket_status_change instead
-// so pending attendees receive "your registration is pending review" rather
+// enqueueRegistrationCreatedEmail queues the email for a newly created
+// registration. Pending (requires_approval) uses ticket_status_change so
+// pending attendees receive "your registration is pending review" rather
 // than "your ticket is confirmed".
 func enqueueRegistrationCreatedEmail(ctx context.Context, qtx *db.Queries, reg db.Registration, event db.Event) error {
-	template, topic := registrationCreatedEmailTemplate(reg.Status)
-	var templateData []byte
-	var err error
-	if template == EmailTemplateTicketStatusChange {
-		templateData, err = json.Marshal(ticketStatusChangeData{
+	return enqueueEmail(ctx, qtx, reg.Email, registrationCreatedEmailData(reg, event))
+}
+
+// registrationCreatedEmailData selects the email payload for a newly
+// created registration. ticket_confirm is reserved for approved creates.
+func registrationCreatedEmailData(reg db.Registration, event db.Event) email.EmailData {
+	if reg.Status == "pending" {
+		return email.TicketStatusChangeData{
 			Name:       reg.Name,
 			EventTitle: event.Title,
 			EventID:    reg.EventID.String(),
 			NewStatus:  reg.Status,
-		})
-	} else {
-		templateData, err = json.Marshal(ticketConfirmData{
-			Name:        reg.Name,
-			EventTitle:  event.Title,
-			EventID:     reg.EventID.String(),
-			AccessToken: reg.AccessToken.String(),
-		})
+		}
 	}
-	if err != nil {
-		return fmt.Errorf("marshal template data: %w", err)
+	return email.TicketConfirmData{
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     reg.EventID.String(),
+		AccessToken: reg.AccessToken.String(),
 	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    reg.Email,
-		Template:     template,
-		TemplateData: templateData,
-		Topic:        topic,
-	}); err != nil {
-		return fmt.Errorf("create email outbox: %w", err)
-	}
-	return nil
-}
-
-// registrationCreatedEmailTemplate selects the outbox template/topic for a
-// newly created registration. ticket_confirm is reserved for approved creates.
-func registrationCreatedEmailTemplate(status string) (template, topic string) {
-	if status == "pending" {
-		return EmailTemplateTicketStatusChange, EmailTopicTicketStatusChange
-	}
-	return EmailTemplateTicketConfirm, EmailTopicTicketConfirm
 }
 
 func (s *RegistrationService) lockEventForRegistration(ctx context.Context, qtx *db.Queries, eventID uuid.UUID) (db.Event, error) {
@@ -504,21 +477,12 @@ func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UU
 		}
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(ticketCancelData{
+	if err := enqueueEmail(ctx, qtx, reg.Email, email.TicketCancelData{
 		Name:       reg.Name,
 		EventTitle: event.Title,
 		EventID:    reg.EventID.String(),
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    reg.Email,
-		Template:     EmailTemplateTicketCancel,
-		TemplateData: templateData,
-		Topic:        EmailTopicTicketCancel,
 	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -724,22 +688,13 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 	}
 
 	// Outbox insert is transactional — failure rolls back the entire operation.
-	templateData, err := json.Marshal(ticketStatusChangeData{
+	if err := enqueueEmail(ctx, qtx, approved.Email, email.TicketStatusChangeData{
 		Name:       approved.Name,
 		EventTitle: event.Title,
 		EventID:    approved.EventID.String(),
 		NewStatus:  approved.Status,
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    approved.Email,
-		Template:     EmailTemplateTicketStatusChange,
-		TemplateData: templateData,
-		Topic:        EmailTopicTicketStatusChange,
 	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -809,22 +764,13 @@ func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UU
 		}
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(ticketStatusChangeData{
+	if err := enqueueEmail(ctx, qtx, reg.Email, email.TicketStatusChangeData{
 		Name:       reg.Name,
 		EventTitle: event.Title,
 		EventID:    reg.EventID.String(),
 		NewStatus:  reg.Status,
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    reg.Email,
-		Template:     EmailTemplateTicketStatusChange,
-		TemplateData: templateData,
-		Topic:        EmailTopicTicketStatusChange,
 	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -962,22 +908,13 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 		}
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(ticketStatusChangeData{
+	if err := enqueueEmail(ctx, qtx, updated.Email, email.TicketStatusChangeData{
 		Name:       updated.Name,
 		EventTitle: event.Title,
 		EventID:    updated.EventID.String(),
 		NewStatus:  updated.Status,
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    updated.Email,
-		Template:     EmailTemplateTicketStatusChange,
-		TemplateData: templateData,
-		Topic:        EmailTopicTicketStatusChange,
 	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -1106,21 +1043,12 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 		}
 		return db.Registration{}, fmt.Errorf("get event for check-in outbox: %w", err)
 	}
-	templateData, err := json.Marshal(checkInData{
+	if err := enqueueEmail(ctx, qtx, reg.Email, email.CheckInData{
 		Name:       reg.Name,
 		EventTitle: event.Title,
 		EventID:    reg.EventID.String(),
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal check-in data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    reg.Email,
-		Template:     EmailTemplateCheckIn,
-		TemplateData: templateData,
-		Topic:        EmailTopicCheckIn,
 	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -1217,21 +1145,12 @@ func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, 
 		}
 		return db.Registration{}, fmt.Errorf("get event for check-in outbox: %w", err)
 	}
-	templateData, err := json.Marshal(checkInData{
+	if err := enqueueEmail(ctx, qtx, reg.Email, email.CheckInData{
 		Name:       reg.Name,
 		EventTitle: event.Title,
 		EventID:    reg.EventID.String(),
-	})
-	if err != nil {
-		return db.Registration{}, fmt.Errorf("marshal check-in data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    reg.Email,
-		Template:     EmailTemplateCheckIn,
-		TemplateData: templateData,
-		Topic:        EmailTopicCheckIn,
 	}); err != nil {
-		return db.Registration{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Registration{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {

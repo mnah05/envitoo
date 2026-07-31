@@ -18,8 +18,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/mnah05/envitoo/internal/cache"
-	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/email"
 	"github.com/mnah05/envitoo/internal/helper"
 )
 
@@ -41,13 +41,6 @@ type guestVerifiedState struct {
 	Email      string    `json:"email"`
 	Name       string    `json:"name"`
 	VerifiedAt time.Time `json:"verified_at"`
-}
-
-type otpEmailTemplateData struct {
-	OTP        string `json:"otp"`
-	Name       string `json:"name"`
-	EventTitle string `json:"event_title"`
-	EventID    string `json:"event_id"`
 }
 
 // RequestGuestOTP validates the event, generates a 6-digit OTP, stores its
@@ -72,7 +65,7 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 		return dto.RequestGuestOTPResponse{}, err
 	}
 
-	email := normalizeGuestEmail(req.Email)
+	recipient := normalizeGuestEmail(req.Email)
 	name := strings.TrimSpace(req.Name)
 
 	event, err := s.queries.GetEventByID(ctx, eventID)
@@ -86,9 +79,9 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 		return dto.RequestGuestOTPResponse{}, fmt.Errorf("event %s: %w", eventID, ErrEventNotOpen)
 	}
 
-	otpKey := guestOTPKey(eventID, email)
-	attemptsKey := guestOTPAttemptsKey(eventID, email)
-	cooldownKey := guestOTPCooldownKey(eventID, email)
+	otpKey := guestOTPKey(eventID, recipient)
+	attemptsKey := guestOTPAttemptsKey(eventID, recipient)
+	cooldownKey := guestOTPCooldownKey(eventID, recipient)
 
 	ok, err := s.cache.SetNX(ctx, cooldownKey, []byte("1"), guestOTPCooldown)
 	if err != nil {
@@ -105,9 +98,9 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 	}
 
 	state := guestOTPState{
-		Hash:  hmacGuestOTP(s.otpSecret, eventID, email, otp),
+		Hash:  hmacGuestOTP(s.otpSecret, eventID, recipient, otp),
 		Name:  name,
-		Email: email,
+		Email: recipient,
 	}
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
@@ -122,17 +115,6 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 	}
 	_ = s.cache.DeleteKeys(ctx, attemptsKey)
 
-	templateData, err := json.Marshal(otpEmailTemplateData{
-		OTP:        otp,
-		Name:       name,
-		EventTitle: event.Title,
-		EventID:    eventID.String(),
-	})
-	if err != nil {
-		_ = s.cache.DeleteKeys(ctx, otpKey, attemptsKey, cooldownKey)
-		return dto.RequestGuestOTPResponse{}, fmt.Errorf("marshal template data: %w", err)
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		_ = s.cache.DeleteKeys(ctx, otpKey, attemptsKey, cooldownKey)
@@ -141,14 +123,14 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := s.queries.WithTx(tx)
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    email,
-		Template:     EmailTemplateOTP,
-		TemplateData: templateData,
-		Topic:        EmailTopicOTP,
+	if err := enqueueEmail(ctx, qtx, recipient, email.OTPData{
+		OTP:        otp,
+		Name:       name,
+		EventTitle: event.Title,
+		EventID:    eventID.String(),
 	}); err != nil {
 		_ = s.cache.DeleteKeys(ctx, otpKey, attemptsKey, cooldownKey)
-		return dto.RequestGuestOTPResponse{}, fmt.Errorf("create email outbox: %w", err)
+		return dto.RequestGuestOTPResponse{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		_ = s.cache.DeleteKeys(ctx, otpKey, attemptsKey, cooldownKey)
@@ -184,11 +166,11 @@ func (s *RegistrationService) VerifyGuestOTP(ctx context.Context, eventID uuid.U
 		return dto.VerifyGuestOTPResponse{}, err
 	}
 
-	email := normalizeGuestEmail(req.Email)
+	recipient := normalizeGuestEmail(req.Email)
 	otp := strings.TrimSpace(req.OTP)
 
-	otpKey := guestOTPKey(eventID, email)
-	attemptsKey := guestOTPAttemptsKey(eventID, email)
+	otpKey := guestOTPKey(eventID, recipient)
+	attemptsKey := guestOTPAttemptsKey(eventID, recipient)
 
 	raw, err := s.cache.GetBytes(ctx, otpKey)
 	if err != nil {
@@ -219,7 +201,7 @@ func (s *RegistrationService) VerifyGuestOTP(ctx context.Context, eventID uuid.U
 		return dto.VerifyGuestOTPResponse{}, fmt.Errorf("decode otp state: %w", err)
 	}
 
-	want := hmacGuestOTP(s.otpSecret, eventID, email, otp)
+	want := hmacGuestOTP(s.otpSecret, eventID, recipient, otp)
 	if subtle.ConstantTimeCompare([]byte(want), []byte(state.Hash)) != 1 {
 		return dto.VerifyGuestOTPResponse{}, ErrOTPInvalid
 	}
@@ -227,14 +209,14 @@ func (s *RegistrationService) VerifyGuestOTP(ctx context.Context, eventID uuid.U
 	_ = s.cache.DeleteKeys(ctx, otpKey, attemptsKey)
 
 	verified, err := json.Marshal(guestVerifiedState{
-		Email:      email,
+		Email:      recipient,
 		Name:       state.Name,
 		VerifiedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		return dto.VerifyGuestOTPResponse{}, fmt.Errorf("marshal verified state: %w", err)
 	}
-	if err := s.cache.SetBytes(ctx, guestVerifiedKey(eventID, email), verified, guestVerifiedTTL); err != nil {
+	if err := s.cache.SetBytes(ctx, guestVerifiedKey(eventID, recipient), verified, guestVerifiedTTL); err != nil {
 		return dto.VerifyGuestOTPResponse{}, fmt.Errorf("store verified: %w", mapCacheErr(err))
 	}
 

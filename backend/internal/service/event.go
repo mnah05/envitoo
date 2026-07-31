@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/email"
 	"github.com/mnah05/envitoo/internal/helper"
 )
 
@@ -815,24 +815,14 @@ func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uui
 		return db.Event{}, fmt.Errorf("get organizer for outbox: %w", err)
 	}
 
-	templateData, err := json.Marshal(eventCancellationData{
-		Title:   event.Title,
-		EventID: event.ID.String(),
-	})
-	if err != nil {
-		return db.Event{}, fmt.Errorf("marshal template data: %w", err)
-	}
-
 	// Notify organizer plus every active registrant (pending/approved).
 	// Deduplicate by email so an organizer who is also registered gets one mail.
 	recipients := map[string]struct{}{organizer.Email: {}}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    organizer.Email,
-		Template:     EmailTemplateEventCancellation,
-		TemplateData: templateData,
-		Topic:        EmailTopicEventCancellation,
+	if err := enqueueEmail(ctx, qtx, organizer.Email, email.EventCancellationData{
+		Title:   event.Title,
+		EventID: event.ID.String(),
 	}); err != nil {
-		return db.Event{}, fmt.Errorf("create email outbox: %w", err)
+		return db.Event{}, err
 	}
 
 	regs, err := qtx.ListActiveRegistrationsByEvent(ctx, id)
@@ -844,13 +834,11 @@ func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uui
 			continue
 		}
 		recipients[reg.Email] = struct{}{}
-		if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-			Recipient:    reg.Email,
-			Template:     EmailTemplateEventCancellation,
-			TemplateData: templateData,
-			Topic:        EmailTopicEventCancellation,
+		if err := enqueueEmail(ctx, qtx, reg.Email, email.EventCancellationData{
+			Title:   event.Title,
+			EventID: event.ID.String(),
 		}); err != nil {
-			return db.Event{}, fmt.Errorf("create email outbox: %w", err)
+			return db.Event{}, err
 		}
 	}
 

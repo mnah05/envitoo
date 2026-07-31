@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -12,6 +11,7 @@ import (
 
 	"github.com/mnah05/envitoo/internal/db"
 	"github.com/mnah05/envitoo/internal/dto"
+	"github.com/mnah05/envitoo/internal/email"
 	"github.com/mnah05/envitoo/internal/helper"
 )
 
@@ -315,14 +315,14 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 
 	name := resolveName(user, req.Name)
 	// Always use the verified account email (same policy as registration).
-	email := normalizeGuestEmail(user.Email)
+	recipient := normalizeGuestEmail(user.Email)
 
 	app, err := qtx.CreateVolunteerApplication(ctx, db.CreateVolunteerApplicationParams{
 		EventID:     eventID,
 		UserID:      user.ID,
 		RoleID:      req.RoleID,
 		Name:        name,
-		Email:       email,
+		Email:       recipient,
 		Phone:       req.Phone,
 		Description: req.Description,
 		Status:      "pending",
@@ -342,22 +342,13 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 		}
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get event for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(applicationConfirmData{
+	if err := enqueueEmail(ctx, qtx, app.Email, email.ApplicationConfirmData{
 		Name:       app.Name,
 		EventTitle: eventForTemplate.Title,
 		EventID:    eventID.String(),
 		RoleName:   role.Name,
-	})
-	if err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    app.Email,
-		Template:     EmailTemplateApplicationConfirm,
-		TemplateData: templateData,
-		Topic:        EmailTopicApplicationConfirm,
 	}); err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+		return dto.VolunteerApplicationResponse{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -490,21 +481,12 @@ func (s *VolunteerService) Cancel(ctx context.Context, appID, userID uuid.UUID) 
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get role for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(applicationCancelData{
+	if err := enqueueEmail(ctx, qtx, app.Email, email.ApplicationCancelData{
 		Name:       app.Name,
 		EventTitle: event.Title,
 		EventID:    app.EventID.String(),
-	})
-	if err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    app.Email,
-		Template:     EmailTemplateApplicationCancel,
-		TemplateData: templateData,
-		Topic:        EmailTopicApplicationCancel,
 	}); err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+		return dto.VolunteerApplicationResponse{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -702,23 +684,14 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 		}
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get event for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(volunteerStatusChangeData{
+	if err := enqueueEmail(ctx, qtx, app.Email, email.VolunteerStatusChangeData{
 		Name:       app.Name,
 		EventTitle: eventForTemplate.Title,
 		EventID:    app.EventID.String(),
 		NewStatus:  app.Status,
 		RoleName:   role.Name,
-	})
-	if err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    app.Email,
-		Template:     EmailTemplateVolunteerStatusChange,
-		TemplateData: templateData,
-		Topic:        EmailTopicVolunteerStatusChange,
 	}); err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+		return dto.VolunteerApplicationResponse{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -775,23 +748,14 @@ func (s *VolunteerService) Reject(ctx context.Context, appID, actorID uuid.UUID)
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("get role for outbox: %w", err)
 	}
-	templateData, err := json.Marshal(volunteerStatusChangeData{
+	if err := enqueueEmail(ctx, qtx, app.Email, email.VolunteerStatusChangeData{
 		Name:       app.Name,
 		EventTitle: event.Title,
 		EventID:    app.EventID.String(),
 		NewStatus:  app.Status,
 		RoleName:   role.Name,
-	})
-	if err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("marshal template data: %w", err)
-	}
-	if _, err := qtx.CreateEmailOutbox(ctx, db.CreateEmailOutboxParams{
-		Recipient:    app.Email,
-		Template:     EmailTemplateVolunteerStatusChange,
-		TemplateData: templateData,
-		Topic:        EmailTopicVolunteerStatusChange,
 	}); err != nil {
-		return dto.VolunteerApplicationResponse{}, fmt.Errorf("create email outbox: %w", err)
+		return dto.VolunteerApplicationResponse{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {

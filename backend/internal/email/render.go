@@ -111,12 +111,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 
 	switch templateName {
 	case TemplateOTP:
-		var d struct {
-			OTP        string `json:"otp"`
-			Name       string `json:"name"`
-			EventTitle string `json:"event_title"`
-			EventID    string `json:"event_id"`
-		}
+		var d OTPData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode otp data: %w", err)
 		}
@@ -126,12 +121,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.EventID = d.EventID
 
 	case TemplateTicketConfirm:
-		var d struct {
-			Name        string `json:"name"`
-			EventTitle  string `json:"event_title"`
-			EventID     string `json:"event_id"`
-			AccessToken string `json:"access_token"`
-		}
+		var d TicketConfirmData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode ticket_confirm data: %w", err)
 		}
@@ -149,11 +139,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		}
 
 	case TemplateTicketCancel:
-		var d struct {
-			Name       string `json:"name"`
-			EventTitle string `json:"event_title"`
-			EventID    string `json:"event_id"`
-		}
+		var d TicketCancelData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode ticket_cancel data: %w", err)
 		}
@@ -164,12 +150,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.CTALabel = "Go to EnviToo"
 
 	case TemplateTicketStatusChange:
-		var d struct {
-			Name       string `json:"name"`
-			EventTitle string `json:"event_title"`
-			EventID    string `json:"event_id"`
-			NewStatus  string `json:"new_status"`
-		}
+		var d TicketStatusChangeData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode ticket_status_change data: %w", err)
 		}
@@ -181,12 +162,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.CTALabel = "View your tickets"
 
 	case TemplateApplicationConfirm:
-		var d struct {
-			Name       string `json:"name"`
-			EventTitle string `json:"event_title"`
-			EventID    string `json:"event_id"`
-			RoleName   string `json:"role_name"`
-		}
+		var d ApplicationConfirmData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode application_confirm data: %w", err)
 		}
@@ -198,11 +174,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.CTALabel = "Go to EnviToo"
 
 	case TemplateApplicationCancel:
-		var d struct {
-			Name       string `json:"name"`
-			EventTitle string `json:"event_title"`
-			EventID    string `json:"event_id"`
-		}
+		var d ApplicationCancelData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode application_cancel data: %w", err)
 		}
@@ -213,13 +185,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.CTALabel = "Go to EnviToo"
 
 	case TemplateVolunteerStatusChange:
-		var d struct {
-			Name       string `json:"name"`
-			EventTitle string `json:"event_title"`
-			EventID    string `json:"event_id"`
-			NewStatus  string `json:"new_status"`
-			RoleName   string `json:"role_name"`
-		}
+		var d VolunteerStatusChangeData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode volunteer_status_change data: %w", err)
 		}
@@ -232,11 +198,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.CTALabel = "Go to EnviToo"
 
 	case TemplateCheckIn:
-		var d struct {
-			Name       string `json:"name"`
-			EventTitle string `json:"event_title"`
-			EventID    string `json:"event_id"`
-		}
+		var d CheckInData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode check_in data: %w", err)
 		}
@@ -247,10 +209,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.CTALabel = "Go to EnviToo"
 
 	case TemplateEventCancellation:
-		var d struct {
-			Title   string `json:"title"`
-			EventID string `json:"event_id"`
-		}
+		var d EventCancellationData
 		if err := json.Unmarshal(raw, &d); err != nil {
 			return view{}, fmt.Errorf("decode event_cancellation data: %w", err)
 		}

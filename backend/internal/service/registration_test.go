@@ -1,6 +1,11 @@
 package service
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/email"
+)
 
 func TestValidateCapacityForApproval(t *testing.T) {
 	tests := []struct {
@@ -59,22 +64,25 @@ func TestRegistrationStatusTransitionAllowed(t *testing.T) {
 	}
 }
 
-func TestRegistrationCreatedEmailTemplate(t *testing.T) {
+func TestRegistrationCreatedEmailData(t *testing.T) {
 	tests := []struct {
 		status       string
 		wantTemplate string
 		wantTopic    string
 	}{
-		{"pending", EmailTemplateTicketStatusChange, EmailTopicTicketStatusChange},
-		{"approved", EmailTemplateTicketConfirm, EmailTopicTicketConfirm},
-		{"rejected", EmailTemplateTicketConfirm, EmailTopicTicketConfirm}, // non-pending create path uses confirm
+		{"pending", email.TemplateTicketStatusChange, email.TopicTicketStatusChange},
+		{"approved", email.TemplateTicketConfirm, email.TopicTicketConfirm},
+		{"rejected", email.TemplateTicketConfirm, email.TopicTicketConfirm}, // non-pending create path uses confirm
 	}
 	for _, tt := range tests {
 		t.Run(tt.status, func(t *testing.T) {
-			gotTemplate, gotTopic := registrationCreatedEmailTemplate(tt.status)
-			if gotTemplate != tt.wantTemplate || gotTopic != tt.wantTopic {
-				t.Fatalf("registrationCreatedEmailTemplate(%q) = (%q, %q), want (%q, %q)",
-					tt.status, gotTemplate, gotTopic, tt.wantTemplate, tt.wantTopic)
+			data := registrationCreatedEmailData(
+				db.Registration{Status: tt.status, Name: "Ada", Email: "ada@example.com"},
+				db.Event{Title: "Hack Night"},
+			)
+			if data.Template() != tt.wantTemplate || data.Topic() != tt.wantTopic {
+				t.Fatalf("registrationCreatedEmailData(...) = (%q, %q), want (%q, %q)",
+					data.Template(), data.Topic(), tt.wantTemplate, tt.wantTopic)
 			}
 		})
 	}
