@@ -106,6 +106,11 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	public.GET("/events/:id/volunteer/settings", s.GetVolunteerSettings)
 	public.GET("/events/:id/volunteer/roles", s.ListVolunteerRoles)
 
+	// Explicit onboarding entry point: provisions the local user on first
+	// call, returns the profile on every call. No LoadUser — the handler
+	// resolves the user itself via user.FindOrProvision.
+	e.POST("/api/me", s.ProvisionMe, middleware.Auth(s.jwksClient), middleware.AuthRateLimiter(ctx, middleware.DefaultAuthConfig))
+
 	protected := e.Group("/api", middleware.Auth(s.jwksClient), middleware.LoadUser(s.pool, s.queries, s.cache, s.forgetRegistrationsByEmail), middleware.AuthRateLimiter(ctx, middleware.DefaultAuthConfig))
 	protected.GET("/me", s.Me)
 

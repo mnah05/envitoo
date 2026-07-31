@@ -3,6 +3,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useMe } from "@/hooks/use-me";
+import { ApiError } from "@/lib/api";
 
 /** Gate that requires a Clerk session. Shows a spinner while auth loads. */
 export function ProtectedRoute() {
@@ -35,6 +36,12 @@ export function ProtectedRoute() {
   }
 
   if (me.isError) {
+    // Authenticated but not onboarded yet — run the setup flow, which
+    // calls POST /api/me to provision the account. A retry button here
+    // could never succeed on its own.
+    if (me.error instanceof ApiError && me.error.status === 403) {
+      return <Navigate to="/welcome" replace />;
+    }
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
         <p className="text-sm text-muted-foreground">

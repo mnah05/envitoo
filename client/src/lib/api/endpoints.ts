@@ -55,6 +55,10 @@ export function getMe(api: Api): Promise<User> {
   return api.get<unknown>("/api/me").then((d) => parseOrThrow(UserSchema, d));
 }
 
+export function postMe(api: Api): Promise<User> {
+  return api.post<unknown>("/api/me").then((d) => parseOrThrow(UserSchema, d));
+}
+
 // --- Events (public) --------------------------------------------------------
 
 export interface PublicEventsParams {

@@ -1,4 +1,4 @@
-package middleware
+package user
 
 import (
 	"testing"
@@ -9,8 +9,8 @@ import (
 func TestPrimaryEmail_requiresVerified(t *testing.T) {
 	// Test that primaryEmail prefers the primary address only when it is
 	// verified, and falls back to the first verified address otherwise.
-	// If no email is verified, it returns "" which triggers a 403 in the
-	// LoadUser middleware.
+	// If no email is verified, it returns "" which Provision maps to
+	// ErrNoVerifiedEmail (403 at the transport layer).
 	unverified := &clerk.EmailAddress{
 		ID:           "idn_unverified",
 		EmailAddress: "raw@example.com",

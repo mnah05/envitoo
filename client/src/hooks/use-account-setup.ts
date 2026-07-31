@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useApi, listMyRegistrations } from "@/lib/api";
-import { useMe } from "@/hooks/use-me";
+import { useProvisionMe } from "@/hooks/use-me";
 import { regKeys } from "@/hooks/use-registrations";
 
 export const SETUP_STEPS = [
@@ -20,11 +20,21 @@ export function useAccountSetup() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const api = useApi();
-  const { isSuccess, isError, isLoading, error, refetch, isFetching } = useMe();
+  const { mutate, isSuccess, isError, error } = useProvisionMe();
 
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const startTimeRef = useRef(Date.now());
   const navigatedRef = useRef(false);
+  const startedRef = useRef(false);
+
+  // Fire the provisioning request once on mount (the ref guards against
+  // StrictMode double-mount). POST /api/me is idempotent, so retrying
+  // after an error is safe.
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    mutate();
+  }, [mutate]);
 
   useEffect(() => {
     if (isSuccess) {
@@ -78,9 +88,11 @@ export function useAccountSetup() {
   return {
     steps: SETUP_STEPS,
     activeStepIndex,
-    isPending: isLoading || isFetching,
+    // Pending covers idle (pre-mount) and in-flight states so the
+    // spinner shows from the first frame.
+    isPending: !isSuccess && !isError,
     isError,
     error,
-    refetch,
+    refetch: mutate,
   };
 }
