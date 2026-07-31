@@ -67,7 +67,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := range 10 {
 		_, err = email.EnsureEmailsStream(ctx, js)
 		if err == nil {
 			break

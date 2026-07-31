@@ -34,3 +34,6 @@ backend/bin/
 
 # Supabase CLI transient state
 supabase/.temp/
+
+# Command Code local tool config
+.commandcode/
