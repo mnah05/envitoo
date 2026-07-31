@@ -56,6 +56,6 @@ jobs:
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
       - name: Build the Docker image
-        run: docker build . --file Dockerfile --tag hasandotx/envito:${{ github.sha }}
+        run: docker build ./backend --file backend/Dockerfile --tag hasandotx/envito:${{ github.sha }}
       - name: Push the Docker image
         run: docker push hasandotx/envito:${{ github.sha }}
