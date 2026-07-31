@@ -30,7 +30,7 @@ Thumbs.db
 .vscode/
 
 # Compiled binary
-server
+backend/bin/
 
 # Supabase CLI transient state
 supabase/.temp/
