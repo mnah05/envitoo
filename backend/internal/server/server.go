@@ -33,6 +33,7 @@ type Server struct {
 	events        *service.EventService
 	registrations *service.RegistrationService
 	volunteers    *service.VolunteerService
+	storage       *service.StorageService
 	healthToken   string
 	jwksClient    *jwks.Client
 }
@@ -43,7 +44,7 @@ type Server struct {
 //
 // The Service layer wraps queries with business logic and is split
 // across EventService, RegistrationService, and VolunteerService.
-func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, healthToken string, log *slog.Logger, jwksClient *jwks.Client) *Server {
+func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, healthToken string, log *slog.Logger, jwksClient *jwks.Client, storage *service.StorageService) *Server {
 	validate := dto.NewValidator()
 	access := service.NewEventAccessService(queries)
 	return &Server{
@@ -55,6 +56,7 @@ func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, hea
 		events:        service.NewEventService(pool, queries, access, log),
 		registrations: service.NewRegistrationService(pool, queries, access, c, otpSecret, log),
 		volunteers:    service.NewVolunteerService(pool, queries, access, log),
+		storage:       storage,
 		healthToken:   healthToken,
 		jwksClient:    jwksClient,
 	}
@@ -119,6 +121,9 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	protected.GET("/me/events", s.ListMyEvents)
 	protected.PATCH("/events/:id", s.UpdateEvent)
 	protected.DELETE("/events/:id", s.CancelEvent)
+
+	// Image upload (presigned URL for direct R2 upload)
+	protected.POST("/upload/presigned-url", s.GeneratePresignedURL)
 
 	// User registration routes
 	protected.POST("/events/:id/register", s.CreateRegistration)

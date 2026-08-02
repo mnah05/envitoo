@@ -47,6 +47,7 @@ export const EventSchema = z.object({
   location_address: z.string().nullable().optional(),
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
+  warning: z.string().nullable().optional(),
   created_at: iso,
   updated_at: iso,
 });
@@ -322,3 +323,18 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const CATEGORIES = Object.keys(CATEGORY_LABELS) as (keyof typeof CATEGORY_LABELS)[];
+
+// --- Upload schemas ---------------------------------------------------------
+
+export const PresignedURLRequestSchema = z.object({
+  filename: z.string().min(1).max(255),
+  content_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  size: z.number().int().min(1).max(5 * 1024 * 1024), // 5 MB
+});
+export type PresignedURLRequest = z.infer<typeof PresignedURLRequestSchema>;
+
+export const PresignedURLResponseSchema = z.object({
+  upload_url: z.string().url(),
+  public_url: z.string().url(),
+});
+export type PresignedURLResponse = z.infer<typeof PresignedURLResponseSchema>;

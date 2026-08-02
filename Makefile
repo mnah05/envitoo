@@ -38,11 +38,13 @@ help: ## Show available targets
 # Development
 # ============================================================
 
-dev: stop dc-up ## Run backend + frontend with infra
+dev: stop dc-up ## Run full stack: infra + backend + frontend + email pipeline
 	@trap 'kill 0' EXIT; \
-	echo "Starting backend and frontend… (Ctrl-C to stop)"; \
+	echo "Starting backend, frontend, worker, mailer… (Ctrl-C to stop)"; \
 	$(MAKE) -s backend & \
 	$(MAKE) -s frontend & \
+	$(MAKE) -s worker & \
+	$(MAKE) -s mailer & \
 	wait
 
 backend: ## Run Go backend on :8080
@@ -67,16 +69,25 @@ email: dc-up ## Run infra + worker + mailer (email pipeline)
 	@cd $(BACKEND) && $(GO) run $(MAILER_PKG) &
 	@wait
 
-stop: ## Kill processes on frontend/backend dev ports
+stop: ## Stop all dev processes (backend, frontend, worker, mailer)
 	@for port in $(FRONTEND_PORT) $(BACKEND_PORT); do \
 		pids=$$(lsof -ti :$$port 2>/dev/null || true); \
 		[ -z "$$pids" ] && continue; \
 		echo "Stopping process(es) on port $$port: $$pids"; \
 		kill $$pids 2>/dev/null || true; \
-		sleep 0.5; \
-		pids=$$(lsof -ti :$$port 2>/dev/null || true); \
+	done
+	@for pat in "go run ./cmd/worker" "go run ./cmd/mailer" "exe/worker" "exe/mailer" "exe/server"; do \
+		pids=$$(pgrep -f "$$pat" 2>/dev/null || true); \
+		[ -z "$$pids" ] && continue; \
+		echo "Stopping: $$pat ($$pids)"; \
+		kill $$pids 2>/dev/null || true; \
+	done
+	@sleep 0.5; \
+	for pat in "go run ./cmd/worker" "go run ./cmd/mailer" "exe/worker" "exe/mailer" "exe/server"; do \
+		pids=$$(pgrep -f "$$pat" 2>/dev/null || true); \
 		[ -n "$$pids" ] && kill -9 $$pids 2>/dev/null || true; \
 	done
+	@echo "✓ dev processes stopped (infra still running: make dc-down to stop it)"
 
 # ============================================================
 # Setup / Install

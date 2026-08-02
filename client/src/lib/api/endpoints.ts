@@ -13,6 +13,7 @@ import {
   VolunteerApplicationListSchema,
   VolunteerListSchema,
   EventStaffListSchema,
+  PresignedURLResponseSchema,
   type CreateEventValues,
   type CreateGuestRegistrationValues,
   type RequestGuestOTPValues,
@@ -26,6 +27,8 @@ import {
   type UpsertVolunteerSettingsValues,
   type CreateVolunteerRoleValues,
   type CreateVolunteerApplicationValues,
+  type PresignedURLRequest,
+  type PresignedURLResponse,
   type Event,
   type EventList,
   type Registration,
@@ -395,4 +398,15 @@ export function rejectVolunteerApplication(api: Api, appId: string): Promise<Vol
   return api
     .post<unknown>(`/api/volunteer-applications/${appId}/reject`)
     .then((d) => parseOrThrow(VolunteerApplicationSchema, d));
+}
+
+// --- Upload ------------------------------------------------------------------
+
+export function generatePresignedURL(
+  api: Api,
+  req: PresignedURLRequest,
+): Promise<PresignedURLResponse> {
+  return api
+    .post<unknown>("/api/upload/presigned-url", req)
+    .then((d) => parseOrThrow(PresignedURLResponseSchema, d));
 }

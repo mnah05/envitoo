@@ -75,7 +75,11 @@ export function useCreateEvent() {
   return useMutation({
     mutationFn: (values: CreateEventValues) => createEvent(api, values),
     onSuccess: (event: Event) => {
-      toast.success(`"${event.title}" published`);
+      if (event.warning) {
+        toast.warning(`Event created, but: ${event.warning}`);
+      } else {
+        toast.success(`"${event.title}" published`);
+      }
       qc.invalidateQueries({ queryKey: ["events", "mine"] });
     },
     onError: (err) => {
@@ -90,8 +94,12 @@ export function useUpdateEvent() {
   return useMutation({
     mutationFn: ({ id, values }: { id: string; values: UpdateEventValues }) =>
       updateEvent(api, id, values),
-    onSuccess: () => {
-      toast.success("Event updated");
+    onSuccess: (event: Event) => {
+      if (event.warning) {
+        toast.warning(`Event updated, but: ${event.warning}`);
+      } else {
+        toast.success("Event updated");
+      }
       qc.invalidateQueries({ queryKey: ["events"] });
     },
     onError: (err) => {

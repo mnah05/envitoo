@@ -19,7 +19,10 @@ import (
 
 // CreateEvent handles POST /api/events. The handler follows a standard
 // pattern: bind JSON → validate → load auth user → call service →
-// invalidate cache → return response.
+// invalidate cache → return response. If the request includes a cover
+// image URL from our R2 storage, it verifies the object exists before
+// creating the event; verification failures nullify the URL and attach
+// a warning instead of blocking the creation.
 func (s *Server) CreateEvent(c echo.Context) error {
 	log := middleware.LoggerFromContext(c.Request().Context())
 
@@ -36,6 +39,15 @@ func (s *Server) CreateEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
+	var imageWarning string
+	if req.CoverImageURL != nil && s.storage != nil {
+		if err := s.storage.VerifyImage(c.Request().Context(), *req.CoverImageURL); err != nil {
+			log.WarnContext(c.Request().Context(), "image verification failed, nullifying cover", "url", *req.CoverImageURL, "error", err)
+			imageWarning = "Cover image upload could not be verified: " + err.Error()
+			req.CoverImageURL = nil
+		}
+	}
+
 	ctx := c.Request().Context()
 	event, err := s.events.Create(ctx, u.ID, req)
 	if err != nil {
@@ -49,7 +61,11 @@ func (s *Server) CreateEvent(c echo.Context) error {
 	// appear without waiting for the TTL to expire.
 	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
-	return c.JSON(http.StatusCreated, s.events.EventResponseBestEffort(ctx, event))
+	resp := s.events.EventResponseBestEffort(ctx, event)
+	if imageWarning != "" {
+		resp.Warning = &imageWarning
+	}
+	return c.JSON(http.StatusCreated, resp)
 }
 
 // GetEvent handles GET /api/events/:id. Uses cache.GetJSON to implement
@@ -225,6 +241,18 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 	}
 
+	// Same R2 verification as CreateEvent: a cover image URL that cannot be
+	// verified is dropped (the existing cover is kept) and a warning is
+	// attached to the response instead of failing the update.
+	var imageWarning string
+	if req.CoverImageURL != nil && s.storage != nil {
+		if err := s.storage.VerifyImage(c.Request().Context(), *req.CoverImageURL); err != nil {
+			log.WarnContext(c.Request().Context(), "image verification failed, keeping current cover", "url", *req.CoverImageURL, "error", err)
+			imageWarning = "Cover image upload could not be verified: " + err.Error()
+			req.CoverImageURL = nil
+		}
+	}
+
 	ctx := c.Request().Context()
 	oldSlug := s.lookupEventSlug(ctx, id)
 	event, err := s.events.Update(ctx, id, u.ID, req)
@@ -251,7 +279,11 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 	s.cache.Delete(ctx, keys...)
 	s.cache.DeletePrefix(ctx, "GET:/api/events?")
 
-	return c.JSON(http.StatusOK, s.events.EventResponseBestEffort(ctx, event))
+	resp := s.events.EventResponseBestEffort(ctx, event)
+	if imageWarning != "" {
+		resp.Warning = &imageWarning
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 // CancelEvent handles DELETE /api/events/:id. Soft-deletes the event

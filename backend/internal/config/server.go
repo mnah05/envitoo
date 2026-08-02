@@ -30,6 +30,12 @@ type Config struct {
 	OTPSecret string
 	// HealthzToken, when set, must be provided as ?pass= on GET /healthz.
 	HealthzToken string
+	// R2 configuration for Cloudflare R2 (S3-compatible object storage).
+	R2AccountID       string
+	R2AccessKeyID     string
+	R2SecretAccessKey string
+	R2BucketName      string
+	R2PublicURL       string
 }
 
 // Load reads environment variables prefixed with DB_ and CLERK_ into a Config.
@@ -46,7 +52,7 @@ func Load() (Config, error) {
 	k := koanf.New(".")
 
 	err := k.Load(env.Provider("", ".", func(key string) string {
-		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") || key == "REDIS_URL" || key == "OTP_SECRET" || key == "HEALTHZ_TOKEN" {
+		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") || strings.HasPrefix(key, "R2_") || key == "REDIS_URL" || key == "OTP_SECRET" || key == "HEALTHZ_TOKEN" {
 			return key
 		}
 		return ""
@@ -79,6 +85,11 @@ func Load() (Config, error) {
 		RedisURL:             k.String("REDIS_URL"),
 		OTPSecret:            k.String("OTP_SECRET"),
 		HealthzToken:         k.String("HEALTHZ_TOKEN"),
+		R2AccountID:          k.String("R2_ACCOUNT_ID"),
+		R2AccessKeyID:        k.String("R2_ACCESS_KEY_ID"),
+		R2SecretAccessKey:    k.String("R2_SECRET_ACCESS_KEY"),
+		R2BucketName:         k.String("R2_BUCKET_NAME"),
+		R2PublicURL:          k.String("R2_PUBLIC_URL"),
 	}, nil
 }
 

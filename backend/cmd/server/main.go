@@ -20,6 +20,7 @@ import (
 	"github.com/mnah05/envitoo/internal/logging"
 	"github.com/mnah05/envitoo/internal/middleware"
 	"github.com/mnah05/envitoo/internal/server"
+	"github.com/mnah05/envitoo/internal/service"
 )
 
 // main is the API server entry point. It initialises the database pool,
@@ -94,7 +95,20 @@ func main() {
 	e := echo.New()
 	e.HideBanner = false
 	e.HidePort = false
-	server.New(database.Pool(), queries, appCache, cfg.OTPSecret, cfg.HealthzToken, log, jwksClient).Register(ctx, e)
+
+	storage, err := service.NewStorageService(service.StorageConfig{
+		AccountID:       cfg.R2AccountID,
+		AccessKeyID:     cfg.R2AccessKeyID,
+		SecretAccessKey: cfg.R2SecretAccessKey,
+		BucketName:      cfg.R2BucketName,
+		PublicURL:       cfg.R2PublicURL,
+	}, log)
+	if err != nil {
+		log.Error("failed to create storage service", "error", err)
+		os.Exit(1)
+	}
+
+	server.New(database.Pool(), queries, appCache, cfg.OTPSecret, cfg.HealthzToken, log, jwksClient, storage).Register(ctx, e)
 
 	// Start the HTTP server in a goroutine so we can listen for shutdown
 	// signals concurrently. The server is configured with explicit timeouts

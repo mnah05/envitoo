@@ -107,6 +107,7 @@ type EventResponse struct {
 	LocationAddress   *string    `json:"location_address,omitempty"`
 	Lat               *float64   `json:"lat,omitempty"`
 	Lng               *float64   `json:"lng,omitempty"`
+	Warning           *string    `json:"warning,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }

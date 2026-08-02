@@ -22,6 +22,8 @@ import {
   LocationSearch,
   type LocationSelection,
 } from "@/components/domain/LocationSearch";
+import { ImageUpload } from "@/components/domain/ImageUpload";
+import { useApi, generatePresignedURL } from "@/lib/api";
 import { useEvent, useUpdateEvent } from "@/hooks/use-events";
 import { useMe } from "@/hooks/use-me";
 import { useMyEventStaff } from "@/hooks/use-volunteers";
@@ -31,6 +33,7 @@ import {
   UpdateEventInput,
   type UpdateEventValues,
 } from "@/lib/api";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 function isoToLocalInput(iso: string): string {
@@ -56,6 +59,7 @@ interface FormState {
 export function EditEvent() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const api = useApi();
   const { data: event, isLoading: eventLoading } = useEvent(id, !!id);
   const { data: me } = useMe();
   const { data: staffData } = useMyEventStaff({}, !!id);
@@ -64,6 +68,8 @@ export function EditEvent() {
   const [form, setForm] = useState<FormState | null>(null);
   const [location, setLocation] = useState<LocationSelection | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const isOrganizer = !!event && !!me && event.organizer_id === me.id;
   const isVolunteerAdmin =
@@ -125,11 +131,11 @@ export function EditEvent() {
       if (!location.locationAddress.trim()) errors.location = "Address is required";
     }
 
-    if (form.cover_image_url && !/^https?:\/\//i.test(form.cover_image_url))
-      errors.cover_image_url = "Enter a valid image URL";
-
     if (Object.keys(errors).length > 0) return { errors };
 
+    // A newly selected file is uploaded before submit; otherwise keep the
+    // existing cover (or none). Uploaded files are validated by the
+    // presign endpoint, so no URL-format check is needed here.
     const payload: UpdateEventValues = {
       description: form.description.trim() || undefined,
       cover_image_url: form.cover_image_url.trim() || undefined,
@@ -165,15 +171,45 @@ export function EditEvent() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (updateMut.isPending) return;
+    if (updateMut.isPending || uploading) return;
     const result = buildPayload();
     if ("errors" in result) {
       setFieldErrors(result.errors);
       return;
     }
     setFieldErrors({});
+
+    let finalCoverURL: string | undefined = result.cover_image_url;
+
+    if (coverImageFile) {
+      setUploading(true);
+      try {
+        const presigned = await generatePresignedURL(api, {
+          filename: coverImageFile.name,
+          content_type: coverImageFile.type as "image/jpeg" | "image/png" | "image/webp",
+          size: coverImageFile.size,
+        });
+        const putRes = await fetch(presigned.upload_url, {
+          method: "PUT",
+          body: coverImageFile,
+          headers: { "Content-Type": coverImageFile.type },
+        });
+        if (!putRes.ok) {
+          throw new Error("Upload failed");
+        }
+        finalCoverURL = presigned.public_url;
+      } catch {
+        toast.error("Failed to upload cover image. Changes were not saved.");
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
+    const payload = { ...result, cover_image_url: finalCoverURL };
+
     try {
-      await updateMut.mutateAsync({ id, values: result });
+      await updateMut.mutateAsync({ id, values: payload });
       navigate(`/manage/${id}`);
     } catch {
       // mutation onError surfaces a toast
@@ -436,23 +472,16 @@ export function EditEvent() {
               />
             </div>
 
-            {/* Cover image URL */}
+            {/* Cover image */}
             <div className="px-4 py-4">
-              <label htmlFor="cover_image_url" className="label-muted mb-1.5 block">
-                Cover image URL <span className="text-muted-foreground/70">(optional)</span>
+              <label className="label-muted mb-2 block">
+                Cover image <span className="text-muted-foreground/70">(optional)</span>
               </label>
-              <Input
-                id="cover_image_url"
-                type="url"
-                value={form.cover_image_url}
-                onChange={(e) => set("cover_image_url", e.target.value)}
-                placeholder="https://…"
-                aria-invalid={!!fieldErrors.cover_image_url}
-                className="h-10"
+              <ImageUpload
+                onChange={setCoverImageFile}
+                error={fieldErrors.cover_image_url}
+                previewUrl={event.cover_image_url ?? undefined}
               />
-              {fieldErrors.cover_image_url && (
-                <p className="mt-1 text-xs text-destructive">{fieldErrors.cover_image_url}</p>
-              )}
             </div>
 
             {isOrganizer && (
@@ -525,11 +554,11 @@ export function EditEvent() {
             <Button
               type="submit"
               size="sm"
-              disabled={updateMut.isPending}
+              disabled={updateMut.isPending || uploading}
               className="ml-auto px-6 sm:min-w-[10rem]"
             >
-              {updateMut.isPending && <Spinner data-icon="inline-start" />}
-              Save changes
+              {(updateMut.isPending || uploading) && <Spinner data-icon="inline-start" />}
+              {uploading ? "Uploading…" : "Save changes"}
             </Button>
             </PageContainer>
           </div>
