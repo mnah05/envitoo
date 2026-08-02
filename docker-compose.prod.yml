@@ -1,6 +1,7 @@
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -13,7 +14,8 @@ services:
 
   nats:
     image: nats:2.10-alpine
-    command: ["-js"]
+    restart: unless-stopped
+    command: ["-js", "-sd", "/data"]
     ports:
       - "4222:4222"
       - "8222:8222"
@@ -28,6 +30,7 @@ services:
   backend:
     image: hasandotx/envito:${IMAGE_TAG:-latest}
     build: !reset null
+    restart: unless-stopped
     env_file:
       - ./backend/.env
     environment:
@@ -39,12 +42,11 @@ services:
       dockerfile: Dockerfile.prod
       args:
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+    restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
       - backend
-    profiles:
-      - full
 
   mail-worker:
     image: hasandotx/envito:${IMAGE_TAG:-latest}
@@ -54,6 +56,7 @@ services:
       - ./backend/.env
     environment:
       NATS_URL: nats://nats:4222
+    restart: unless-stopped
     depends_on:
       nats:
         condition: service_healthy
@@ -63,5 +66,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    profiles:
-      - full
+
+volumes:
+  redis_data:
+  nats_data:
