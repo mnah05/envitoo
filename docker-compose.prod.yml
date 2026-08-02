@@ -28,6 +28,10 @@ services:
   backend:
     image: hasandotx/envito:${IMAGE_TAG:-latest}
     build: !reset null
+    env_file:
+      - ./backend/.env
+    environment:
+      NATS_URL: nats://nats:4222
 
   frontend:
     build:
