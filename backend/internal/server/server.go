@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -19,6 +20,9 @@ import (
 	"github.com/mnah05/envitoo/internal/middleware"
 	"github.com/mnah05/envitoo/internal/service"
 )
+
+// serverStartTime is when the process started; used for /healthz uptime.
+var serverStartTime = time.Now()
 
 // Server holds the HTTP handlers and their dependencies. Each exported
 // method on Server is an echo.HandlerFunc wired to a route in Register.
@@ -158,8 +162,10 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	protected.POST("/volunteer-applications/:id/reject", s.RejectVolunteerApplication)
 }
 
-// Health handles GET /healthz. A simple liveness probe —
-// returns {"status":"ok"} with HTTP 200.
+// Health handles GET /healthz. A liveness + readiness probe: returns
+// HTTP 200 with status ok while the process is healthy, or 503 with
+// status degraded when the database is unreachable. The payload includes
+// uptime, Go version, git revision, and DB status.
 // If HEALTHZ_TOKEN is set, the caller must supply a matching ?pass=
 // query parameter (constant-time comparison to avoid timing attacks).
 func (s *Server) Health(c echo.Context) error {
@@ -169,7 +175,36 @@ func (s *Server) Health(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 		}
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+
+	payload := map[string]any{
+		"status":         "ok",
+		"service":        "envitoo-api",
+		"uptime_seconds": int64(time.Since(serverStartTime).Seconds()),
+		"time":           time.Now().UTC().Format(time.RFC3339),
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		payload["go_version"] = info.GoVersion
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" && len(setting.Value) >= 7 {
+				payload["revision"] = setting.Value[:7]
+			}
+		}
+	}
+
+	if s.pool == nil {
+		payload["db"] = "n/a"
+		return c.JSON(http.StatusOK, payload)
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
+	defer cancel()
+	if err := s.pool.Ping(ctx); err != nil {
+		payload["status"] = "degraded"
+		payload["db"] = "unreachable"
+		return c.JSON(http.StatusServiceUnavailable, payload)
+	}
+	payload["db"] = "ok"
+	return c.JSON(http.StatusOK, payload)
 }
 
 // Me handles GET /api/me and returns the authenticated user's profile.
