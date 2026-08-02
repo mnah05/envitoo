@@ -34,6 +34,8 @@ import {
   LocationSearch,
   type LocationSelection,
 } from "@/components/domain/LocationSearch";
+import { ImageUpload } from "@/components/domain/ImageUpload";
+import { useApi, generatePresignedURL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface FormState {
@@ -76,9 +78,12 @@ function createInitialState(): FormState {
 
 export function CreateEvent() {
   const navigate = useNavigate();
+  const api = useApi();
   const createMut = useCreateEvent();
   const [form, setForm] = useState<FormState>(createInitialState);
   const [location, setLocation] = useState<LocationSelection | null>(null);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [createdEvent, setCreatedEvent] = useState<{ id: string; slug: string; title: string } | null>(null);
 
@@ -129,9 +134,6 @@ export function CreateEvent() {
       if (!location.locationAddress.trim()) errors.location = "Address is required";
     }
 
-    if (form.cover_image_url && !/^https?:\/\//i.test(form.cover_image_url))
-      errors.cover_image_url = "Enter a valid image URL";
-
     if (Object.keys(errors).length > 0) return { errors };
 
     const payload: CreateEventValues = {
@@ -167,15 +169,45 @@ export function CreateEvent() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (createMut.isPending) return;
+    if (createMut.isPending || uploading) return;
     const result = buildPayload();
     if ("errors" in result) {
       setFieldErrors(result.errors);
       return;
     }
     setFieldErrors({});
+
+    let finalCoverURL: string | undefined = result.cover_image_url;
+
+    if (coverImageFile) {
+      setUploading(true);
+      try {
+        const presigned = await generatePresignedURL(api, {
+          filename: coverImageFile.name,
+          content_type: coverImageFile.type as "image/jpeg" | "image/png" | "image/webp",
+          size: coverImageFile.size,
+        });
+        const putRes = await fetch(presigned.upload_url, {
+          method: "PUT",
+          body: coverImageFile,
+          headers: { "Content-Type": coverImageFile.type },
+        });
+        if (!putRes.ok) {
+          throw new Error("Upload failed");
+        }
+        finalCoverURL = presigned.public_url;
+      } catch {
+        toast.error("Failed to upload cover image. Event was not created.");
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
+    const payload = { ...result, cover_image_url: finalCoverURL };
+
     try {
-      const event = await createMut.mutateAsync(result);
+      const event = await createMut.mutateAsync(payload);
       setCreatedEvent({ id: event.id, slug: event.slug, title: event.title });
     } catch {
       // mutation onError surfaces a toast
@@ -386,21 +418,13 @@ export function CreateEvent() {
             </div>
 
             <div className="px-4 py-4">
-              <label htmlFor="cover_image_url" className="label-muted mb-1.5 block">
-                Cover image URL <span className="text-muted-foreground/70">(optional)</span>
+              <label className="label-muted mb-2 block">
+                Cover image <span className="text-muted-foreground/70">(optional)</span>
               </label>
-              <Input
-                id="cover_image_url"
-                type="url"
-                value={form.cover_image_url}
-                onChange={(e) => set("cover_image_url", e.target.value)}
-                placeholder="https://…"
-                aria-invalid={!!fieldErrors.cover_image_url}
-                className="h-10"
+              <ImageUpload
+                onChange={setCoverImageFile}
+                error={fieldErrors.cover_image_url}
               />
-              {fieldErrors.cover_image_url && (
-                <p className="mt-1 text-xs text-destructive">{fieldErrors.cover_image_url}</p>
-              )}
             </div>
 
             <div className="flex items-center justify-between gap-4 px-4 py-4">
@@ -464,11 +488,11 @@ export function CreateEvent() {
               <Button
                 type="submit"
                 size="sm"
-                disabled={createMut.isPending}
+                disabled={createMut.isPending || uploading}
                 className="ml-auto px-6 sm:min-w-[10rem]"
               >
-                {createMut.isPending && <Spinner data-icon="inline-start" />}
-                Create event
+                {(createMut.isPending || uploading) && <Spinner data-icon="inline-start" />}
+                {uploading ? "Uploading…" : "Create event"}
               </Button>
             </PageContainer>
           </div>
