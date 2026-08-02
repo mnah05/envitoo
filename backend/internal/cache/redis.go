@@ -57,6 +57,16 @@ func (r *Redis) IsHealthy() bool {
 	return r.healthy.Load()
 }
 
+// Ping performs a live round-trip to Redis. Returns nil when reachable.
+// Used by /healthz; unlike IsHealthy (background flag), this is a real
+// connection check at the moment of the request.
+func (r *Redis) Ping(ctx context.Context) error {
+	if r == nil || r.client == nil {
+		return fmt.Errorf("redis not configured")
+	}
+	return r.client.Ping(ctx).Err()
+}
+
 // StartHealthCheck launches a background goroutine that pings Redis every
 // interval and updates the healthy flag. The goroutine exits when ctx is
 // cancelled. Only one health-check goroutine should run per Redis instance.
