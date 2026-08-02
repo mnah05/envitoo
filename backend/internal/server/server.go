@@ -193,17 +193,31 @@ func (s *Server) Health(c echo.Context) error {
 
 	if s.pool == nil {
 		payload["db"] = "n/a"
-		return c.JSON(http.StatusOK, payload)
+	} else {
+		ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
+		defer cancel()
+		if err := s.pool.Ping(ctx); err != nil {
+			payload["status"] = "degraded"
+			payload["db"] = "unreachable"
+			return c.JSON(http.StatusServiceUnavailable, payload)
+		}
+		payload["db"] = "ok"
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
-	defer cancel()
-	if err := s.pool.Ping(ctx); err != nil {
-		payload["status"] = "degraded"
-		payload["db"] = "unreachable"
-		return c.JSON(http.StatusServiceUnavailable, payload)
+	// Redis is optional by design (cache-aside falls back to the DB), so
+	// an unreachable Redis is reported but does not fail the probe.
+	if s.cache == nil {
+		payload["redis"] = "n/a"
+	} else {
+		ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
+		defer cancel()
+		if err := s.cache.Ping(ctx); err != nil {
+			payload["redis"] = "unreachable"
+		} else {
+			payload["redis"] = "ok"
+		}
 	}
-	payload["db"] = "ok"
+
 	return c.JSON(http.StatusOK, payload)
 }
 

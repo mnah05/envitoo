@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -106,6 +107,16 @@ func (s *Store) Delete(ctx context.Context, keys ...string) {
 // Use for features that require Redis (OTP), not optional HTTP caching.
 func (s *Store) Available() bool {
 	return s != nil && s.redis != nil && s.redis.IsHealthy()
+}
+
+// Ping performs a live round-trip to Redis (see Redis.Ping). Nil-safe:
+// a nil Store returns an error so /healthz can report redis as n/a or
+// unreachable without panicking.
+func (s *Store) Ping(ctx context.Context) error {
+	if s == nil {
+		return fmt.Errorf("cache not configured")
+	}
+	return s.redis.Ping(ctx)
 }
 
 func (s *Store) requireRedis() error {
