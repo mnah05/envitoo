@@ -36,7 +36,80 @@ make dev   # docker infra (postgres+redis+nats) + local backend:8080 + frontend:
 
 Migrations run automatically on first `dc-up` (mounted as init scripts). To re-run: `docker compose down -v && make dc-up`.
 
-Optional email pipeline: `make worker` and `make mailer` (need NATS + Resend).
+### Email pipeline (three-process architecture)
+
+```
+┌─────────────┐     INSERT email_outbox (in TX)     ┌───────────────┐
+│  API Server  │ ──────────────────────────────────► │  PostgreSQL    │
+│ (cmd/server) │                                      │  email_outbox  │
+└─────────────┘                                      └──────┬────────┘
+                                                            │
+                                          SELECT FOR UPDATE SKIP LOCKED
+                                          (worker polls every 2s, batch 50)
+                                                            │
+                                                    ┌───────┴───────┐
+                                                    │  Outbox Drainer │
+                                                    │  (cmd/worker)   │
+                                                    └───────┬───────┘
+                                                            │
+                                          PublishAsync(MsgID=outbox UUID)
+                                          subject=emails.<topic>
+                                                            │
+                                                    ┌───────┴───────┐
+                                                    │  NATS JetStream │
+                                                    │  Stream: EMAILS │
+                                                    │  Consumer:       │
+                                                    │  email-resend    │
+                                                    └───────┬───────┘
+                                                            │
+                                          Batcher pulls up to 100 msgs
+                                          every 500ms, rate-limited
+                                          to 4 req/sec
+                                                            │
+                                                    ┌───────┴───────┐
+                                                    │  Mailer Batcher │
+                                                    │  (cmd/mailer)   │
+                                                    │  Render +       │
+                                                    │  SendBatch (100)│
+                                                    └───────┬───────┘
+                                                            │
+                                              Resend batch API
+                                              (1 call = up to 100 emails)
+                                                            │
+                                                    ┌───────┴───────┐
+                                                    │  User Inbox     │
+                                                    └────────────────┘
+```
+
+**Key design decisions:**
+
+- **Transactional outbox**: email rows are inserted in the same DB transaction as the domain write. If the transaction rolls back, the email is never sent. Guarantees at-least-once delivery.
+- **Batch sending**: the mailer uses `client.Batch.SendWithOptions()` (permissive validation) to send up to 100 emails per Resend API call. Each batch call counts as 1 request against Resend's 5 req/sec team limit. The batcher is rate-limited to 4 req/sec via `golang.org/x/time/rate`, leaving 1 req/sec margin.
+- **Pull consumer**: the mailer uses `consumer.Fetch(100, FetchMaxWait(500ms))` instead of the old push-based `Consume()` callback. This gives the batcher explicit control over when and how many messages to pull.
+- **Single instance**: at 4 batch calls/sec × 100 emails/batch = 400 emails/sec theoretical capacity, one mailer instance handles the full peak load (~85 emails/sec). No horizontal scaling needed.
+- **Partial failure handling**: on `BatchEmailResponse.Errors`, successful messages are Ack'd and failed messages (by index) are Nak'd with a 2s delay for redelivery. Full batch failures Nak all.
+- **Poison messages**: unparseable JSON payloads are Term'd (removed permanently from the stream).
+- **Idempotency**: the batch idempotency key is set to the first outbox UUID in the batch.
+
+**Files:**
+
+| File | Role |
+|------|------|
+| `internal/email/batcher.go` | Pull-based batch processor (Batcher.Run loop) |
+| `internal/email/sender.go` | BatchSender interface + SendBatch using Resend batch API |
+| `internal/email/nats.go` | Stream/consumer config (MaxAckPending=200, MaxRequestBatch=100) |
+| `internal/email/outbox.go` | Drainer: polls email_outbox, publishes to NATS |
+| `cmd/mailer/main.go` | Entry point: wires Batcher → Run until shutdown |
+| `cmd/worker/main.go` | Entry point: wires Drainer → PublishBatch loop |
+
+### Optional: running the email pipeline locally
+
+```bash
+make worker  # outbox drainer (polls DB → publishes to NATS)
+make mailer  # batch sender (pulls NATS → renders → Resend batch)
+```
+
+Both need NATS + Resend configured. The mailer also requires `APP_PUBLIC_URL` for ticket links in rendered emails.
 
 ### Lint / test / build
 
