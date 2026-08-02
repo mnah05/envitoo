@@ -47,27 +47,28 @@ func EnsureEmailsStream(ctx context.Context, js jetstream.JetStream) (jetstream.
 	return stream, nil
 }
 
-// EnsureMailerConsumer creates or updates the durable mailer consumer on EMAILS.
+// EnsureMailerConsumer creates or updates the durable pull-based mailer
+// consumer on EMAILS.
 //
-// Note 4: CreateOrUpdateConsumer is idempotent — if the consumer already
-// exists with matching config, it is a no-op. This lets both the drainer
-// and mailer safely call this on startup without error handling for "already
-// exists."
-//
-// Note 5: DeliverAllPolicy ensures that any messages published while the
-// mailer was offline are delivered when it comes back. This prevents
-// message loss during deployments or crashes.
+// The consumer is configured for pull-based Fetch (used by Batcher) rather
+// than push-based Consume. MaxAckPending is 2× the batch size so the broker
+// keeps enough messages available for efficient batching without flooding
+// memory. InactiveThreshold is 5 minutes so the consumer is not cleaned up
+// during extended idle periods.
 func EnsureMailerConsumer(ctx context.Context, js jetstream.JetStream) (jetstream.Consumer, error) {
 	if _, err := EnsureEmailsStream(ctx, js); err != nil {
 		return nil, err
 	}
 	consumer, err := js.CreateOrUpdateConsumer(ctx, StreamName, jetstream.ConsumerConfig{
-		Durable:       ConsumerName,
-		AckPolicy:     jetstream.AckExplicitPolicy,
-		AckWait:       60 * time.Second,
-		MaxDeliver:    10,
-		FilterSubject: StreamSubjects,
-		DeliverPolicy: jetstream.DeliverAllPolicy,
+		Durable:           ConsumerName,
+		AckPolicy:         jetstream.AckExplicitPolicy,
+		AckWait:           60 * time.Second,
+		MaxDeliver:        10,
+		MaxAckPending:     200,
+		MaxRequestBatch:   100,
+		FilterSubject:     StreamSubjects,
+		DeliverPolicy:     jetstream.DeliverAllPolicy,
+		InactiveThreshold: 5 * time.Minute,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ensure %s consumer: %w", ConsumerName, err)

@@ -47,6 +47,12 @@ type SendRequest struct {
 	IdempotencyKey string
 }
 
+// BatchSender is the interface for sending emails in batch through Resend.
+// It exists so Batcher can be tested with a mock instead of a real Resend client.
+type BatchSender interface {
+	SendBatch(ctx context.Context, reqs []SendRequest) (*resend.BatchEmailResponse, error)
+}
+
 // Send delivers one email. IdempotencyKey should be the outbox UUID so NATS
 // redeliveries do not create duplicate Resend sends.
 //
@@ -83,4 +89,38 @@ func (s *Sender) Send(ctx context.Context, req SendRequest) error {
 		return fmt.Errorf("resend send: %w", err)
 	}
 	return nil
+}
+
+// SendBatch delivers up to 100 emails in one Resend API call using the batch
+// endpoint. Each SendRequest's IdempotencyKey is preserved via the email-level
+// idempotency header — Resend's batch validation is set to permissive so
+// individual failures do not block the rest of the batch.
+//
+// SendBatch counts as a single request against Resend's 5 req/sec team limit,
+// which is the key reason for this method's existence.
+func (s *Sender) SendBatch(ctx context.Context, reqs []SendRequest) (*resend.BatchEmailResponse, error) {
+	params := make([]*resend.SendEmailRequest, 0, len(reqs))
+	for _, req := range reqs {
+		if req.To == "" || req.Subject == "" || (req.HTML == "" && req.Text == "") {
+			continue
+		}
+		params = append(params, &resend.SendEmailRequest{
+			From:    s.from,
+			To:      []string{req.To},
+			Subject: req.Subject,
+			Html:    req.HTML,
+			Text:    req.Text,
+		})
+	}
+
+	batchOpts := &resend.BatchSendEmailOptions{
+		BatchValidation: resend.BatchValidationPermissive,
+	}
+	if len(reqs) > 0 {
+		if key := strings.TrimSpace(reqs[0].IdempotencyKey); key != "" {
+			batchOpts.IdempotencyKey = key
+		}
+	}
+
+	return s.client.Batch.SendWithOptions(ctx, params, batchOpts)
 }

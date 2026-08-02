@@ -17,10 +17,10 @@ import (
 	"github.com/mnah05/envitoo/internal/logging"
 )
 
-// main is the mailer worker entry point. It subscribes to the EMAILS
-// JetStream consumer, renders HTML emails from templates, and sends them
-// via the Resend API. Each email is processed by email.Consumer with a
-// 45-second timeout.
+// main is the mailer worker entry point. It connects to the EMAILS
+// JetStream stream and runs a pull-based batcher that renders and sends
+// emails via Resend's batch endpoint (up to 100 per API call, rate-limited
+// to 4 req/sec to stay under Resend's 5 req/sec team limit).
 func main() {
 	log := logging.New("mailer")
 	slog.SetDefault(log)
@@ -100,17 +100,11 @@ func main() {
 		"consumer", email.ConsumerName,
 	)
 
-	mailer := email.NewConsumer(renderer, sender)
-
-	consCtx, err := consumer.Consume(func(msg jetstream.Msg) {
-		mailer.Handle(ctx, msg, log)
-	})
-	if err != nil {
-		log.Error("consume", "error", err)
+	batcher := email.NewBatcher(renderer, sender, log)
+	if err := batcher.Run(ctx, consumer); err != nil {
+		log.Error("batcher", "error", err)
 		os.Exit(1)
 	}
-	defer consCtx.Stop()
 
-	<-ctx.Done()
 	log.Info("mailer_shutdown")
 }
