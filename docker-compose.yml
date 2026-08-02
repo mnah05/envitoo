@@ -81,7 +81,7 @@ services:
   mail-worker:
     build:
       context: ./backend
-    command: ["/mailer"]
+    command: ["/usr/local/bin/mailer"]
     env_file:
       - ./backend/.env
     environment:

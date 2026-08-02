@@ -49,7 +49,7 @@ services:
   mail-worker:
     image: hasandotx/envito:${IMAGE_TAG:-latest}
     build: !reset null
-    command: ["/mailer"]
+    command: ["/usr/local/bin/mailer"]
     env_file:
       - ./backend/.env
     environment:
