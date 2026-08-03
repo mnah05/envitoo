@@ -19,6 +19,7 @@ import (
 	"github.com/mnah05/envitoo/internal/dto"
 	"github.com/mnah05/envitoo/internal/middleware"
 	"github.com/mnah05/envitoo/internal/service"
+	"github.com/redis/go-redis/v9"
 )
 
 // serverStartTime is when the process started; used for /healthz uptime.
@@ -40,6 +41,7 @@ type Server struct {
 	storage       *service.StorageService
 	healthToken   string
 	jwksClient    *jwks.Client
+	redisClient   *redis.Client
 }
 
 // New creates a Server with all services initialized.
@@ -51,6 +53,10 @@ type Server struct {
 func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, healthToken string, log *slog.Logger, jwksClient *jwks.Client, storage *service.StorageService) *Server {
 	validate := dto.NewValidator()
 	access := service.NewEventAccessService(queries)
+	var rdb *redis.Client
+	if c != nil {
+		rdb = c.RedisClient()
+	}
 	return &Server{
 		pool:          pool,
 		queries:       queries,
@@ -63,6 +69,7 @@ func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, hea
 		storage:       storage,
 		healthToken:   healthToken,
 		jwksClient:    jwksClient,
+		redisClient:   rdb,
 	}
 }
 
@@ -84,12 +91,14 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	e.Use(echoMiddleware.CORSWithConfig(echoMiddleware.CORSConfig{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPatch, http.MethodPost, http.MethodDelete, http.MethodOptions},
-		AllowHeaders:     []string{echo.HeaderAuthorization, echo.HeaderContentType, echo.HeaderXRequestID},
-		ExposeHeaders:    []string{echo.HeaderXRequestID},
+		AllowHeaders:     []string{echo.HeaderAuthorization, echo.HeaderContentType, echo.HeaderXRequestID, "Idempotency-Key"},
+		ExposeHeaders:    []string{echo.HeaderXRequestID, "Idempotent-Replayed"},
 		AllowCredentials: false,
 	}))
 
 	e.GET("/healthz", s.Health)
+
+	idem := middleware.Idempotency(s.redisClient)
 
 	public := e.Group("/api", middleware.PublicRateLimiter(ctx, middleware.DefaultPublicConfig))
 
@@ -100,11 +109,12 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 
 	// Guest OTP — tighter limiter (each request can enqueue outbound email).
 	otp := e.Group("/api", middleware.PublicRateLimiter(ctx, middleware.DefaultOTPConfig))
-	otp.POST("/events/:id/register/guest/otp", s.RequestGuestOTP)
+	otp.POST("/events/:id/register/guest/otp", s.RequestGuestOTP, idem)
 	otp.POST("/events/:id/register/guest/otp/verify", s.VerifyGuestOTP)
 
-	// Public guest registration (post-OTP)
-	public.POST("/events/:id/register/guest", s.CreateGuestRegistration)
+	// Public guest registration (post-OTP) — idempotent to prevent duplicate registrations.
+	publicIdem := e.Group("/api", middleware.PublicRateLimiter(ctx, middleware.DefaultPublicConfig), idem)
+	publicIdem.POST("/events/:id/register/guest", s.CreateGuestRegistration)
 	public.GET("/guest-registrations", s.GetGuestRegistration)
 	public.DELETE("/guest-registrations", s.CancelGuestRegistration)
 
@@ -121,7 +131,7 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	protected.GET("/me", s.Me)
 
 	// Host-only event management
-	protected.POST("/events", s.CreateEvent)
+	protected.POST("/events", s.CreateEvent, idem)
 	protected.GET("/me/events", s.ListMyEvents)
 	protected.PATCH("/events/:id", s.UpdateEvent)
 	protected.DELETE("/events/:id", s.CancelEvent)
@@ -130,7 +140,7 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	protected.POST("/upload/presigned-url", s.GeneratePresignedURL)
 
 	// User registration routes
-	protected.POST("/events/:id/register", s.CreateRegistration)
+	protected.POST("/events/:id/register", s.CreateRegistration, idem)
 	protected.GET("/registrations/:id", s.GetRegistration)
 	protected.DELETE("/registrations/:id", s.CancelRegistration)
 	protected.GET("/me/registrations", s.ListMyRegistrations)
@@ -139,13 +149,13 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 	protected.GET("/events/:id/registrations", s.ListEventRegistrations)
 	protected.POST("/events/:id/check-in", s.CheckInByEventToken)
 	protected.GET("/registrations/:id/admin", s.GetRegistrationAsAdmin)
-	protected.POST("/registrations/:id/approve", s.ApproveRegistration)
+	protected.POST("/registrations/:id/approve", s.ApproveRegistration, idem)
 	protected.POST("/registrations/:id/reject", s.RejectRegistration)
 	protected.PATCH("/registrations/:id/status", s.UpdateRegistrationStatus)
 	protected.POST("/registrations/:id/check-in", s.CheckInAttendee)
 
 	// Volunteer application routes (auth user)
-	protected.POST("/events/:id/volunteer/apply", s.CreateVolunteerApplication)
+	protected.POST("/events/:id/volunteer/apply", s.CreateVolunteerApplication, idem)
 	protected.GET("/me/event-staff", s.ListMyEventStaff)
 	protected.GET("/me/volunteer-applications", s.ListMyVolunteerApplications)
 	protected.GET("/volunteer-applications/:id", s.GetMyVolunteerApplication)
