@@ -66,6 +66,9 @@ export function useApi(): ApiMethods {
       const headers: Record<string, string> = {};
       if (token) headers.Authorization = `Bearer ${token}`;
       if (body != null) headers["Content-Type"] = "application/json";
+      if (method === "POST" || method === "PUT" || method === "PATCH") {
+        headers["Idempotency-Key"] = crypto.randomUUID();
+      }
 
       const res = await fetch(buildUrl(path, query), { method, headers, body });
 

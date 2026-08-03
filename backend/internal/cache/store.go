@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -117,6 +118,15 @@ func (s *Store) Ping(ctx context.Context) error {
 		return fmt.Errorf("cache not configured")
 	}
 	return s.redis.Ping(ctx)
+}
+
+// RedisClient returns the underlying *redis.Client for middleware that needs
+// direct Redis access (Lua scripting). Returns nil if Redis is not configured.
+func (s *Store) RedisClient() *redis.Client {
+	if s == nil || s.redis == nil {
+		return nil
+	}
+	return s.redis.Client()
 }
 
 func (s *Store) requireRedis() error {

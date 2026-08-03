@@ -57,6 +57,12 @@ func (r *Redis) IsHealthy() bool {
 	return r.healthy.Load()
 }
 
+// Client returns the underlying *redis.Client for use by middleware that needs
+// direct Redis access (e.g. Lua scripting, atomic operations).
+func (r *Redis) Client() *redis.Client {
+	return r.client
+}
+
 // Ping performs a live round-trip to Redis. Returns nil when reachable.
 // Used by /healthz; unlike IsHealthy (background flag), this is a real
 // connection check at the moment of the request.
