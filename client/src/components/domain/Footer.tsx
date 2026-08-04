@@ -55,6 +55,14 @@ export function Footer() {
           <p className="text-xs text-muted-foreground">
             &copy; {new Date().getFullYear()} EnviToo
           </p>
+          <div className="mt-3 flex items-center gap-x-5 gap-y-3 text-xs text-muted-foreground sm:mt-0">
+            <Link to="/privacy" className="transition-colors hover:text-foreground">
+              Privacy policy
+            </Link>
+            <Link to="/terms" className="transition-colors hover:text-foreground">
+              Terms of service
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
