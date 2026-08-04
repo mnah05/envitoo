@@ -15,8 +15,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     mem_limit: 100m
@@ -30,9 +28,6 @@ services:
     image: nats:2.10-alpine
     restart: unless-stopped
     command: ["-js", "-sd", "/data"]
-    ports:
-      - "4222:4222"
-      - "8222:8222"
     volumes:
       - nats_data:/data
     mem_limit: 150m
