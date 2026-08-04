@@ -5,6 +5,14 @@ import "./index.css";
 import { Providers } from "./providers";
 import { App } from "./App";
 
+// Social prerender restore: when the backend redirects a real browser from
+// /e/:slug to /?next=/e/:slug, put the original path back before the router
+// mounts so bookmarks and share links land on the event page.
+const next = new URLSearchParams(window.location.search).get("next");
+if (next && next.startsWith("/")) {
+  window.history.replaceState(null, "", next);
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Providers>

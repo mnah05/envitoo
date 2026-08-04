@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#18181b" />
+      <stop offset="55%" stop-color="#0a0a0a" />
+      <stop offset="100%" stop-color="#000000" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect x="64" y="64" width="1072" height="502" rx="24" fill="none" stroke="#27272a" stroke-width="2" />
+
+  <circle cx="120" cy="160" r="58" fill="#fafafa" />
+  <text x="120" y="190" font-family="Inter, Arial, Helvetica, sans-serif" font-size="80" font-weight="700" text-anchor="middle" fill="#0a0a0a">E</text>
+
+  <text x="120" y="330" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="700" fill="#fafafa">EnviToo</text>
+  <text x="120" y="400" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" fill="#a1a1aa">Host and discover events people actually show up for.</text>
+
+  <g font-family="Inter, Arial, Helvetica, sans-serif" font-size="26" fill="#71717a">
+    <circle cx="120" cy="470" r="6" fill="#3f3f46" />
+    <text x="144" y="482">Create a page</text>
+    <circle cx="288" cy="470" r="6" fill="#3f3f46" />
+    <text x="312" y="482">Share one link</text>
+    <circle cx="456" cy="470" r="6" fill="#3f3f46" />
+    <text x="480" y="482">Check in at the door</text>
+  </g>
+</svg>

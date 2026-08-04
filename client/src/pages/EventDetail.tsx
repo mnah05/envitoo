@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ArrowLeft, CalendarDays, Check, Clock, Globe, MapPin, Share2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { VolunteerApplyForm } from "@/components/domain/VolunteerApplyForm";
 import { EventMap } from "@/components/domain/EventMap";
 import { useEventBySlug } from "@/hooks/use-events";
 import { useVolunteerSettings } from "@/hooks/use-volunteers";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { formatEventDate, formatFullDate, formatPrice } from "@/lib/format";
 
 export function EventDetail() {
@@ -20,9 +21,17 @@ export function EventDetail() {
   const { data: event, isLoading, error } = useEventBySlug(slug);
   const { data: volunteerSettings } = useVolunteerSettings(event?.id ?? "", !!event);
 
-  useEffect(() => {
-    document.title = event ? `${event.title} — EnviToo` : "Event — EnviToo";
-  }, [event]);
+  const description = event?.description
+    ? event.description.replace(/\s+/g, " ").trim().slice(0, 200)
+    : undefined;
+
+  usePageMeta({
+    title: event ? `${event.title} — EnviToo` : "Event — EnviToo",
+    description,
+    image: event?.cover_image_url ?? undefined,
+    url: event ? `/e/${event.slug}` : undefined,
+    type: "event",
+  });
 
   const eventUrl = event ? `${window.location.origin}/e/${event.slug}` : "";
   const [copied, setCopied] = useState(false);

@@ -47,6 +47,12 @@ const EditEvent = lazy(() =>
 const NotFound = lazy(() =>
   import("@/pages/NotFound").then((m) => ({ default: m.NotFound })),
 );
+const PrivacyPolicy = lazy(() =>
+  import("@/pages/Legal").then((m) => ({ default: m.PrivacyPolicy })),
+);
+const TermsOfService = lazy(() =>
+  import("@/pages/Legal").then((m) => ({ default: m.TermsOfService })),
+);
 
 function SiteLayout() {
   const { pathname } = useLocation();
@@ -84,6 +90,8 @@ export function App() {
             <Route path="/discover" element={<Discover />} />
             <Route path="/e/:slug" element={<EventDetail />} />
             <Route path="/ticket" element={<GuestTicket />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
 
             <Route element={<ProtectedRoute />}>
               <Route path="/home" element={<MyTickets />} />

@@ -19,6 +19,7 @@ import { EventCard } from "@/components/domain/EventCard";
 import { EventCardSkeleton } from "@/components/domain/EventCardSkeleton";
 import { CategoryIcon } from "@/components/domain/CategoryIcon";
 import { usePublicEvents } from "@/hooks/use-events";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { CATEGORIES, CATEGORY_LABELS } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,13 @@ export function Landing() {
   const transition = reduceMotion
     ? { duration: 0 }
     : { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const };
+
+  usePageMeta({
+    title: "EnviToo — Host & discover events",
+    description:
+      "Host and discover events people actually show up for. Create pages, open registrations, and manage check-ins.",
+    url: "/",
+  });
 
   return (
     <div className="overflow-x-hidden">
