@@ -6,12 +6,13 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    mem_limit: 100m
+    mem_reservation: 50m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
-
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
@@ -21,12 +22,13 @@ services:
       - "8222:8222"
     volumes:
       - nats_data:/data
+    mem_limit: 150m
+    mem_reservation: 80m
     healthcheck:
       test: ["CMD-SHELL", "ps aux | grep nats-server | grep -v grep"]
       interval: 5s
       timeout: 5s
       retries: 10
-
   backend:
     image: hasandotx/envito:${IMAGE_TAG:-latest}
     build: !reset null
@@ -35,19 +37,18 @@ services:
       - ./backend/.env
     environment:
       NATS_URL: nats://nats:4222
-
+    mem_limit: 250m
+    mem_reservation: 128m
   frontend:
-    build:
-      context: ./client
-      dockerfile: Dockerfile.prod
-      args:
-        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+    image: hasandotx/envito-frontend:${IMAGE_TAG:-latest}
+    build: !reset null
     restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
       - backend
-
+    mem_limit: 50m
+    mem_reservation: 20m
   mail-worker:
     image: hasandotx/envito:${IMAGE_TAG:-latest}
     build: !reset null
@@ -60,13 +61,14 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+    mem_limit: 100m
+    mem_reservation: 50m
     healthcheck:
       test: ["CMD-SHELL", "ps aux | grep mailer | grep -v grep"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-
 volumes:
   redis_data:
   nats_data:
