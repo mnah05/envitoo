@@ -15,6 +15,7 @@ import { PageContainer } from "@/components/domain/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EventCover } from "@/components/domain/EventCard";
 import { EventStatusBadge } from "@/components/domain/StatusBadge";
+import { OnboardingChecklist } from "@/components/domain/OnboardingChecklist";
 import { useMyEvents, useCancelEvent } from "@/hooks/use-events";
 import { formatEventDate } from "@/lib/format";
 import {
@@ -69,7 +70,11 @@ export function ManageEvents() {
           </label>
         </div>
 
-        <div className="mt-8 flex flex-col gap-3">
+        <div className="mt-8">
+          <div className="mb-6">
+            <OnboardingChecklist />
+          </div>
+          <div className="flex flex-col gap-3">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div
@@ -162,6 +167,7 @@ export function ManageEvents() {
               </div>
             ))
           )}
+          </div>
         </div>
       </PageContainer>
     </div>

@@ -16,6 +16,7 @@ import {
 import { PageContainer } from "@/components/domain/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EventStatusBadge, RegStatusBadge } from "@/components/domain/StatusBadge";
+import { OnboardingChecklist } from "@/components/domain/OnboardingChecklist";
 import { MyVolunteerApplications } from "@/components/domain/MyVolunteerApplications";
 import { MyEventStaffList } from "@/components/domain/MyEventStaffList";
 import { CancelTicketDialog } from "@/components/domain/CancelTicketDialog";
@@ -43,6 +44,9 @@ export function MyTickets() {
         </p>
 
         <div className="mt-8">
+          <div className="mb-6">
+            <OnboardingChecklist />
+          </div>
           <Tabs defaultValue="tickets">
             <TabsList>
               <TabsTrigger value="tickets">
