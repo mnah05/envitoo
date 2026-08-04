@@ -98,6 +98,11 @@ func (s *Server) Register(ctx context.Context, e *echo.Echo) {
 
 	e.GET("/healthz", s.Health)
 
+	// Social prerender: static HTML shell with OG tags for non-JS crawlers,
+	// redirect to the SPA (?next=) for everyone else.
+	social := e.Group("/e", middleware.PublicRateLimiter(ctx, middleware.DefaultPublicConfig))
+	social.GET("/:slug", s.PrerenderEventSocial)
+
 	idem := middleware.Idempotency(s.redisClient)
 
 	public := e.Group("/api", middleware.PublicRateLimiter(ctx, middleware.DefaultPublicConfig))

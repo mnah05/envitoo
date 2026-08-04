@@ -1,8 +1,14 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/domain/Layout";
+import { usePageMeta } from "@/hooks/use-page-meta";
 
 export function NotFound() {
+  usePageMeta({
+    title: "Page not found — EnviToo",
+    description: "The page you're looking for doesn't exist.",
+  });
+
   return (
     <div className="pt-14">
       <PageContainer className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">

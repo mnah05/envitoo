@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useReducedMotion } from "framer-motion";
 import { CompassIcon, SparklesIcon } from "lucide-animated";
@@ -9,6 +9,7 @@ import { EventCardSkeleton } from "@/components/domain/EventCardSkeleton";
 import { CategoryIcon } from "@/components/domain/CategoryIcon";
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { usePublicEvents } from "@/hooks/use-events";
+import { usePageMeta } from "@/hooks/use-page-meta";
 import { CATEGORIES, CATEGORY_LABELS, type Event } from "@/lib/api";
 
 const PAGE_SIZE = 100;
@@ -52,9 +53,10 @@ export function Discover() {
 
   const activeCategories = CATEGORIES.filter((c) => (grouped.get(c)?.length ?? 0) > 0);
 
-  useEffect(() => {
-    document.title = "Discover — EnviToo";
-  }, []);
+  usePageMeta({
+    title: "Discover — EnviToo",
+    description: "Browse upcoming events near you — workshops, meetups, socials, and more.",
+  });
 
   function clearCategory() {
     setSearchParams((prev) => {
