@@ -50,7 +50,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./client
-          file: Dockerfile.prod
+          file: ./client/Dockerfile.prod
           push: true
           tags: |
             hasandotx/envito-frontend:latest
