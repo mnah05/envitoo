@@ -146,8 +146,17 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.Name = d.Name
 		v.EventTitle = d.EventTitle
 		v.EventID = d.EventID
-		v.CTAURL = v.HomeURL
-		v.CTALabel = "Go to EnviToo"
+		v.AccessToken = d.AccessToken
+		// Link straight to the (public) ticket page when a usable token exists
+		// so the ticket link works whether or not the attendee is signed in.
+		if isUsableToken(d.AccessToken) {
+			v.TicketURL = publicURL + "/ticket?token=" + url.QueryEscape(d.AccessToken)
+			v.CTAURL = v.TicketURL
+			v.CTALabel = "View your ticket"
+		} else {
+			v.CTAURL = v.HomeURL
+			v.CTALabel = "Go to EnviToo"
+		}
 
 	case TemplateTicketStatusChange:
 		var d TicketStatusChangeData
@@ -158,8 +167,17 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.EventTitle = d.EventTitle
 		v.EventID = d.EventID
 		v.NewStatus = d.NewStatus
-		v.CTAURL = v.HomeURL
-		v.CTALabel = "View your tickets"
+		v.AccessToken = d.AccessToken
+		// Every status email links to the public ticket page when a usable
+		// access token exists, so attendees never hit a login wall.
+		if isUsableToken(d.AccessToken) {
+			v.TicketURL = publicURL + "/ticket?token=" + url.QueryEscape(d.AccessToken)
+			v.CTAURL = v.TicketURL
+			v.CTALabel = "View your ticket"
+		} else {
+			v.CTAURL = v.HomeURL
+			v.CTALabel = "View your tickets"
+		}
 
 	case TemplateApplicationConfirm:
 		var d ApplicationConfirmData
@@ -205,8 +223,15 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.Name = d.Name
 		v.EventTitle = d.EventTitle
 		v.EventID = d.EventID
-		v.CTAURL = v.HomeURL
-		v.CTALabel = "Go to EnviToo"
+		v.AccessToken = d.AccessToken
+		if isUsableToken(d.AccessToken) {
+			v.TicketURL = publicURL + "/ticket?token=" + url.QueryEscape(d.AccessToken)
+			v.CTAURL = v.TicketURL
+			v.CTALabel = "View your ticket"
+		} else {
+			v.CTAURL = v.HomeURL
+			v.CTALabel = "Go to EnviToo"
+		}
 
 	case TemplateEventCancellation:
 		var d EventCancellationData

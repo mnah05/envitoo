@@ -36,9 +36,10 @@ func (TicketConfirmData) Topic() string    { return TopicTicketConfirm }
 
 // TicketCancelData is the payload for a cancelled registration.
 type TicketCancelData struct {
-	Name       string `json:"name"`
-	EventTitle string `json:"event_title"`
-	EventID    string `json:"event_id"`
+	Name        string `json:"name"`
+	EventTitle  string `json:"event_title"`
+	EventID     string `json:"event_id"`
+	AccessToken string `json:"access_token"`
 }
 
 func (TicketCancelData) Template() string { return TemplateTicketCancel }
@@ -46,10 +47,11 @@ func (TicketCancelData) Topic() string    { return TopicTicketCancel }
 
 // TicketStatusChangeData is the payload for a registration status update.
 type TicketStatusChangeData struct {
-	Name       string `json:"name"`
-	EventTitle string `json:"event_title"`
-	EventID    string `json:"event_id"`
-	NewStatus  string `json:"new_status"`
+	Name        string `json:"name"`
+	EventTitle  string `json:"event_title"`
+	EventID     string `json:"event_id"`
+	NewStatus   string `json:"new_status"`
+	AccessToken string `json:"access_token"`
 }
 
 func (TicketStatusChangeData) Template() string { return TemplateTicketStatusChange }
@@ -90,9 +92,10 @@ func (VolunteerStatusChangeData) Topic() string    { return TopicVolunteerStatus
 
 // CheckInData is the payload for the attendance check-in confirmation email.
 type CheckInData struct {
-	Name       string `json:"name"`
-	EventTitle string `json:"event_title"`
-	EventID    string `json:"event_id"`
+	Name        string `json:"name"`
+	EventTitle  string `json:"event_title"`
+	EventID     string `json:"event_id"`
+	AccessToken string `json:"access_token"`
 }
 
 func (CheckInData) Template() string { return TemplateCheckIn }

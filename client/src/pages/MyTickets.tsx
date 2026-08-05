@@ -48,7 +48,7 @@ export function MyTickets() {
             <OnboardingChecklist />
           </div>
           <Tabs defaultValue="tickets">
-            <TabsList>
+            <TabsList className="w-full justify-start overflow-x-auto sm:w-fit sm:justify-center sm:overflow-visible">
               <TabsTrigger value="tickets">
                 <Ticket data-icon="inline-start" />
                 My tickets
@@ -199,7 +199,7 @@ function TicketCard({ reg }: { reg: Registration }) {
           <div className="flex flex-wrap items-center gap-2">
             {eventCancelled && <EventStatusBadge status="cancelled" />}
           </div>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"

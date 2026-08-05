@@ -538,10 +538,10 @@ export function EditEvent() {
           )}
 
           {/* Spacer so sticky footer / bottom nav doesn't cover content */}
-          <div className="h-32 sm:h-24" aria-hidden />
+          <div className="h-[calc(env(safe-area-inset-bottom)+8rem)] sm:h-24" aria-hidden />
 
           {/* Sticky action footer (inside form so submit associates natively) */}
-          <div className="fixed inset-x-0 bottom-16 z-30 border-t bg-background/90 backdrop-blur-md sm:bottom-0 sm:pb-[env(safe-area-inset-bottom)]">
+          <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+3.5rem)] z-30 border-t bg-background/90 backdrop-blur-md sm:bottom-0 sm:pb-[env(safe-area-inset-bottom)]">
             <PageContainer width="narrow" className="flex items-center justify-between gap-3 py-3">
               <Button
                 type="button"

@@ -203,9 +203,10 @@ func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) 
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
 	if err := enqueueEmail(ctx, qtx, reg.Email, email.TicketCancelData{
-		Name:       reg.Name,
-		EventTitle: event.Title,
-		EventID:    reg.EventID.String(),
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     reg.EventID.String(),
+		AccessToken: reg.AccessToken.String(),
 	}); err != nil {
 		return db.Registration{}, err
 	}
@@ -296,10 +297,11 @@ func enqueueRegistrationCreatedEmail(ctx context.Context, qtx *db.Queries, reg d
 func registrationCreatedEmailData(reg db.Registration, event db.Event) email.EmailData {
 	if reg.Status == "pending" {
 		return email.TicketStatusChangeData{
-			Name:       reg.Name,
-			EventTitle: event.Title,
-			EventID:    reg.EventID.String(),
-			NewStatus:  reg.Status,
+			Name:        reg.Name,
+			EventTitle:  event.Title,
+			EventID:     reg.EventID.String(),
+			NewStatus:   reg.Status,
+			AccessToken: reg.AccessToken.String(),
 		}
 	}
 	return email.TicketConfirmData{
@@ -478,9 +480,10 @@ func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UU
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
 	if err := enqueueEmail(ctx, qtx, reg.Email, email.TicketCancelData{
-		Name:       reg.Name,
-		EventTitle: event.Title,
-		EventID:    reg.EventID.String(),
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     reg.EventID.String(),
+		AccessToken: reg.AccessToken.String(),
 	}); err != nil {
 		return db.Registration{}, err
 	}
@@ -689,10 +692,11 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 
 	// Outbox insert is transactional — failure rolls back the entire operation.
 	if err := enqueueEmail(ctx, qtx, approved.Email, email.TicketStatusChangeData{
-		Name:       approved.Name,
-		EventTitle: event.Title,
-		EventID:    approved.EventID.String(),
-		NewStatus:  approved.Status,
+		Name:        approved.Name,
+		EventTitle:  event.Title,
+		EventID:     approved.EventID.String(),
+		NewStatus:   approved.Status,
+		AccessToken: approved.AccessToken.String(),
 	}); err != nil {
 		return db.Registration{}, err
 	}
@@ -765,10 +769,11 @@ func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UU
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
 	if err := enqueueEmail(ctx, qtx, reg.Email, email.TicketStatusChangeData{
-		Name:       reg.Name,
-		EventTitle: event.Title,
-		EventID:    reg.EventID.String(),
-		NewStatus:  reg.Status,
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     reg.EventID.String(),
+		NewStatus:   reg.Status,
+		AccessToken: reg.AccessToken.String(),
 	}); err != nil {
 		return db.Registration{}, err
 	}
@@ -909,10 +914,11 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 		return db.Registration{}, fmt.Errorf("get event for outbox: %w", err)
 	}
 	if err := enqueueEmail(ctx, qtx, updated.Email, email.TicketStatusChangeData{
-		Name:       updated.Name,
-		EventTitle: event.Title,
-		EventID:    updated.EventID.String(),
-		NewStatus:  updated.Status,
+		Name:        updated.Name,
+		EventTitle:  event.Title,
+		EventID:     updated.EventID.String(),
+		NewStatus:   updated.Status,
+		AccessToken: updated.AccessToken.String(),
 	}); err != nil {
 		return db.Registration{}, err
 	}
@@ -1044,9 +1050,10 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 		return db.Registration{}, fmt.Errorf("get event for check-in outbox: %w", err)
 	}
 	if err := enqueueEmail(ctx, qtx, reg.Email, email.CheckInData{
-		Name:       reg.Name,
-		EventTitle: event.Title,
-		EventID:    reg.EventID.String(),
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     reg.EventID.String(),
+		AccessToken: reg.AccessToken.String(),
 	}); err != nil {
 		return db.Registration{}, err
 	}
@@ -1146,9 +1153,10 @@ func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, 
 		return db.Registration{}, fmt.Errorf("get event for check-in outbox: %w", err)
 	}
 	if err := enqueueEmail(ctx, qtx, reg.Email, email.CheckInData{
-		Name:       reg.Name,
-		EventTitle: event.Title,
-		EventID:    reg.EventID.String(),
+		Name:        reg.Name,
+		EventTitle:  event.Title,
+		EventID:     reg.EventID.String(),
+		AccessToken: reg.AccessToken.String(),
 	}); err != nil {
 		return db.Registration{}, err
 	}

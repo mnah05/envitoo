@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser";
-import { Check, QrCode, ScanLine, X } from "lucide-react";
+import { Check, QrCode, RefreshCw, ScanLine, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,30 @@ export function parseTicketToken(raw: string): string | null {
   }
 }
 
+function describeCameraError(err: unknown): string {
+  const name = err instanceof DOMException ? err.name : (err as Error)?.name;
+  const msg = err instanceof Error ? err.message : String(err);
+  const combined = `${name} ${msg}`.toLowerCase();
+
+  // iOS Safari / non-secure contexts: the whole API is missing.
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return "Camera is not available here. Make sure you're connected over HTTPS (the padlock in the address bar) and using Safari or Chrome.";
+  }
+  if (/notallowed|permission|denied/i.test(combined)) {
+    return "Camera access was denied. Tap the camera/refresh icon in the address bar to allow it, or enable it in Settings > Privacy > Camera, then try again.";
+  }
+  if (/notfound/i.test(combined) || /no camera/i.test(combined)) {
+    return "No camera was found on this device.";
+  }
+  if (/notreadable|trackstart|in use/i.test(combined)) {
+    return "Couldn't start the camera. Make sure no other app (camera, FaceTime, zoom) is using it, then retry.";
+  }
+  if (/overconstrained|constraint/i.test(combined)) {
+    return "Could not start the camera. Try again — if it keeps failing, close other apps using the camera.";
+  }
+  return "Could not start the camera. Make sure no other app is using it and that you're on HTTPS, then retry.";
+}
+
 export function CheckInScanner({
   open,
   onOpenChange,
@@ -39,6 +63,7 @@ export function CheckInScanner({
   const streamRef = useRef<MediaStream | null>(null);
   const cooldownRef = useRef(0);
   const lastTokenRef = useRef<string>("");
+  const startRef = useRef<() => void>(() => {});
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -51,17 +76,24 @@ export function CheckInScanner({
     }
   }, []);
 
-  // useLayoutEffect ensures videoRef is populated before we access the camera.
+  // requestAnimationFrame so getUserMedia runs straight after the tap that
+  // opened the dialog — iOS Safari drops camera permission prompts that are
+  // not issued within a user gesture.
   useLayoutEffect(() => {
     if (!open) {
       stop();
+      setError(null);
       return;
     }
     setError(null);
     setFlash(null);
-    let cancelled = false;
+    requestAnimationFrame(() => startRef.current());
+  }, [open, stop]);
 
+  startRef.current = function start() {
     const video = videoRef.current;
+    let cancelled = false;
+    if (controlsRef.current || streamRef.current) stop();
 
     const onScanResult = (result: any) => {
       if (cancelled || !result) return;
@@ -77,56 +109,66 @@ export function CheckInScanner({
       onResult(token);
     };
 
-    async function start() {
+    async function run() {
       try {
-        // Attempt 1: rear camera on phones
         let stream: MediaStream;
         try {
+          // Attempt 1: rear camera on phones (ideal, not exact — some iOS
+          // builds throw OverconstrainedError for an exact facingMode).
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" },
+            video: { facingMode: { ideal: "environment" } },
             audio: false,
           });
         } catch {
           // Fallback: any camera (laptops → front camera)
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         }
+
         if (cancelled || !video) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
 
         streamRef.current = stream;
+        video.playsInline = true; // required on iOS or the stream is fullscreen
+        video.muted = true;
         video.srcObject = stream;
         await video.play();
 
-        // Pass the already-playing video to zxing for scanning only
+        // iOS reports a 0x0 frame until the stream is actually rendering;
+        // give zxing a ready frame before handing it the element.
+        for (let i = 0; i < 50 && video.videoWidth === 0; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+
         const reader = new BrowserMultiFormatReader();
         const controls = await reader.decodeFromVideoElement(video, onScanResult);
         if (cancelled) controls.stop();
         else controlsRef.current = controls;
       } catch (err) {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : String(err);
         console.error("[CheckInScanner]", err);
-
-        if (/permission|notallowed|denied/i.test(msg)) {
-          setError("Camera access was denied. Allow camera permissions and try again.");
-        } else {
-          setError("Could not start the camera. Make sure no other app is using it.");
+        setError(describeCameraError(err));
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
         }
       }
     }
 
-    start();
+    run();
 
-    return () => {
+    // `cancelled` is captured by run() before it resolves; a retry creates a
+    // fresh start() so a stale run can flag itself as cancelled via an early
+    // closure. Track it with a local so a new start() invalidates the old one.
+    startRef.current = function invalidated() {
       cancelled = true;
-      stop();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
     };
-  }, [open, onResult, stop]);
+  };
 
   // Brief success overlay after each scan — auto-clears so scanning resumes.
   useEffect(() => {
@@ -153,10 +195,16 @@ export function CheckInScanner({
             <div className="grid size-12 place-items-center rounded-full bg-destructive/10 text-destructive">
               <X className="size-6" />
             </div>
-            <p className="text-sm text-muted-foreground">{error}</p>
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
+            <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
+            <div className="mt-1 flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => startRef.current()}>
+                <RefreshCw className="size-4" />
+                Retry camera
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="relative overflow-hidden rounded-xl border bg-black">

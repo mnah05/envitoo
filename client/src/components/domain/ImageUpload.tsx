@@ -92,6 +92,9 @@ export function ImageUpload({ onChange, error, previewUrl }: Props) {
             <p className="mt-1 text-xs text-muted-foreground">
               JPEG, PNG or WebP · up to 5 MB
             </p>
+            <p className="mt-0.5 text-xs text-muted-foreground/80">
+              For the best look, use a 16:9 landscape image (e.g. 1600×900)
+            </p>
           </div>
         </div>
       )}

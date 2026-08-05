@@ -210,7 +210,7 @@ export function GuestTicket() {
                   : "Present this QR at check-in. Keep this link safe — it's your only proof of registration."}
             </div>
             {!ticketCancelled && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   onClick={handleDownload}
