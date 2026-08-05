@@ -50,7 +50,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./client
-          file: Dockerfile.prod
+          file: ./client/Dockerfile.prod
           push: true
           tags: |
             hasandotx/envito-frontend:latest
@@ -65,6 +65,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy compose file to server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.LINODE_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key docker-compose.prod.yml ${{ secrets.LINODE_USER }}@${{ secrets.LINODE_HOST }}:/home/deployer/envito/docker-compose.prod.yml
+
       - uses: appleboy/ssh-action@v1
         env:
           IMAGE_TAG: ${{ github.sha }}
@@ -81,12 +90,21 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         with:
           host: ${{ secrets.LINODE_HOST }}
           username: ${{ secrets.LINODE_USER }}
           key: ${{ secrets.LINODE_SSH_KEY }}
-          envs: IMAGE_TAG,DB_URL,CLERK_SECRET_KEY,REDIS_URL,OTP_SECRET,RESEND_API_KEY,EMAIL_FROM,APP_PUBLIC_URL,HEALTHZ_TOKEN,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,R2_PUBLIC_URL
+          envs: IMAGE_TAG,DB_URL,CLERK_SECRET_KEY,REDIS_URL,OTP_SECRET,RESEND_API_KEY,EMAIL_FROM,APP_PUBLIC_URL,HEALTHZ_TOKEN,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,R2_PUBLIC_URL,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
           script: |
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            cat > /home/deployer/envito/Caddyfile << CADDYEOF
+            envitoo.mnah.dev {
+                reverse_proxy frontend:80
+            }
+            CADDYEOF
+
             cat > /home/deployer/envito/backend/.env << ENVEOF
             DB_URL=${DB_URL}
             CLERK_SECRET_KEY=${CLERK_SECRET_KEY}

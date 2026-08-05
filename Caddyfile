@@ -1,0 +1,3 @@
+envitoo.mnah.dev {
+    reverse_proxy frontend:80
+}

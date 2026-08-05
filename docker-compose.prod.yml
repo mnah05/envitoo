@@ -1,9 +1,20 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 50m
+    mem_reservation: 20m
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     mem_limit: 100m
@@ -17,9 +28,6 @@ services:
     image: nats:2.10-alpine
     restart: unless-stopped
     command: ["-js", "-sd", "/data"]
-    ports:
-      - "4222:4222"
-      - "8222:8222"
     volumes:
       - nats_data:/data
     mem_limit: 150m
@@ -43,8 +51,6 @@ services:
     image: hasandotx/envito-frontend:${IMAGE_TAG:-latest}
     build: !reset null
     restart: unless-stopped
-    ports:
-      - "80:80"
     depends_on:
       - backend
     mem_limit: 50m
@@ -69,6 +75,29 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  outbox-worker:
+    image: hasandotx/envito:${IMAGE_TAG:-latest}
+    build: !reset null
+    command: ["/usr/local/bin/worker"]
+    env_file:
+      - ./backend/.env
+    environment:
+      NATS_URL: nats://nats:4222
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    mem_limit: 100m
+    mem_reservation: 50m
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep worker | grep -v grep"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 volumes:
+  caddy_data:
+  caddy_config:
   redis_data:
   nats_data:
