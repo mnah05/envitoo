@@ -596,7 +596,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 		params.RequiresApproval = *req.RequiresApproval
 	}
 	if req.CoverImageURL != nil {
-		params.CoverImageUrl = req.CoverImageURL
+		params.CoverImageUrl = *req.CoverImageURL
 	}
 	if req.IsVirtual != nil {
 		params.IsVirtual = *req.IsVirtual
@@ -705,7 +705,7 @@ func (s *EventService) updateStaffFields(ctx context.Context, id, actorID uuid.U
 		description = req.Description
 	}
 	if req.CoverImageURL != nil {
-		coverImage = req.CoverImageURL
+		coverImage = *req.CoverImageURL
 	}
 	if req.MeetingURL != nil {
 		meetingURL = req.MeetingURL

@@ -273,3 +273,44 @@ func TestUpdateEvent_NullifiesUnverifiedCover(t *testing.T) {
 		t.Fatalf("db cover_image_url = %v, want original cover kept", row.CoverImageUrl)
 	}
 }
+
+func TestUpdateEvent_ClearsCoverWithNull(t *testing.T) {
+	pool, queries := openServerTestDB(t)
+	user := setupServerTestUser(t, pool, queries)
+
+	// Create with a storage-less server so the cover URL is stored as-is.
+	createRec := doCreateEvent(newEventServer(t, pool, queries, nil), user,
+		validEventBody("https://cdn.example.com/event-covers/keep.jpg"))
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201; body: %s", createRec.Code, createRec.Body.String())
+	}
+	var created dto.EventResponse
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), "DELETE FROM events WHERE id = $1", created.ID) })
+
+	s := newEventServer(t, pool, queries, newFakeStorage(t))
+	updateRec := doUpdateEvent(s, user, created.ID, `{"cover_image_url":null}`)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("update status = %d, want 200; body: %s", updateRec.Code, updateRec.Body.String())
+	}
+	var updated dto.EventResponse
+	if err := json.Unmarshal(updateRec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+	if updated.Warning != nil {
+		t.Fatalf("warning = %v, want none when clearing cover", *updated.Warning)
+	}
+	if updated.CoverImageURL != nil {
+		t.Fatalf("cover_image_url = %v, want null after clearing", *updated.CoverImageURL)
+	}
+
+	row, err := queries.GetEventByID(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("get event from db: %v", err)
+	}
+	if row.CoverImageUrl != nil {
+		t.Fatalf("db cover_image_url = %v, want NULL after clearing", *row.CoverImageUrl)
+	}
+}

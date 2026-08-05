@@ -64,7 +64,7 @@ type UpdateEventRequest struct {
 	PriceInPaise     *int64     `json:"price_in_paise" validate:"omitempty,min=0"`
 	Currency         *string    `json:"currency" validate:"omitempty,len=3"`
 	RequiresApproval *bool      `json:"requires_approval"`
-	CoverImageURL    *string    `json:"cover_image_url" validate:"omitempty,url"`
+	CoverImageURL    **string   `json:"cover_image_url" validate:"omitempty,url"`
 	IsVirtual        *bool      `json:"is_virtual"`
 	MeetingURL       *string    `json:"meeting_url" validate:"omitempty,url"`
 	VenueName        *string    `json:"venue_name" validate:"omitempty,max=200"`

@@ -245,11 +245,14 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 	// verified is dropped (the existing cover is kept) and a warning is
 	// attached to the response instead of failing the update.
 	var imageWarning string
-	if req.CoverImageURL != nil && s.storage != nil {
-		if err := s.storage.VerifyImage(c.Request().Context(), *req.CoverImageURL); err != nil {
-			log.WarnContext(c.Request().Context(), "image verification failed, keeping current cover", "url", *req.CoverImageURL, "error", err)
-			imageWarning = "Cover image upload could not be verified: " + err.Error()
-			req.CoverImageURL = nil
+	if req.CoverImageURL != nil {
+		coverURL := *req.CoverImageURL
+		if coverURL != nil && s.storage != nil {
+			if err := s.storage.VerifyImage(c.Request().Context(), *coverURL); err != nil {
+				log.WarnContext(c.Request().Context(), "image verification failed, keeping current cover", "url", *coverURL, "error", err)
+				imageWarning = "Cover image upload could not be verified: " + err.Error()
+				req.CoverImageURL = nil
+			}
 		}
 	}
 

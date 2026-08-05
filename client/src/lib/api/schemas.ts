@@ -139,7 +139,7 @@ export const UpdateEventInput = z.object({
   price_in_paise: z.number().int().min(0).optional(),
   currency: z.string().length(3).optional(),
   requires_approval: z.boolean().optional(),
-  cover_image_url: z.string().url().optional(),
+  cover_image_url: z.string().url().nullable().optional(),
   is_virtual: z.boolean().optional(),
   meeting_url: z.string().url().optional(),
   venue_name: z.string().max(200).optional(),

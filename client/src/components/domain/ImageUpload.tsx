@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDropzone } from "react-dropzone";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { ImageIcon, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 export function ImageUpload({ onChange, error, previewUrl }: Props) {
   const [preview, setPreview] = useState<string | null>(previewUrl ?? null);
   const previewRef = useRef<string | null>(previewUrl ?? null);
+  const [selfError, setSelfError] = useState<string | null>(null);
 
   useEffect(() => {
     return () => revoke(previewRef.current);
@@ -34,14 +35,27 @@ export function ImageUpload({ onChange, error, previewUrl }: Props) {
     (accepted: File[]) => {
       const file = accepted[0];
       if (!file) return;
+      setSelfError(null);
       onChange(file);
       setPreviewURL(URL.createObjectURL(file));
     },
     [onChange],
   );
 
+  const onDropRejected = useCallback((rejections: FileRejection[]) => {
+    const codes = rejections[0]?.errors.map((e) => e.code) ?? [];
+    if (codes.includes("file-too-large")) {
+      setSelfError("Image must be 5 MB or smaller.");
+    } else if (codes.includes("file-invalid-type")) {
+      setSelfError("Only JPEG, PNG or WebP images are allowed.");
+    } else {
+      setSelfError("That file was not accepted. Use a JPEG, PNG or WebP image up to 5 MB.");
+    }
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: { "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"], "image/webp": [".webp"] },
     maxSize: MAX_SIZE,
     maxFiles: 1,
@@ -49,6 +63,7 @@ export function ImageUpload({ onChange, error, previewUrl }: Props) {
   });
 
   const remove = () => {
+    setSelfError(null);
     onChange(null);
     setPreviewURL(null);
   };
@@ -98,8 +113,8 @@ export function ImageUpload({ onChange, error, previewUrl }: Props) {
           </div>
         </div>
       )}
-      {error && !preview && (
-        <p className="mt-1.5 text-sm text-destructive">{error}</p>
+      {(selfError || (error && !preview)) && (
+        <p className="mt-1.5 text-sm text-destructive">{selfError ?? error}</p>
       )}
     </div>
   );

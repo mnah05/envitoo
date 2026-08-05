@@ -15,6 +15,7 @@ func TestHasDisallowedStaffUpdateFields(t *testing.T) {
 	reqApproval := true
 	virtual := true
 	category := "technical"
+	coverImage := new("https://img.example.com/a.png")
 
 	tests := []struct {
 		name string
@@ -26,7 +27,7 @@ func TestHasDisallowedStaffUpdateFields(t *testing.T) {
 			req: dto.UpdateEventRequest{
 				Description:   new("updated"),
 				MeetingURL:    new("https://meet.example.com"),
-				CoverImageURL: new("https://img.example.com/a.png"),
+				CoverImageURL: &coverImage,
 				VenueName:     new("Hall A"),
 			},
 			want: false,

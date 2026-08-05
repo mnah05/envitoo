@@ -69,6 +69,7 @@ export function EditEvent() {
   const [location, setLocation] = useState<LocationSelection | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [coverRemoved, setCoverRemoved] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const isOrganizer = !!event && !!me && event.organizer_id === me.id;
@@ -138,7 +139,7 @@ export function EditEvent() {
     // presign endpoint, so no URL-format check is needed here.
     const payload: UpdateEventValues = {
       description: form.description.trim() || undefined,
-      cover_image_url: form.cover_image_url.trim() || undefined,
+      cover_image_url: coverRemoved ? null : form.cover_image_url.trim() || undefined,
       meeting_url: form.is_virtual ? form.meeting_url.trim() : undefined,
       venue_name: !form.is_virtual && location ? location.venueName.trim() : undefined,
       location_address:
@@ -179,7 +180,7 @@ export function EditEvent() {
     }
     setFieldErrors({});
 
-    let finalCoverURL: string | undefined = result.cover_image_url;
+    let finalCoverURL: string | null | undefined = result.cover_image_url;
 
     if (coverImageFile) {
       setUploading(true);
@@ -478,7 +479,10 @@ export function EditEvent() {
                 Cover image <span className="text-muted-foreground/70">(optional)</span>
               </label>
               <ImageUpload
-                onChange={setCoverImageFile}
+                onChange={(file) => {
+                  setCoverImageFile(file);
+                  if (!file && event?.cover_image_url) setCoverRemoved(true);
+                }}
                 error={fieldErrors.cover_image_url}
                 previewUrl={event.cover_image_url ?? undefined}
               />
