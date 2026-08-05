@@ -129,14 +129,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.EventTitle = d.EventTitle
 		v.EventID = d.EventID
 		v.AccessToken = d.AccessToken
-		if isUsableToken(d.AccessToken) {
-			v.TicketURL = publicURL + "/ticket?token=" + url.QueryEscape(d.AccessToken)
-			v.CTAURL = v.TicketURL
-			v.CTALabel = "View your ticket"
-		} else {
-			v.CTAURL = v.HomeURL
-			v.CTALabel = "View your tickets"
-		}
+		setTicketCTA(&v, publicURL, d.AccessToken, "View your tickets")
 
 	case TemplateTicketCancel:
 		var d TicketCancelData
@@ -146,8 +139,8 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.Name = d.Name
 		v.EventTitle = d.EventTitle
 		v.EventID = d.EventID
-		v.CTAURL = v.HomeURL
-		v.CTALabel = "Go to EnviToo"
+		v.AccessToken = d.AccessToken
+		setTicketCTA(&v, publicURL, d.AccessToken, "Go to EnviToo")
 
 	case TemplateTicketStatusChange:
 		var d TicketStatusChangeData
@@ -158,8 +151,8 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.EventTitle = d.EventTitle
 		v.EventID = d.EventID
 		v.NewStatus = d.NewStatus
-		v.CTAURL = v.HomeURL
-		v.CTALabel = "View your tickets"
+		v.AccessToken = d.AccessToken
+		setTicketCTA(&v, publicURL, d.AccessToken, "View your tickets")
 
 	case TemplateApplicationConfirm:
 		var d ApplicationConfirmData
@@ -205,8 +198,7 @@ func buildView(templateName string, raw json.RawMessage, publicURL string) (view
 		v.Name = d.Name
 		v.EventTitle = d.EventTitle
 		v.EventID = d.EventID
-		v.CTAURL = v.HomeURL
-		v.CTALabel = "Go to EnviToo"
+		setTicketCTA(&v, publicURL, d.AccessToken, "Go to EnviToo")
 
 	case TemplateEventCancellation:
 		var d EventCancellationData
@@ -257,12 +249,23 @@ func subjectFor(templateName string, v view) string {
 }
 
 // isUsableToken checks whether the access token is a real UUID or a zero
-// value. Zero UUIDs are used for authenticated (non-guest) registrations
-// where no ticket token is issued.
+// value. Zero UUIDs can appear on legacy or malformed payloads where no
+// public ticket token is available.
 func isUsableToken(token string) bool {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return false
 	}
 	return token != "00000000-0000-0000-0000-000000000000"
+}
+
+func setTicketCTA(v *view, publicURL, token, fallbackLabel string) {
+	if isUsableToken(token) {
+		v.TicketURL = publicURL + "/ticket?token=" + url.QueryEscape(strings.TrimSpace(token))
+		v.CTAURL = v.TicketURL
+		v.CTALabel = "View your ticket"
+		return
+	}
+	v.CTAURL = v.HomeURL
+	v.CTALabel = fallbackLabel
 }

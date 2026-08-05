@@ -3,3 +3,5 @@ Checked in — {{.EventTitle}}
 {{if .Name}}Hi {{.Name}},{{else}}Hi,{{end}}
 
 You've been checked in for {{.EventTitle}}. Enjoy the event.
+
+{{if .CTAURL}}{{.CTALabel}}: {{.CTAURL}}{{end}}
