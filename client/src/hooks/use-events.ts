@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import {
   useApi,
+  publicApi,
   listPublicEvents,
   getEvent,
   getEventBySlug,
@@ -39,10 +40,9 @@ export function usePublicEvents(params: PublicEventsParams = {}) {
 }
 
 export function useEvent(id: string, enabled = true) {
-  const api = useApi();
   return useQuery({
     queryKey: eventsKeys.detail(id),
-    queryFn: () => getEvent(api, id),
+    queryFn: () => getEvent(publicApi, id),
     enabled: enabled && !!id,
   });
 }

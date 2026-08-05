@@ -46,6 +46,53 @@ interface ApiMethods {
   del: <T>(path: string, query?: Query) => Promise<T>;
 }
 
+function createApi(getToken?: () => Promise<string | null>): ApiMethods {
+  async function request<T>(
+    method: string,
+    path: string,
+    opts: { query?: Query; body?: BodyInit; parse?: "json" | "empty" } = {},
+  ): Promise<T> {
+    const { query, body, parse = "json" } = opts;
+    const token = getToken ? await getToken() : null;
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (body != null) headers["Content-Type"] = "application/json";
+    if (method === "POST" || method === "PUT" || method === "PATCH") {
+      headers["Idempotency-Key"] = crypto.randomUUID();
+    }
+
+    const res = await fetch(buildUrl(path, query), { method, headers, body });
+
+    if (!res.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await res.json();
+      } catch {
+        try {
+          errorBody = await res.text();
+        } catch {
+          errorBody = undefined;
+        }
+      }
+      const message = errorBodyMessage(errorBody, res.statusText || "request failed");
+      throw new ApiError(res.status, message, errorBody);
+    }
+
+    if (parse === "empty" || res.status === 204) return undefined as T;
+    return (await res.json()) as T;
+  }
+
+  return {
+    get: (path, query) => request("GET", path, { query }),
+    post: (path, body) => request("POST", path, { body: body != null ? JSON.stringify(body) : undefined }),
+    put: (path, body) => request("PUT", path, { body: body != null ? JSON.stringify(body) : undefined }),
+    patch: (path, body) => request("PATCH", path, { body: body != null ? JSON.stringify(body) : undefined }),
+    del: (path, query) => request("DELETE", path, { query }),
+  };
+}
+
+export const publicApi = createApi();
+
 /**
  * Build a fetcher bound to the Clerk session token. Returns a stable object
  * (memoized) so it is safe to reference inside TanStack Query dependencies.
@@ -56,48 +103,7 @@ export function useApi(): ApiMethods {
   getTokenRef.current = getToken;
 
   return useMemo<ApiMethods>(() => {
-    async function request<T>(
-      method: string,
-      path: string,
-      opts: { query?: Query; body?: BodyInit; parse?: "json" | "empty" } = {},
-    ): Promise<T> {
-      const { query, body, parse = "json" } = opts;
-      const token = await getTokenRef.current();
-      const headers: Record<string, string> = {};
-      if (token) headers.Authorization = `Bearer ${token}`;
-      if (body != null) headers["Content-Type"] = "application/json";
-      if (method === "POST" || method === "PUT" || method === "PATCH") {
-        headers["Idempotency-Key"] = crypto.randomUUID();
-      }
-
-      const res = await fetch(buildUrl(path, query), { method, headers, body });
-
-      if (!res.ok) {
-        let errorBody: unknown;
-        try {
-          errorBody = await res.json();
-        } catch {
-          try {
-            errorBody = await res.text();
-          } catch {
-            errorBody = undefined;
-          }
-        }
-        const message = errorBodyMessage(errorBody, res.statusText || "request failed");
-        throw new ApiError(res.status, message, errorBody);
-      }
-
-      if (parse === "empty" || res.status === 204) return undefined as T;
-      return (await res.json()) as T;
-    }
-
-    return {
-      get: (path, query) => request("GET", path, { query }),
-      post: (path, body) => request("POST", path, { body: body != null ? JSON.stringify(body) : undefined }),
-      put: (path, body) => request("PUT", path, { body: body != null ? JSON.stringify(body) : undefined }),
-      patch: (path, body) => request("PATCH", path, { body: body != null ? JSON.stringify(body) : undefined }),
-      del: (path, query) => request("DELETE", path, { query }),
-    };
+    return createApi(() => getTokenRef.current());
   }, []);
 }
 

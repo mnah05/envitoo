@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import {
   useApi,
+  publicApi,
   createGuestRegistration,
   requestGuestOTP,
   verifyGuestOTP,
@@ -70,10 +71,9 @@ export function useVerifyGuestOTP() {
 }
 
 export function useGuestRegistration(token: string, enabled = true) {
-  const api = useApi();
   return useQuery({
     queryKey: regKeys.guest(token),
-    queryFn: () => getGuestRegistration(api, token),
+    queryFn: () => getGuestRegistration(publicApi, token),
     enabled: enabled && !!token,
     retry: (count, err) => (err instanceof ApiError && err.status === 404 ? false : count < 2),
   });

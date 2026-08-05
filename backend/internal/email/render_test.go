@@ -35,14 +35,14 @@ func TestRenderer_AllTemplates(t *testing.T) {
 			name: TemplateTicketConfirm,
 			data: map[string]string{
 				"name": "Ada", "event_title": "Hack Night", "event_id": "e1",
-				"access_token": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+				"access_token": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
 			},
 			subjSub: "Hack Night",
 			bodySub: "/ticket?token=",
 		},
 		{
 			name: TemplateTicketConfirm,
-			// Zero UUID = authenticated registration, should link to /home
+			// Legacy rows without a usable token still fall back to the dashboard.
 			data: map[string]string{
 				"name": "Ada", "event_title": "Hack Night", "event_id": "e1",
 				"access_token": "00000000-0000-0000-0000-000000000000",
@@ -51,20 +51,41 @@ func TestRenderer_AllTemplates(t *testing.T) {
 			bodySub: "/home",
 		},
 		{
-			name: TemplateTicketCancel,
+			name: TemplateTicketStatusChange,
 			data: map[string]string{
-				"name": "Ada", "event_title": "Hack Night", "event_id": "e1",
+				"name": "Ada", "event_title": "Hack Night", "event_id": "e1", "new_status": "approved",
+				"access_token": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
 			},
-			subjSub: "cancelled",
-			bodySub: "Hack Night",
+			subjSub: "Registration update",
+			bodySub: "/ticket?token=",
 		},
 		{
 			name: TemplateTicketStatusChange,
+			// Legacy rows without a usable token still mention the status, but
+			// cannot offer a bearer-link ticket.
 			data: map[string]string{
 				"name": "Ada", "event_title": "Hack Night", "event_id": "e1", "new_status": "approved",
 			},
 			subjSub: "Registration update",
 			bodySub: "approved",
+		},
+		{
+			name: TemplateTicketCancel,
+			data: map[string]string{
+				"name": "Ada", "event_title": "Hack Night", "event_id": "e1",
+				"access_token": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+			},
+			subjSub: "cancelled",
+			bodySub: "/ticket?token=",
+		},
+		{
+			name: TemplateCheckIn,
+			data: map[string]string{
+				"name": "Ada", "event_title": "Hack Night", "event_id": "e1",
+				"access_token": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+			},
+			subjSub: "Checked in",
+			bodySub: "/ticket?token=",
 		},
 		{
 			name: TemplateApplicationConfirm,
@@ -130,6 +151,80 @@ func TestRenderer_AllTemplates(t *testing.T) {
 			}
 			if out.HTML == "" || out.Text == "" {
 				t.Fatal("empty body")
+			}
+		})
+	}
+}
+
+func TestRenderer_TicketEmailsUsePublicTicketLink(t *testing.T) {
+	r, err := NewRenderer("https://envitoo.app")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	token := "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+	cases := []struct {
+		name string
+		data any
+	}{
+		{
+			name: TemplateTicketConfirm,
+			data: TicketConfirmData{
+				Name:        "Ada",
+				EventTitle:  "Hack Night",
+				EventID:     "e1",
+				AccessToken: token,
+			},
+		},
+		{
+			name: TemplateTicketStatusChange,
+			data: TicketStatusChangeData{
+				Name:        "Ada",
+				EventTitle:  "Hack Night",
+				EventID:     "e1",
+				NewStatus:   "approved",
+				AccessToken: token,
+			},
+		},
+		{
+			name: TemplateTicketCancel,
+			data: TicketCancelData{
+				Name:        "Ada",
+				EventTitle:  "Hack Night",
+				EventID:     "e1",
+				AccessToken: token,
+			},
+		},
+		{
+			name: TemplateCheckIn,
+			data: CheckInData{
+				Name:        "Ada",
+				EventTitle:  "Hack Night",
+				EventID:     "e1",
+				AccessToken: token,
+			},
+		},
+	}
+
+	want := "/ticket?token=" + token
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := json.Marshal(tc.data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := r.Render(tc.name, raw)
+			if err != nil {
+				t.Fatalf("render: %v", err)
+			}
+			if !strings.Contains(out.HTML, want) {
+				t.Fatalf("html missing public ticket link %q in:\n%s", want, out.HTML)
+			}
+			if !strings.Contains(out.Text, want) {
+				t.Fatalf("text missing public ticket link %q", want)
+			}
+			if strings.Contains(out.HTML, "/home") || strings.Contains(out.Text, "/home") {
+				t.Fatal("ticket email should not send token-bearing recipients to /home")
 			}
 		})
 	}
