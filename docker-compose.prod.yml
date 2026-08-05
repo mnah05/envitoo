@@ -75,6 +75,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  outbox-worker:
+    image: hasandotx/envito:${IMAGE_TAG:-latest}
+    build: !reset null
+    command: ["/usr/local/bin/worker"]
+    env_file:
+      - ./backend/.env
+    environment:
+      NATS_URL: nats://nats:4222
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    mem_limit: 100m
+    mem_reservation: 50m
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep worker | grep -v grep"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 volumes:
   caddy_data:
   caddy_config:
