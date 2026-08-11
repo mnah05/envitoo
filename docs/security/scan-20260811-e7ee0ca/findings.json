@@ -1,0 +1,201 @@
+{
+  "scan_id": "scan-20260811-e7ee0ca",
+  "findings": [
+    {
+      "id": "ENV-2026-01",
+      "title": "Per-IP rate limiters collapse to global buckets behind the production reverse-proxy chain (XFF untrusted)",
+      "severity": "medium",
+      "confidence": "high",
+      "category": "Availability / Anti-abuse",
+      "likelihood": "high",
+      "impact": "Platform-wide denial of service on public endpoints and OTP endpoint; email-spam / cost abuse via OTP",
+      "location": {
+        "file": "backend/internal/server/server.go",
+        "line": 81,
+        "related": [
+          "backend/internal/middleware/ratelimit.go:33",
+          "backend/internal/middleware/ratelimit.go:46"
+        ]
+      },
+      "description": "e.IPExtractor is set to echo.ExtractIPFromXFFHeader(echo.TrustLoopback(true)), which trusts X-Forwarded-For only from loopback peers. In production (docker-compose.prod.yml) traffic flows Caddy -> frontend container -> backend; the backend's immediate peer is the frontend container IP on the Docker network, which is not loopback, so the XFF header is ignored and c.RealIP() returns that single shared container IP for every request. The public limiter (10 rps / 20 burst) and OTP limiter (5/min / burst 5) therefore become one global bucket for the entire platform.",
+      "evidence": "server.go:81; ratelimit.go PublicRateLimiter keys on c.RealIP(); docker-compose.prod.yml caddy -> frontend -> backend networking",
+      "impact_detail": "A single attacker can exhaust the shared public/OTP buckets and 429 the whole site for discovery, guest-ticket reads, and guest registration for everyone. The OTP bucket also allows ~5 OTP emails/min to arbitrary victim addresses (spam + Resend cost) until exhausted. Per-(event,email) Redis cooldown still applies. Auth limiter keys by user ID and is unaffected. In-process limiter resets on restart (documented trade-off).",
+      "remediation": [
+        "Set e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustAllProxies()) or configure an explicit trusted-proxy CIDR list that includes the frontend/Caddy container network.",
+        "Optionally add edge rate limiting at Caddy/Cloudflare for /api/events/:id/register/guest/otp.",
+        "Move OTP rate limiting to Redis-backed shared counters (survive restarts and multiple replicas)."
+      ]
+    },
+    {
+      "id": "ENV-2026-02",
+      "title": "Registration access tokens are always serialized in responses despite documented intent to omit them (omitempty ineffective on uuid.UUID)",
+      "severity": "medium",
+      "confidence": "high",
+      "category": "Information disclosure / Authz boundary",
+      "likelihood": "medium",
+      "impact": "Bearer tokens for every attendee exposed in staff list responses; enables token-holder to cancel arbitrary guest registrations via the public endpoint",
+      "location": {
+        "file": "backend/internal/dto/registration.go",
+        "line": 113,
+        "related": [
+          "backend/internal/dto/registration.go:145",
+          "backend/internal/server/registration.go:382",
+          "backend/internal/server/registration.go:136"
+        ]
+      },
+      "description": "RegistrationResponse.AccessToken is declared as uuid.UUID with json:\"access_token,omitempty\". uuid.UUID is a [16]byte array; encoding/json never considers an array 'empty', so the field is always emitted. NewRegistrationResponse sets it unconditionally. The DTO comment (Note 10) states tokens should be omitted in list responses, but the constructor contradicts that.",
+      "evidence": "dto/registration.go:113 omitempty on [16]byte; dto/registration.go:145 AccessToken: r.AccessToken unconditional; ListEventRegistrations builds RegistrationResponse via NewRegistrationResponse",
+      "impact_detail": "GET /api/events/:id/registrations (staff: organizer or volunteer admin) returns every attendee's access_token. Anyone who holds a token can call public GET/DELETE /api/guest-registrations?token= to read PII or cancel the guest registration — so volunteer admins effectively gain cancel-any-guest powers beyond their intended scope, and any leak of a staff list payload (cache, logs, proxy) leaks all guest bearer tokens. User-scoped list returns only the user's own tokens (lower impact but still contradicts documented intent).",
+      "remediation": [
+        "Change AccessToken to *uuid.UUID and set it only in the create response (omitempty will then work).",
+        "Return tokens in list responses only if the check-in desk flow genuinely requires them; if so, update the DTO comment and scope exposure explicitly."
+      ]
+    },
+    {
+      "id": "ENV-2026-03",
+      "title": "No upload size limit on direct-to-R2 presigned PUTs; extension user-controlled; orphaned objects accumulate",
+      "severity": "medium",
+      "confidence": "medium",
+      "category": "Storage abuse / Cost DoS",
+      "likelihood": "medium",
+      "impact": "Any authenticated user can fill the R2 bucket / rack up storage cost; no cleanup for orphaned objects",
+      "location": {
+        "file": "backend/internal/service/storage.go",
+        "line": 91,
+        "related": [
+          "backend/internal/server/upload.go:29",
+          "backend/internal/dto/upload.go:7"
+        ]
+      },
+      "description": "GeneratePresignedURL builds the object key as 'event-covers/<uuid>' + path.Ext(user-provided filename) and issues a 5-minute presigned PUT with no Content-Length cap. The DTO constrains Content-Type to image/jpeg|png|webp and it is signed into the presigned request, so the actual MIME served by R2 is effectively enforced by the signature. But the object suffix is attacker-controlled, upload size is unbounded, and objects are never deleted when an event cover is nullified or the event is deleted.",
+      "evidence": "storage.go:96-100 ext from filename, no size cap; upload.go returns public URL directly; CreateEvent nullifies cover URL on VerifyImage failure (server/event.go:43-49) without deleting the object",
+      "impact_detail": "Authenticated users (the presigned endpoint requires Clerk auth) can upload arbitrarily large objects at any rate within the auth limiter, inflating R2 storage + egress cost (bucket-fill / cost DoS). Abandoned uploads and nullified covers accumulate as orphaned objects. Content-type confusion is mitigated by the signed Content-Type; extension is cosmetic unless R2 is ever configured to serve by extension.",
+      "remediation": [
+        "Reject requests whose declared filename extension is not .jpg/.png/.webp (or generate the key from a fixed allowlist of suffixes).",
+        "Set a practical Content-Length cap (reject presign requests for >N MB) and/or enforce size on VerifyImage (Content-Length from HeadObject).",
+        "Add lifecycle rules (e.g., R2/bucket lifecycle expiry for unlinked objects) or delete the object when a cover is nullified/event deleted."
+      ]
+    },
+    {
+      "id": "ENV-2026-04",
+      "title": "SPA 'next' query parameter accepts protocol-relative URLs, causing an uncaught SecurityError and blank-page crash (and latent origin-spoofing risk)",
+      "severity": "low",
+      "confidence": "high",
+      "category": "Client-side / URL validation",
+      "likelihood": "high",
+      "impact": "Client-side denial of service (blank SPA) for any user clicking a crafted link; latent risk if validation is relaxed",
+      "location": {
+        "file": "client/src/main.tsx",
+        "line": 12,
+        "related": [
+          "client/src/pages/GuestTicket.tsx:129",
+          "client/src/pages/EventDetail.tsx:36",
+          "client/src/pages/MyTickets.tsx:117"
+        ]
+      },
+      "description": "main.tsx reads ?next= and calls window.history.replaceState(null, '', next) when next.startsWith('/'). A value like '//evil.com' passes the check; replaceState throws SecurityError because the resolved URL is cross-origin. The throw happens at module scope with no try/catch, so the SPA never mounts (blank page).",
+      "evidence": "main.tsx:11-14; next='//evil.com' passes startsWith('/'), replaceState with cross-origin URL throws per HTML spec",
+      "impact_detail": "An attacker can craft https://envitoo.mnah.dev/?next=//evil.com (or ?next=/\\evil.com in some browsers); any user clicking it gets a blank page (no redirect, no data loss). Origin-based URL construction (ticketUrl with ?token=, eventUrl) is built from window.location.origin; if this validation were ever relaxed so a cross-origin replaceState succeeded, those URLs (including the guest QR ticket link) would be minted against an attacker domain — a real token-leak vector to avoid enabling.",
+      "remediation": [
+        "Require next to be a same-origin path: next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\\\').",
+        "Wrap the replaceState call in try/catch so a bad value cannot blank the app.",
+        "Validate next against the router's known paths (allowlist /e/, /ticket) instead of arbitrary paths."
+      ]
+    },
+    {
+      "id": "ENV-2026-05",
+      "title": "Idempotency keys are not bound to a user or route; replayed stored responses can contain PII and guest access tokens",
+      "severity": "low",
+      "confidence": "medium",
+      "category": "Design / Session binding",
+      "likelihood": "low",
+      "impact": "A caller presenting a known idempotency key + matching body hash can replay a stored response (up to 5 min) containing PII/access_token",
+      "location": {
+        "file": "backend/internal/middleware/idempotency.go",
+        "line": 111,
+        "related": [
+          "backend/internal/middleware/idempotency.go:44",
+          "backend/internal/server/server.go:121"
+        ]
+      },
+      "description": "The Redis key is 'idem:<client-supplied-key>' with no namespace for user or route; the payload hash covers only the request body. Bodyless endpoints (e.g., approve) share the hash of an empty body across routes. A 'done' entry replays the stored response to any caller presenting the same key + body hash. Registration-create responses include the guest access_token.",
+      "evidence": "idempotency.go:111 redisKey := 'idem:' + key; claimScript compares only payload_hash; finalizeIdempotency stores full response body (RegistrationResponse incl. access_token) for 5 min",
+      "impact_detail": "Requires knowing a victim's client-supplied UUID idempotency key (high entropy) — low likelihood. Replay can disclose attendee PII and guest bearer tokens, or cause incorrect state reads. Cross-route collision is possible when clients reuse keys.",
+      "remediation": [
+        "Scope the Redis key by authenticated user (or a per-request caller binding) and by route: idem:<userID>:<method>:<path>:<key>.",
+        "Avoid persisting sensitive fields (access_token) in the stored response, or truncate the replay TTL.",
+        "Include the path/method in the payload hash input."
+      ]
+    },
+    {
+      "id": "ENV-2026-06",
+      "title": "No security policy (SECURITY.md) and no security headers at the edge or in the SPA",
+      "severity": "info",
+      "confidence": "high",
+      "category": "Hardening / Governance",
+      "likelihood": "n/a",
+      "impact": "No coordinated disclosure path; missing defense-in-depth headers",
+      "location": {
+        "file": "Caddyfile",
+        "line": 1,
+        "related": [
+          "client/index.html",
+          "docker-compose.prod.yml"
+        ]
+      },
+      "description": "No SECURITY.md exists anywhere in the repo, so there is no vulnerability disclosure path. Caddyfile sets no security headers (HSTS, X-Frame-Options, X-Content-Type-Options, CSP) and the SPA index.html has no CSP or Referrer-Policy.",
+      "evidence": "glob SECURITY.md -> none; Caddyfile reverse_proxy only; client/index.html has no CSP meta",
+      "impact_detail": "Vulnerabilities have no documented reporting channel. Missing HSTS/CSP/X-Frame-Options reduce clickjacking and XSS defense-in-depth; the ticket page in particular embeds a bearer token in the URL, so a strict Referrer-Policy (e.g., origin or no-referrer) is recommended.",
+      "remediation": [
+        "Add SECURITY.md with a contact/reporting channel and PGP key if available.",
+        "Add HSTS + X-Frame-Options/CSP headers in Caddyfile (and a CSP on the SPA).",
+        "Set Referrer-Policy: origin on the SPA so /ticket?token= URLs are not leaked in Referer headers."
+      ]
+    },
+    {
+      "id": "ENV-2026-07",
+      "title": "Health endpoint discloses build metadata; CORS is fully open for any origin",
+      "severity": "info",
+      "confidence": "high",
+      "category": "Hardening",
+      "likelihood": "n/a",
+      "impact": "Minor information disclosure / standard SPA CORS posture",
+      "location": {
+        "file": "backend/internal/server/server.go",
+        "line": 186,
+        "related": [
+          "backend/internal/server/server.go:91"
+        ]
+      },
+      "description": "GET /healthz returns go_version, vcs.revision, uptime, and service name (protected only by an optional HEALTHZ_TOKEN). CORS is AllowOrigins ['*'] with AllowCredentials false — acceptable for a bearer-token SPA but worth confirming the API has no cookie-based auth.",
+      "evidence": "server.go:194-207 payload; server.go:91-97 CORSConfig",
+      "impact_detail": "Build/version metadata is minor recon. Wildcard CORS + Authorization header is standard for token-based SPAs but means any origin may call the API with a captured token.",
+      "remediation": [
+        "Set HEALTHZ_TOKEN in production or restrict /healthz to internal networks.",
+        "Optionally narrow CORS AllowOrigins to the known SPA origin(s)."
+      ]
+    },
+    {
+      "id": "ENV-2026-08",
+      "title": "DTO URL validation permits non-http schemes on meeting_url / cover URLs",
+      "severity": "info",
+      "confidence": "medium",
+      "category": "Hardening",
+      "likelihood": "low",
+      "impact": "javascript: URLs accepted at the API boundary but neutralized by React's URL sanitization",
+      "location": {
+        "file": "backend/internal/dto/event.go",
+        "line": 1,
+        "related": [
+          "backend/internal/service/storage.go:117"
+        ]
+      },
+      "description": "Event/volunteer DTOs use a url validation tag which accepts any scheme (e.g., javascript:) via url.ParseRequestURI. React 16.9+ strips javascript: from href, and cover URLs are additionally validated against the configured R2 host via VerifyImage, so impact is limited.",
+      "evidence": "validator url tag accepts javascript:; VerifyImage enforces storage domain for covers",
+      "impact_detail": "An organizer/volunteer-admin can store javascript: or other non-http schemes; rendering is sanitized by React. Low practical impact.",
+      "remediation": [
+        "Add a custom validator that requires scheme http/https for meeting_url and cover URLs."
+      ]
+    }
+  ]
+}

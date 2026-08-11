@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+	"path"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -25,8 +27,13 @@ func (s *Server) GeneratePresignedURL(c echo.Context) error {
 		return validationError(c, err)
 	}
 
+	ext := strings.ToLower(path.Ext(req.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" {
+		return echo.NewHTTPError(http.StatusBadRequest, "unsupported file extension")
+	}
+
 	ctx := c.Request().Context()
-	uploadURL, publicURL, err := s.storage.GeneratePresignedURL(ctx, req.Filename, req.ContentType)
+	uploadURL, publicURL, err := s.storage.GeneratePresignedURL(ctx, req.Filename, req.ContentType, req.Size)
 	if err != nil {
 		middleware.LoggerFromContext(ctx).ErrorContext(ctx, "generate presigned URL", "error", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to generate upload URL")

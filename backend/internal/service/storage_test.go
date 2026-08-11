@@ -172,7 +172,7 @@ func TestVerifyImage_Unconfigured(t *testing.T) {
 
 func TestGeneratePresignedURL_KeyFormat(t *testing.T) {
 	storage := newTestStorage(&fakeHeadObject{})
-	uploadURL, publicURL, err := storage.GeneratePresignedURL(context.Background(), "my photo.png", "image/png")
+	uploadURL, publicURL, err := storage.GeneratePresignedURL(context.Background(), "my photo.png", "image/png", 1024)
 	if err != nil {
 		t.Fatalf("GeneratePresignedURL: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestGeneratePresignedURL_KeyFormat(t *testing.T) {
 
 func TestGeneratePresignedURL_DefaultExtension(t *testing.T) {
 	storage := newTestStorage(&fakeHeadObject{})
-	_, publicURL, err := storage.GeneratePresignedURL(context.Background(), "noext", "image/webp")
+	_, publicURL, err := storage.GeneratePresignedURL(context.Background(), "noext", "image/webp", 1024)
 	if err != nil {
 		t.Fatalf("GeneratePresignedURL: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestGeneratePresignedURL_DefaultExtension(t *testing.T) {
 
 func TestGeneratePresignedURL_Unconfigured(t *testing.T) {
 	var storage *StorageService
-	if _, _, err := storage.GeneratePresignedURL(context.Background(), "a.jpg", "image/jpeg"); err == nil {
+	if _, _, err := storage.GeneratePresignedURL(context.Background(), "a.jpg", "image/jpeg", 1024); err == nil {
 		t.Fatal("expected error on nil storage, got nil")
 	}
 }
@@ -213,7 +213,7 @@ func TestGeneratePresignedURL_KeyIsPathScoped(t *testing.T) {
 	// The object key must live under event-covers/ so the bucket root
 	// stays predictable and public URLs are namespaced.
 	storage := newTestStorage(&fakeHeadObject{})
-	_, publicURL, err := storage.GeneratePresignedURL(context.Background(), "x.png", "image/png")
+	_, publicURL, err := storage.GeneratePresignedURL(context.Background(), "x.png", "image/png", 1024)
 	if err != nil {
 		t.Fatalf("GeneratePresignedURL: %v", err)
 	}

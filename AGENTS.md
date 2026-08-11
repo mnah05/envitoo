@@ -4,6 +4,8 @@
 
 EnviToo is an event management platform with a **Go API** (`backend/`, port 8080) and **React/Vite SPA** (`client/`, port 5173). See the root `Makefile` for standard commands.
 
+> **Full reference`: `docs/TECHNICAL_SPEC.md` — complete API route table, DB schema, business flows, and gap list. AGENTS.md is the quick-reference; the spec is the deep dive.
+
 ### System dependencies (one-time on a fresh VM)
 
 These are **not** in the startup update script:
@@ -172,6 +174,30 @@ Redis cache keys follow `METHOD:path` patterns (e.g. `GET:/api/events/123`). All
 
 The cache is **nil-safe**: passing a nil `*cache.Store` bypasses caching entirely without panicking.
 
+### API surface (summary — full table in `docs/TECHNICAL_SPEC.md` §2.1)
+
+- **Public** (`/api`, public rate limiter 10 rps/20 burst): `GET /events[/:id|/slug/:slug]`, `GET /events`, `GET/DELETE /guest-registrations`, `GET /events/:id/volunteer/settings|roles`, social prerender `GET /e/:slug`
+- **Guest OTP** (OTP rate limiter 5 req/min): `POST /api/events/:id/register/guest/otp`, `.../otp/verify`
+- **Protected** (Clerk JWT → `LoadUser` → 30 rps): `/api/me`, host event CRUD (`POST /events`, `GET /me/events`, `PATCH|DELETE /events/:id`), uploads (`POST /upload/presigned-url` — direct-to-R2), registrations (create/cancel/list/approve/reject/status/check-in), volunteers (apply list, settings/roles/applications/roster admin), `GET /registrations/:id/admin`
+- **Idempotency-Key** (UUID header, Redis Lua, 60s in-progress / 5m replay cache, `Idempotent-Replayed: true` on replay) is enabled on: guest otp+register, event create, authenticated register, approve, volunteer apply.
+
+### Guest registration flow (OTP)
+
+1. `POST .../otp` → 6-digit code HMAC-hashed with `OTP_SECRET`, Redis TTL 10m, 60s cooldown per (event, email); email via outbox (best-effort; endpoint 503s if `OTP_SECRET` unset)
+2. `POST .../otp/verify` → max 5 tries, sets `guest:verified:{event_id}:{email}` marker (15m)
+3. `POST .../register/guest` → consumes marker (one-time), creates registration (`pending` if `requires_approval` else `approved`), issues `access_token` UUID (returned once, 30d TTL), outbox ticket email
+
+### Volunteer programme
+
+`volunteer_settings` (per-event `enabled/description/max_applications`) → `volunteer_roles` (`is_admin` flag) → authenticated `apply` (duplicate-guarded) → organizer approve (inserts roster `volunteers` row, `ON CONFLICT DO NOTHING`) / reject. Approve/reject roles: an admin role is only assignable by the organizer (`ErrVolunteerAdminRoleRestricted`). Partial unique index allows re-apply after cancel/reject.
+
+### Known gaps (tables exist, no code) — see spec §7
+
+- **Payments**: `payments` table + `price_in_paise`/`currency` on events exist; no checkout/processing code at all
+- **Kanban**: `kanban_columns`/`kanban_tasks`/`kanban_task_status_log` migrations exist; zero API routes or UI
+- **Calendars**: `calendars` table + slug exist, no public calendar pages or endpoints
+- **No global admin role, no event scheduler** (statuses only change via explicit cancel)
+
 ### Testing with a local database
 
 Auth middleware tests require a real Postgres. Set `TEST_DB_URL` in `backend/.env`:
@@ -195,6 +221,23 @@ Auth-specific tests: `go test -run TestLoadUser ./internal/middleware/`.
 - Put Go 1.26+ on `PATH` before running backend commands: `export PATH="/usr/local/go/bin:$PATH"`.
 - Vite proxies `/api` and `/healthz` to `localhost:8080` in dev; leave `VITE_API_BASE_URL` empty in `client/.env`.
 - Without real Clerk keys, the UI shell renders but discover/event pages stay empty because Clerk fails to initialize.
+
+### Security implementation notes
+
+*From scan `scan-20260811-e7ee0ca` — see `docs/security/` for full report and remediation.*
+
+**Rate limiter XFF trust** (`server.go:81`): `e.IPExtractor = echo.ExtractIPFromXFFHeader()` trusts all upstream proxies. The backend is only reachable from the frontend container on the Docker internal network; Caddy handles edge filtering. Each real client IP gets its own rate-limit bucket.
+
+**Access token serialization** (`dto/registration.go:113`): `AccessToken` is `*uuid.UUID` with `json:"omitempty"`. The constructor (`NewRegistrationResponse`) never sets it — it stays nil and is omitted from JSON in list/get/admin responses by `omitempty`. Only the two create handlers (`CreateGuestRegistration`, `CreateRegistration`) populate `resp.AccessToken = &token` on the create response. Never expose access tokens in cached or listed payloads.
+
+**Upload limits** (`storage.go`, `upload.go`):
+- Extension allowlist: only `.jpg`, `.jpeg`, `.png`, `.webp` are accepted before presigning.
+- `Content-Length` in presigned URL: R2 enforces the size cap at the S3 layer. `maxUploadSize = 5 MB` matches the DTO validator.
+- `VerifyImage` also checks `Content-Length` via HeadObject for post-upload validation.
+
+**Next param validation** (`client/src/main.tsx`): Blocks `//` (protocol-relative) and `/\` (UNC path) prefixes. `replaceState` is wrapped in try/catch so bad values can never blank the SPA. Protects against latent origin-spoofing risk that would feed cross-origin domains into `window.location.origin`-based ticket URL builders — guest bearer tokens would leak.
+
+**Idempotency key scoping** (`middleware/idempotency.go`): Redis key format is `idem:<METHOD>:<PATH>:<USER_ID>:<CLIENT_KEY>`. User ID is empty for public/guest routes. Cross-route collision is impossible; cross-user replay requires knowing both the victim's key and their user ID.
 
 ### Working without Clerk keys (limited mode)
 

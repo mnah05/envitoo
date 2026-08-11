@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// headObjectAPI is the subset of the AWS S3 client used by VerifyImage.
+const maxUploadSize = 5 * 1024 * 1024 // 5 MB
 // Keeping it as an interface lets tests inject a fake without hitting R2.
 type headObjectAPI interface {
 	HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
@@ -88,9 +88,13 @@ func NewStorageService(cfg StorageConfig, log *slog.Logger) (*StorageService, er
 // GeneratePresignedURL creates a short-lived presigned PUT URL for direct
 // upload to R2. The generated object key is a UUID with the original file
 // extension appended, preventing collisions without exposing user filenames.
-func (s *StorageService) GeneratePresignedURL(ctx context.Context, filename, contentType string) (uploadURL, publicURL string, err error) {
+func (s *StorageService) GeneratePresignedURL(ctx context.Context, filename, contentType string, size int64) (uploadURL, publicURL string, err error) {
 	if s == nil {
 		return "", "", fmt.Errorf("storage service not configured")
+	}
+
+	if size > maxUploadSize {
+		return "", "", fmt.Errorf("file size %d exceeds maximum %d", size, maxUploadSize)
 	}
 
 	ext := path.Ext(filename)
@@ -100,9 +104,10 @@ func (s *StorageService) GeneratePresignedURL(ctx context.Context, filename, con
 	key := "event-covers/" + uuid.New().String() + ext
 
 	req, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(s.bucket),
-		Key:         aws.String(key),
-		ContentType: aws.String(contentType),
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(key),
+		ContentType:   aws.String(contentType),
+		ContentLength: aws.Int64(size),
 	}, s3.WithPresignExpires(5*time.Minute))
 	if err != nil {
 		return "", "", fmt.Errorf("presign put object: %w", err)
@@ -138,6 +143,10 @@ func (s *StorageService) VerifyImage(ctx context.Context, publicURLStr string) e
 	}
 	if !isAllowedImageType(contentType) {
 		return fmt.Errorf("unexpected content type: %s", contentType)
+	}
+
+	if out.ContentLength != nil && *out.ContentLength > maxUploadSize {
+		return fmt.Errorf("image size %d exceeds maximum %d", *out.ContentLength, maxUploadSize)
 	}
 
 	return nil
