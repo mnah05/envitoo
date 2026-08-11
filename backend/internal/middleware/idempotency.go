@@ -108,7 +108,7 @@ func Idempotency(rdb *redis.Client) echo.MiddlewareFunc {
 			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 			payloadHash := hashSHA256(bodyBytes)
-			redisKey := "idem:" + key
+			redisKey := "idem:" + req.Method + ":" + c.Path() + ":" + idemScope(c) + ":" + key
 
 			out, err := claimScript.Run(
 				req.Context(),
@@ -184,4 +184,11 @@ func finalizeIdempotency(ctx context.Context, rdb *redis.Client, redisKey, paylo
 func hashSHA256(body []byte) string {
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])
+}
+
+func idemScope(c echo.Context) string {
+	if u, ok := UserFromContext(c); ok {
+		return u.ID.String()
+	}
+	return ""
 }

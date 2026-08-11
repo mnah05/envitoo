@@ -9,8 +9,17 @@ import { App } from "./App";
 // /e/:slug to /?next=/e/:slug, put the original path back before the router
 // mounts so bookmarks and share links land on the event page.
 const next = new URLSearchParams(window.location.search).get("next");
-if (next && next.startsWith("/")) {
-  window.history.replaceState(null, "", next);
+if (
+  next &&
+  next.startsWith("/") &&
+  !next.startsWith("//") &&
+  !next.startsWith("/\\")
+) {
+  try {
+    window.history.replaceState(null, "", next);
+  } catch {
+    // Malformed/cross-origin next value — silently ignored.
+  }
 }
 
 createRoot(document.getElementById("root")!).render(

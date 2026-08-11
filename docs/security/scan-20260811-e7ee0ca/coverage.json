@@ -1,0 +1,100 @@
+{
+  "scan_id": "scan-20260811-e7ee0ca",
+  "mode": "repository",
+  "inventory_strategy": "repository",
+  "inventory": {
+    "root": "/Users/mnah/code-space/envito",
+    "head_commit": "e7ee0ca",
+    "areas": {
+      "authn": {
+        "status": "reviewed",
+        "files": [
+          "backend/internal/middleware/auth.go",
+          "backend/internal/middleware/clerk.go",
+          "backend/internal/user/provision.go",
+          "backend/internal/service/guest_otp.go"
+        ],
+        "notes": "Clerk JWT + local JWKS pre-warm; provisioning race-safe (ON CONFLICT DO NOTHING); OTP uses crypto/rand, HMAC-SHA256 stored (no plaintext), constant-time compare, 5-try limit, single-use verified marker, per-(event,email) cooldown."
+      },
+      "authz": {
+        "status": "reviewed",
+        "files": [
+          "backend/internal/service/event_access.go",
+          "backend/internal/service/registration.go",
+          "backend/internal/service/event.go",
+          "backend/internal/service/volunteer.go"
+        ],
+        "notes": "Organizer/volunteer-admin resolved before serving cached staff payloads; user-scoped queries (WHERE user_id); organizer-only UpdateStatus; volunteer admin-role restricted to organizer. No authz bypasses found."
+      },
+      "rate_limiting": {
+        "status": "reviewed",
+        "files": [
+          "backend/internal/middleware/ratelimit.go",
+          "backend/internal/server/server.go"
+        ],
+        "notes": "FINDING ENV-2026-01: XFF trusted only from loopback -> global-bucket collapse behind prod proxy chain."
+      },
+      "idempotency": {
+        "status": "reviewed",
+        "files": ["backend/internal/middleware/idempotency.go"],
+        "notes": "FINDING ENV-2026-05: key not bound to user/route; body-hash only; response replay includes PII/access_token for 5 min."
+      },
+      "object_storage": {
+        "status": "reviewed",
+        "files": [
+          "backend/internal/server/upload.go",
+          "backend/internal/service/storage.go",
+          "backend/internal/dto/upload.go",
+          "backend/internal/server/event.go"
+        ],
+        "notes": "FINDING ENV-2026-03: unbounded upload size, user-controlled suffix, orphaned objects; content-type enforced via signed presign (mitigated). VerifyImage on cover save nullifies on failure."
+      },
+      "email_pipeline": {
+        "status": "reviewed",
+        "files": [
+          "backend/internal/email/render.go",
+          "backend/internal/email/sender.go",
+          "backend/internal/email/batcher.go",
+          "backend/internal/email/nats.go",
+          "backend/internal/email/outbox.go",
+          "backend/cmd/worker/main.go",
+          "backend/cmd/mailer/main.go",
+          "backend/internal/service/email_outbox.go"
+        ],
+        "notes": "html/template auto-escaping; Resend JSON API (no SMTP header injection); transactional outbox; JetStream MsgID idempotency; Ack/Nak/Term poison handling. Recipients come from verified DB rows only."
+      },
+      "client": {
+        "status": "reviewed",
+        "files": [
+          "client/src/main.tsx",
+          "client/src/pages/GuestTicket.tsx",
+          "client/src/pages/EventDetail.tsx",
+          "client/src/pages/MyTickets.tsx",
+          "client/src/components/domain/TicketPDF.tsx"
+        ],
+        "notes": "FINDING ENV-2026-04: next param validation crash. No dangerouslySetInnerHTML/eval/DOMParser sinks. Guest token kept in URL only (no localStorage)."
+      },
+      "infra": {
+        "status": "reviewed",
+        "files": [
+          "docker-compose.yml",
+          "docker-compose.prod.yml",
+          "Caddyfile",
+          "Dockerfile",
+          "Makefile",
+          ".github/workflows/ci.yml",
+          ".github/workflows/deploy.yml",
+          ".gitignore",
+          "backend/.env.example"
+        ],
+        "notes": "No committed secrets (.env gitignored, .env.local untracked; CI runs gitleaks). Dev-only creds in compose. FINDING ENV-2026-06: no SECURITY.md, no security headers. FINDING ENV-2026-07: health metadata + wildcard CORS."
+      },
+      "database": {
+        "status": "partial",
+        "files": ["backend/sql/"],
+        "notes": "sqlc generated, parameterized queries only (no string-concat SQL found). Capacity guarded via SELECT ... FOR UPDATE. Migration schema not deeply reviewed for data-at-rest (defer to DBA review)."
+      }
+    }
+  },
+  "coverage_notes": "Coverage is best-effort parent-side (degraded mode). Areas marked reviewed were read directly. Independent investigator separation was not achieved because delegation was unavailable (repeated cancellations/empty results). sqlc-generated DB files excluded."
+}

@@ -78,7 +78,7 @@ func New(pool *pgxpool.Pool, queries *db.Queries, c *cache.Store, otpSecret, hea
 // and protected (Clerk JWT + local user provisioning).
 // ctx is used to stop rate-limiter cleanup goroutines on shutdown.
 func (s *Server) Register(ctx context.Context, e *echo.Echo) {
-	e.IPExtractor = echo.ExtractIPFromXFFHeader(echo.TrustLoopback(true))
+	e.IPExtractor = echo.ExtractIPFromXFFHeader() // trusts all upstream proxies (production: Caddy → frontend → here)
 	e.Use(echoMiddleware.Recover())
 	e.Use(echoMiddleware.RequestID())
 	e.Use(middleware.RequestLogger(s.log))

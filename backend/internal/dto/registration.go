@@ -110,7 +110,7 @@ type RegistrationResponse struct {
 	Name           string     `json:"name"`
 	Email          string     `json:"email"`
 	Status         string     `json:"status"`
-	AccessToken    uuid.UUID  `json:"access_token,omitempty"`
+	AccessToken    *uuid.UUID `json:"access_token,omitempty"`
 	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
 	CheckedInAt    *time.Time `json:"checked_in_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -137,14 +137,13 @@ type RegistrationListResponse struct {
 // matching the same pattern used in NewEventResponse.
 func NewRegistrationResponse(r db.Registration) RegistrationResponse {
 	resp := RegistrationResponse{
-		ID:          r.ID,
-		EventID:     r.EventID,
-		Name:        r.Name,
-		Email:       r.Email,
-		Status:      r.Status,
-		AccessToken: r.AccessToken,
-		CreatedAt:   r.CreatedAt,
-		UpdatedAt:   r.UpdatedAt,
+		ID:        r.ID,
+		EventID:   r.EventID,
+		Name:      r.Name,
+		Email:     r.Email,
+		Status:    r.Status,
+		CreatedAt: r.CreatedAt,
+		UpdatedAt: r.UpdatedAt,
 	}
 
 	if r.UserID.Valid {

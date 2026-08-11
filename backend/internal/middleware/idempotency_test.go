@@ -144,7 +144,7 @@ func TestIdempotency_ConcurrentRequest_ReturnsConflict(t *testing.T) {
 	payloadHash := hashSHA256([]byte(body))
 
 	// Simulate in_progress by injecting directly into Redis
-	key := "idem:conc-key"
+	key := "idem:POST:/test::conc-key"
 	doc := `{"status":"in_progress","payload_hash":"` + payloadHash + `"}`
 	if err := rdb.Set(context.Background(), key, doc, 0).Err(); err != nil {
 		t.Fatalf("redis set failed: %v", err)

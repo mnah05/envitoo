@@ -133,7 +133,10 @@ func (s *Server) CreateGuestRegistration(c echo.Context) error {
 	}
 	s.forgetRegistration(ctx, reg)
 
-	return c.JSON(http.StatusCreated, dto.NewRegistrationResponse(reg))
+	resp := dto.NewRegistrationResponse(reg)
+	token := reg.AccessToken
+	resp.AccessToken = &token
+	return c.JSON(http.StatusCreated, resp)
 }
 
 // GetGuestRegistration handles GET /api/guest-registrations?token=.
@@ -243,7 +246,10 @@ func (s *Server) CreateRegistration(c echo.Context) error {
 	}
 	s.forgetRegistration(ctx, reg)
 
-	return c.JSON(http.StatusCreated, dto.NewRegistrationResponse(reg))
+	resp := dto.NewRegistrationResponse(reg)
+	token := reg.AccessToken
+	resp.AccessToken = &token
+	return c.JSON(http.StatusCreated, resp)
 }
 
 // GetRegistration handles GET /api/registrations/:id. Scoped to the
