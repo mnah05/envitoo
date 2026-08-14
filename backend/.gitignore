@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Supabase CLI transient state
+supabase/.temp/
+
 # Go build artifacts
 /bin/
 /server

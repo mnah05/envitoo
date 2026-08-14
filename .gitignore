@@ -35,5 +35,9 @@ backend/bin/
 # Supabase CLI transient state
 supabase/.temp/
 
+# Agent tooling artifacts (downloaded skill blobs and their lockfiles)
+.agents/
+skills-lock.json
+
 # Command Code local tool config
 .commandcode/
