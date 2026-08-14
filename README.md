@@ -40,7 +40,7 @@ DB/REDIS/NATS URL overrides point at the compose services.
 Production `DB_URL` values must enable TLS:
 
 ```
-postgresql://db.example.com:5432/envitoo?sslmode=require
+postgresql://<user>:<password>@db.example.com:5432/envitoo?sslmode=require
 ```
 
 `sslmode=verify-full` is preferred when the CA chain is trusted. When
