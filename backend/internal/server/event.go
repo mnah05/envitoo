@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -229,8 +232,28 @@ func (s *Server) UpdateEvent(c echo.Context) error {
 	}
 
 	var req dto.UpdateEventRequest
+
+	// Detect an explicit `"cover_image_url": null` at the raw JSON level.
+	// encoding/json collapses JSON null into a nil **string, making it
+	// indistinguishable from an absent field, so presence must be checked
+	// before binding. The synthesized marker below lets the service clear
+	// the stored cover URL.
+	coverCleared := false
+	if body, err := io.ReadAll(c.Request().Body); err == nil {
+		var raw struct {
+			CoverImageURL json.RawMessage `json:"cover_image_url"`
+		}
+		if err := json.Unmarshal(body, &raw); err == nil && len(raw.CoverImageURL) > 0 && string(raw.CoverImageURL) == "null" {
+			coverCleared = true
+		}
+		c.Request().Body = io.NopCloser(bytes.NewReader(body))
+	}
+
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if coverCleared {
+		req.CoverImageURL = new(*string)
 	}
 	if err := s.validate.Struct(req); err != nil {
 		return validationError(c, err)

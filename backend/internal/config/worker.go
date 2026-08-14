@@ -16,15 +16,23 @@ import (
 // as a notification channel. This config controls how aggressively the worker
 // polls, retries, and cleans up old records.
 type WorkerConfig struct {
-	DatabaseURL      string
-	NATSURL          string
-	BatchSize        int
-	PollInterval     time.Duration
-	AckWaitLimit     time.Duration
-	MaxRetries       int
-	CleanupInterval  time.Duration
-	RetentionPeriod  time.Duration
-	CleanupBatchSize int
+	DatabaseURL          string
+	NATSURL              string
+	BatchSize            int
+	PollInterval         time.Duration
+	AckWaitLimit         time.Duration
+	MaxRetries           int
+	CleanupInterval      time.Duration
+	RetentionPeriod      time.Duration
+	CleanupBatchSize     int
+	DBMaxConns           int32
+	DBMinConns           int32
+	DBMaxConnLifetime    time.Duration
+	DBMaxConnIdleTime    time.Duration
+	DBHealthCheckPeriod  time.Duration
+	DisablePreparedStmts bool
+	DBRequireTLS         bool
+	AppEnv               string
 }
 
 // LoadWorker reads environment variables for the outbox drainer worker.
@@ -41,7 +49,7 @@ func LoadWorker() (WorkerConfig, error) {
 	k := koanf.New(".")
 
 	err := k.Load(env.Provider("", ".", func(key string) string {
-		if strings.HasPrefix(key, "WORKER_") || key == "DB_URL" || key == "NATS_URL" {
+		if strings.HasPrefix(key, "WORKER_") || strings.HasPrefix(key, "DB_") || key == "NATS_URL" || key == "APP_ENV" {
 			return key
 		}
 		return ""
@@ -61,15 +69,23 @@ func LoadWorker() (WorkerConfig, error) {
 	}
 
 	return WorkerConfig{
-		DatabaseURL:      dbURL,
-		NATSURL:          natsURL,
-		BatchSize:        intOr(k, "WORKER_BATCH_SIZE", 50),
-		PollInterval:     durationOr(k, "WORKER_POLL_INTERVAL", 2*time.Second),
-		AckWaitLimit:     durationOr(k, "WORKER_ACK_WAIT", 30*time.Second),
-		MaxRetries:       intOr(k, "WORKER_MAX_RETRIES", 5),
-		CleanupInterval:  durationOr(k, "WORKER_CLEANUP_INTERVAL", time.Hour),
-		RetentionPeriod:  durationOr(k, "WORKER_RETENTION_PERIOD", 14*24*time.Hour),
-		CleanupBatchSize: intOr(k, "WORKER_CLEANUP_BATCH_SIZE", 1000),
+		DatabaseURL:          dbURL,
+		NATSURL:              natsURL,
+		BatchSize:            intOr(k, "WORKER_BATCH_SIZE", 50),
+		PollInterval:         durationOr(k, "WORKER_POLL_INTERVAL", 2*time.Second),
+		AckWaitLimit:         durationOr(k, "WORKER_ACK_WAIT", 30*time.Second),
+		MaxRetries:           intOr(k, "WORKER_MAX_RETRIES", 5),
+		CleanupInterval:      durationOr(k, "WORKER_CLEANUP_INTERVAL", time.Hour),
+		RetentionPeriod:      durationOr(k, "WORKER_RETENTION_PERIOD", 14*24*time.Hour),
+		CleanupBatchSize:     intOr(k, "WORKER_CLEANUP_BATCH_SIZE", 1000),
+		DBMaxConns:           int32OrDefault(k, "DB_MAX_CONNS", 20),
+		DBMinConns:           int32OrDefault(k, "DB_MIN_CONNS", 2),
+		DBMaxConnLifetime:    durationOr(k, "DB_MAX_CONN_LIFETIME", time.Hour),
+		DBMaxConnIdleTime:    durationOr(k, "DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
+		DBHealthCheckPeriod:  durationOr(k, "DB_HEALTH_CHECK_PERIOD", time.Minute),
+		DisablePreparedStmts: k.Bool("DB_DISABLE_PREPARED_STATEMENTS"),
+		DBRequireTLS:         k.Bool("DB_REQUIRE_TLS") || isProduction(k.String("APP_ENV")),
+		AppEnv:               k.String("APP_ENV"),
 	}, nil
 }
 
@@ -87,4 +103,12 @@ func intOr(k *koanf.Koanf, key string, def int) int {
 		return def
 	}
 	return k.Int(key)
+}
+
+// int32OrDefault returns the env var value if set, otherwise the provided default.
+func int32OrDefault(k *koanf.Koanf, key string, def int32) int32 {
+	if !k.Exists(key) {
+		return def
+	}
+	return int32(k.Int64(key))
 }

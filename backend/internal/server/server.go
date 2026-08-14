@@ -217,6 +217,18 @@ func (s *Server) Health(c echo.Context) error {
 			return c.JSON(http.StatusServiceUnavailable, payload)
 		}
 		payload["db"] = "ok"
+
+		if stat := s.pool.Stat(); stat != nil {
+			payload["db_pool"] = map[string]any{
+				"total_conns":   stat.TotalConns(),
+				"idle_conns":    stat.IdleConns(),
+				"in_use_conns":  stat.AcquiredConns(),
+				"wait_count":    stat.EmptyAcquireCount(),
+				"wait_ns":       stat.EmptyAcquireWaitTime(),
+				"acquire_count": stat.AcquireCount(),
+				"max_conns":     stat.MaxConns(),
+			}
+		}
 	}
 
 	// Redis is optional by design (cache-aside falls back to the DB), so

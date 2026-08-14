@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/mnah05/envitoo/internal/config"
+	"github.com/mnah05/envitoo/internal/database"
 	"github.com/mnah05/envitoo/internal/email"
 	"github.com/mnah05/envitoo/internal/logging"
 )
@@ -39,17 +39,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	db, err := database.Open(ctx, cfg.DatabaseURL, database.PoolConfig{
+		MaxConns:             cfg.DBMaxConns,
+		MinConns:             cfg.DBMinConns,
+		MaxConnLifetime:      cfg.DBMaxConnLifetime,
+		MaxConnIdleTime:      cfg.DBMaxConnIdleTime,
+		HealthCheckPeriod:    cfg.DBHealthCheckPeriod,
+		ApplicationName:      "envitoo-worker",
+		DisablePreparedStmts: cfg.DisablePreparedStmts,
+		RequireTLS:           cfg.DBRequireTLS,
+	})
 	if err != nil {
 		log.Error("connect database", "error", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	defer db.Close()
 
-	if err := pool.Ping(ctx); err != nil {
-		log.Error("ping database", "error", err)
-		os.Exit(1)
-	}
+	pool := db.Pool()
 
 	nc, err := nats.Connect(cfg.NATSURL,
 		nats.MaxReconnects(-1),

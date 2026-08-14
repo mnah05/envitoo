@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -13,7 +14,12 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/mnah05/envitoo/internal/db"
+	"github.com/mnah05/envitoo/internal/helper"
 )
+
+// countPendingOutboxEmails is a lightweight, non-locking count used to decide
+// whether there is any work to do before starting a transaction.
+const countPendingOutboxEmails = `SELECT COUNT(*) FROM email_outbox WHERE status = 'PENDING' AND retries < $1`
 
 // OutboxConfig holds the tunables for the outbox drainer.
 type OutboxConfig struct {
@@ -76,11 +82,22 @@ func resolvePubAck(ctx context.Context, ok <-chan *jetstream.PubAck, errCh <-cha
 // All DB writes run in a single transaction so partial failures do not
 // lose rows or double-publish.
 func (d *Drainer) PublishBatch(ctx context.Context) error {
+	// Check for pending rows before acquiring a transaction. This avoids
+	// opening and immediately rolling back a transaction on every poll when
+	// the outbox is empty, which is the common case.
+	var pendingCount int
+	if err := d.pool.QueryRow(ctx, countPendingOutboxEmails, int32(d.cfg.MaxRetries)).Scan(&pendingCount); err != nil {
+		return fmt.Errorf("count pending outbox emails: %w", err)
+	}
+	if pendingCount == 0 {
+		return nil
+	}
+
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) // no-op once committed
+	defer helper.RollbackTx(ctx, tx, d.log) // no-op once committed
 
 	queries := db.New(tx)
 

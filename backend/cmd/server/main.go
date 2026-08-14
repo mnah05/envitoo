@@ -53,7 +53,16 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	database, err := database.Open(ctx, cfg)
+	database, err := database.Open(ctx, cfg.DatabaseURL, database.PoolConfig{
+		MaxConns:             cfg.DBMaxConns,
+		MinConns:             cfg.DBMinConns,
+		MaxConnLifetime:      cfg.DBMaxConnLifetime,
+		MaxConnIdleTime:      cfg.DBMaxConnIdleTime,
+		HealthCheckPeriod:    cfg.DBHealthCheckPeriod,
+		ApplicationName:      "envitoo-api",
+		DisablePreparedStmts: cfg.DisablePreparedStmts,
+		RequireTLS:           cfg.DBRequireTLS,
+	})
 	if err != nil {
 		log.Error("failed to open database", "error", err)
 		os.Exit(1)

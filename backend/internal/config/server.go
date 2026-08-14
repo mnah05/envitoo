@@ -23,6 +23,8 @@ type Config struct {
 	DBMaxConnIdleTime    time.Duration
 	DBHealthCheckPeriod  time.Duration
 	DisablePreparedStmts bool
+	DBRequireTLS         bool
+	AppEnv               string
 	ClerkSecretKey       string
 	RedisURL             string
 	// OTPSecret is the HMAC key for guest email OTP. Optional at process
@@ -52,7 +54,7 @@ func Load() (Config, error) {
 	k := koanf.New(".")
 
 	err := k.Load(env.Provider("", ".", func(key string) string {
-		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") || strings.HasPrefix(key, "R2_") || key == "REDIS_URL" || key == "OTP_SECRET" || key == "HEALTHZ_TOKEN" {
+		if strings.HasPrefix(key, "DB_") || strings.HasPrefix(key, "CLERK_") || strings.HasPrefix(key, "R2_") || key == "REDIS_URL" || key == "OTP_SECRET" || key == "HEALTHZ_TOKEN" || key == "APP_ENV" {
 			return key
 		}
 		return ""
@@ -75,12 +77,14 @@ func Load() (Config, error) {
 
 	return Config{
 		DatabaseURL:          dbURL,
-		DBMaxConns:           int32Or(k, "DB_MAX_CONNS", 40),
+		DBMaxConns:           int32Or(k, "DB_MAX_CONNS", 20),
 		DBMinConns:           int32Or(k, "DB_MIN_CONNS", 2),
 		DBMaxConnLifetime:    durationOr(k, "DB_MAX_CONN_LIFETIME", time.Hour),
 		DBMaxConnIdleTime:    durationOr(k, "DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
 		DBHealthCheckPeriod:  durationOr(k, "DB_HEALTH_CHECK_PERIOD", time.Minute),
 		DisablePreparedStmts: k.Bool("DB_DISABLE_PREPARED_STATEMENTS"),
+		DBRequireTLS:         k.Bool("DB_REQUIRE_TLS") || isProduction(k.String("APP_ENV")),
+		AppEnv:               k.String("APP_ENV"),
 		ClerkSecretKey:       clerkSecretKey,
 		RedisURL:             k.String("REDIS_URL"),
 		OTPSecret:            k.String("OTP_SECRET"),
@@ -91,6 +95,12 @@ func Load() (Config, error) {
 		R2BucketName:         k.String("R2_BUCKET_NAME"),
 		R2PublicURL:          k.String("R2_PUBLIC_URL"),
 	}, nil
+}
+
+// isProduction returns true when the environment name indicates a production
+// deployment. It is used to opt-in to stricter defaults such as requiring TLS.
+func isProduction(env string) bool {
+	return strings.ToLower(env) == "production" || strings.ToLower(env) == "prod"
 }
 
 // int32Or is a helper that returns the env var value if set, or a default

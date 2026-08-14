@@ -120,7 +120,7 @@ func (s *RegistrationService) RequestGuestOTP(ctx context.Context, eventID uuid.
 		_ = s.cache.DeleteKeys(ctx, otpKey, attemptsKey, cooldownKey)
 		return dto.RequestGuestOTPResponse{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 	if err := enqueueEmail(ctx, qtx, recipient, email.OTPData{

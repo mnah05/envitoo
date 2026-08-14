@@ -100,7 +100,7 @@ func (s *RegistrationService) CreateGuest(ctx context.Context, eventID uuid.UUID
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -183,7 +183,7 @@ func (s *RegistrationService) CancelGuest(ctx context.Context, token uuid.UUID) 
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -240,7 +240,7 @@ func (s *RegistrationService) Create(ctx context.Context, user *db.User, eventID
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -457,7 +457,7 @@ func (s *RegistrationService) Cancel(ctx context.Context, registrationID uuid.UU
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -642,7 +642,7 @@ func (s *RegistrationService) Approve(ctx context.Context, registrationID uuid.U
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -746,7 +746,7 @@ func (s *RegistrationService) Reject(ctx context.Context, registrationID uuid.UU
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -839,7 +839,7 @@ func (s *RegistrationService) UpdateStatus(ctx context.Context, registrationID u
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -953,7 +953,7 @@ func (s *RegistrationService) CheckIn(ctx context.Context, registrationID uuid.U
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -1088,7 +1088,7 @@ func (s *RegistrationService) CheckInByEventToken(ctx context.Context, eventID, 
 	if err != nil {
 		return db.Registration{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 

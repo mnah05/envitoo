@@ -151,11 +151,11 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 		qtx := s.queries.WithTx(tx)
 		created, err = qtx.CreateEvent(ctx, event)
 		if err == pgx.ErrNoRows {
-			_ = tx.Rollback(ctx)
+			helper.RollbackTx(ctx, tx, s.log)
 			continue
 		}
 		if err != nil {
-			_ = tx.Rollback(ctx)
+			helper.RollbackTx(ctx, tx, s.log)
 			if helper.IsForeignKeyViolation(err) {
 				// Most likely invalid calendar_id (organizer_id is from auth).
 				return db.Event{}, fmt.Errorf("%w: invalid calendar_id", ErrInvalidEvent)
@@ -167,7 +167,7 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, req dt
 			EventID:    created.ID,
 			Visibility: visibility,
 		}); err != nil {
-			_ = tx.Rollback(ctx)
+			helper.RollbackTx(ctx, tx, s.log)
 			return db.Event{}, fmt.Errorf("create event visibility: %w", err)
 		}
 
@@ -531,7 +531,7 @@ func (s *EventService) Update(ctx context.Context, id uuid.UUID, actorID uuid.UU
 	if err != nil {
 		return db.Event{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -792,7 +792,7 @@ func (s *EventService) Cancel(ctx context.Context, id uuid.UUID, organizerID uui
 	if err != nil {
 		return db.Event{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 

@@ -268,7 +268,7 @@ func (s *VolunteerService) Apply(ctx context.Context, user *db.User, eventID uui
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -455,7 +455,7 @@ func (s *VolunteerService) Cancel(ctx context.Context, appID, userID uuid.UUID) 
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -645,7 +645,7 @@ func (s *VolunteerService) Approve(ctx context.Context, appID, actorID uuid.UUID
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
@@ -722,7 +722,7 @@ func (s *VolunteerService) Reject(ctx context.Context, appID, actorID uuid.UUID)
 	if err != nil {
 		return dto.VolunteerApplicationResponse{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer helper.RollbackTx(ctx, tx, s.log)
 
 	qtx := s.queries.WithTx(tx)
 
