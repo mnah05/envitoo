@@ -35,6 +35,9 @@ tags = ["credential", "private-key"]
 
 [allowlist]
 description = "Allowlist for test and example values"
+regexes = [
+    '''postgres(?:ql)?://user:pass@db\.example\.com:5432/envitoo\?sslmode=require''',
+]
 paths = [
     '''(?i)\.go\.mod$''',
     '''(?i)_test\.go$''',
