@@ -49,7 +49,7 @@ services:
       timeout: 5s
       retries: 10
   backend:
-    image: hasandotx/envito:${IMAGE_TAG:-latest}
+    image: hasandotx/envito:${IMAGE_TAG}
     build: !reset null
     restart: unless-stopped
     env_file:
@@ -63,7 +63,7 @@ services:
     mem_limit: 250m
     mem_reservation: 128m
   frontend:
-    image: hasandotx/envito-frontend:${IMAGE_TAG:-latest}
+    image: hasandotx/envito-frontend:${IMAGE_TAG}
     build: !reset null
     restart: unless-stopped
     depends_on:
@@ -73,7 +73,7 @@ services:
     mem_limit: 50m
     mem_reservation: 20m
   mail-worker:
-    image: hasandotx/envito:${IMAGE_TAG:-latest}
+    image: hasandotx/envito:${IMAGE_TAG}
     build: !reset null
     command: ["/usr/local/bin/mailer"]
     env_file:
@@ -95,7 +95,7 @@ services:
       start_period: 10s
 
   outbox-worker:
-    image: hasandotx/envito:${IMAGE_TAG:-latest}
+    image: hasandotx/envito:${IMAGE_TAG}
     build: !reset null
     command: ["/usr/local/bin/worker"]
     env_file:

@@ -68,7 +68,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Log in to Docker Hub
-        run: echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
       - name: Build the Docker image
         run: docker build ./backend --file backend/Dockerfile --tag hasandotx/envito:${{ github.sha }}
       - name: Push the Docker image
