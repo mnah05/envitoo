@@ -1,7 +1,14 @@
+networks:
+  envito-prod:
+
 services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    depends_on:
+      - frontend
+    networks:
+      - envito-prod
     ports:
       - "80:80"
       - "443:443"
@@ -15,6 +22,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    networks:
+      - envito-prod
     volumes:
       - redis_data:/data
     mem_limit: 100m
@@ -28,6 +37,8 @@ services:
     image: nats:2.10-alpine
     restart: unless-stopped
     command: ["-js", "-sd", "/data"]
+    networks:
+      - envito-prod
     volumes:
       - nats_data:/data
     mem_limit: 150m
@@ -45,6 +56,10 @@ services:
       - ./backend/.env
     environment:
       NATS_URL: nats://nats:4222
+    depends_on:
+      - redis
+    networks:
+      - envito-prod
     mem_limit: 250m
     mem_reservation: 128m
   frontend:
@@ -53,6 +68,8 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    networks:
+      - envito-prod
     mem_limit: 50m
     mem_reservation: 20m
   mail-worker:
@@ -65,8 +82,9 @@ services:
       NATS_URL: nats://nats:4222
     restart: unless-stopped
     depends_on:
-      nats:
-        condition: service_healthy
+      - nats
+    networks:
+      - envito-prod
     mem_limit: 100m
     mem_reservation: 50m
     healthcheck:
@@ -86,8 +104,9 @@ services:
       NATS_URL: nats://nats:4222
     restart: unless-stopped
     depends_on:
-      nats:
-        condition: service_healthy
+      - nats
+    networks:
+      - envito-prod
     mem_limit: 100m
     mem_reservation: 50m
     healthcheck:
