@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import { CalendarDays, Compass, Plus, Ticket, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
  * Hidden on sm+ (the desktop header handles nav there).
  */
 export function BottomNav() {
+  const { isLoaded, isSignedIn } = useAuth();
   return (
     <nav
       className={cn(
@@ -40,22 +41,21 @@ export function BottomNav() {
           )}
         </NavLink>
 
-        <SignedIn>
+        {isLoaded && isSignedIn ? (
+          <>
           <NavItem to="/home" label="Tickets" icon={<Ticket className="size-5" />} />
           <NavItem to="/manage" label="Events" icon={<CalendarDays className="size-5" />} />
-        </SignedIn>
-
-        <SignedOut>
-          <SignInButton mode="redirect" forceRedirectUrl="/home">
-            <button
-              className="flex flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Sign in"
-            >
-              <UserRound className="size-5" />
-              <span className="text-[11px] font-medium">Sign in</span>
-            </button>
-          </SignInButton>
-        </SignedOut>
+          </>
+        ) : (
+          <NavLink
+            to="/signin"
+            className="flex flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Sign in"
+          >
+            <UserRound className="size-5" />
+            <span className="text-[11px] font-medium">Sign in</span>
+          </NavLink>
+        )}
       </div>
     </nav>
   );
