@@ -2,6 +2,24 @@ networks:
   envito-prod:
 
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/supabase/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - envito-prod
+    mem_limit: 512m
+    mem_reservation: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U envitoo -d envitoo"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -33,6 +51,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
@@ -55,9 +74,15 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      REDIS_URL: redis://redis:6379/0
       NATS_URL: nats://nats:4222
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
     networks:
       - envito-prod
     mem_limit: 250m
@@ -82,7 +107,10 @@ services:
       NATS_URL: nats://nats:4222
     restart: unless-stopped
     depends_on:
-      - nats
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
     networks:
       - envito-prod
     mem_limit: 100m
@@ -104,7 +132,10 @@ services:
       NATS_URL: nats://nats:4222
     restart: unless-stopped
     depends_on:
-      - nats
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
     networks:
       - envito-prod
     mem_limit: 100m
@@ -116,6 +147,7 @@ services:
       retries: 3
       start_period: 10s
 volumes:
+  postgres_data:
   caddy_data:
   caddy_config:
   redis_data:
