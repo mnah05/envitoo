@@ -97,6 +97,7 @@ jobs:
           R2_CREDENTIALS_FRESH: ${{ vars.R2_CREDENTIALS_FRESH }}
           ARTIFACT_BUCKET: ${{ vars.DEPLOY_ARTIFACT_BUCKET }}
           EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
         run: |
           if [ "$R2_CREDENTIALS_FRESH" != "yes" ]; then
             echo "::error::Fresh R2 credentials are not configured; refusing to deploy with old R2 secrets."
@@ -151,5 +152,3 @@ jobs:
             --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --region "$AWS_REGION" --command-id "$command_id" --instance-id "$EC2_INSTANCE_ID"
           aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$command_id" --instance-id "$EC2_INSTANCE_ID" --query 'StandardOutputContent' --output text
-        env:
-          AWS_REGION: ${{ vars.AWS_REGION }}
