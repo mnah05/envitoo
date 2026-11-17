@@ -43,10 +43,9 @@ export const regKeys = {
 // --- Guest (public) ---------------------------------------------------------
 
 export function useRequestGuestOTP() {
-  const api = useApi();
   return useMutation({
     mutationFn: ({ eventId, values }: { eventId: string; values: RequestGuestOTPValues }) =>
-      requestGuestOTP(api, eventId, values),
+      requestGuestOTP(publicApi, eventId, values),
     onError: (err) => {
       if (err instanceof ApiError && err.status === 429) {
         toast.error(err.message || "Please wait before requesting another code");
@@ -58,10 +57,9 @@ export function useRequestGuestOTP() {
 }
 
 export function useVerifyGuestOTP() {
-  const api = useApi();
   return useMutation({
     mutationFn: ({ eventId, values }: { eventId: string; values: VerifyGuestOTPValues }) =>
-      verifyGuestOTP(api, eventId, values),
+      verifyGuestOTP(publicApi, eventId, values),
     onError: (err) => {
       // Inline field errors are handled by the form for 400; still toast other failures.
       if (err instanceof ApiError && err.status === 400) return;
@@ -80,10 +78,9 @@ export function useGuestRegistration(token: string, enabled = true) {
 }
 
 export function useCreateGuestRegistration() {
-  const api = useApi();
   return useMutation({
     mutationFn: ({ eventId, values }: { eventId: string; values: CreateGuestRegistrationValues }) =>
-      createGuestRegistration(api, eventId, values),
+      createGuestRegistration(publicApi, eventId, values),
     onError: (err) => {
       toast.error(err instanceof ApiError ? err.message : "Failed to register");
     },
@@ -91,10 +88,9 @@ export function useCreateGuestRegistration() {
 }
 
 export function useCancelGuestRegistration() {
-  const api = useApi();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (token: string) => cancelGuestRegistration(api, token),
+    mutationFn: (token: string) => cancelGuestRegistration(publicApi, token),
     onSuccess: (reg) => {
       toast.success("Registration cancelled");
       if (reg.access_token) qc.invalidateQueries({ queryKey: regKeys.guest(reg.access_token) });

@@ -30,10 +30,9 @@ export const eventsKeys = {
 };
 
 export function usePublicEvents(params: PublicEventsParams = {}) {
-  const api = useApi();
   return useQuery({
     queryKey: eventsKeys.public(params),
-    queryFn: () => listPublicEvents(api, params),
+    queryFn: () => listPublicEvents(publicApi, params),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
@@ -48,10 +47,9 @@ export function useEvent(id: string, enabled = true) {
 }
 
 export function useEventBySlug(slug: string, enabled = true) {
-  const api = useApi();
   return useQuery({
     queryKey: eventsKeys.slug(slug),
-    queryFn: () => getEventBySlug(api, slug),
+    queryFn: () => getEventBySlug(publicApi, slug),
     enabled: enabled && !!slug,
     retry: (failureCount, error) => {
       if (error instanceof ApiError && error.status === 404) return false;
