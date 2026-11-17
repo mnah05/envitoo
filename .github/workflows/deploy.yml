@@ -68,27 +68,25 @@ jobs:
     needs: build-and-push
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copy compose file to server
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.LINODE_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key docker-compose.prod.yml ${{ secrets.LINODE_USER }}@${{ secrets.LINODE_HOST }}:/home/deployer/envito/docker-compose.prod.yml
+      - name: Configure AWS credentials through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: envitoo-github-deploy
 
-      - uses: appleboy/ssh-action@v1
+      - name: Prepare deployment bundle
         env:
-          IMAGE_TAG: ${{ github.sha }}
-          DB_URL: ${{ secrets.DB_URL }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
           OTP_SECRET: ${{ secrets.OTP_SECRET }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           APP_PUBLIC_URL: ${{ secrets.APP_PUBLIC_URL }}
-          HEALTHZ_TOKEN: ${{ secrets.HEALTHZ_TOKEN }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -96,39 +94,61 @@ jobs:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        with:
-          host: ${{ secrets.LINODE_HOST }}
-          username: ${{ secrets.LINODE_USER }}
-          key: ${{ secrets.LINODE_SSH_KEY }}
-          envs: IMAGE_TAG,DB_URL,CLERK_SECRET_KEY,REDIS_URL,OTP_SECRET,RESEND_API_KEY,EMAIL_FROM,APP_PUBLIC_URL,HEALTHZ_TOKEN,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,R2_PUBLIC_URL,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
-          script: |
-            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-            cat > /home/deployer/envito/Caddyfile << CADDYEOF
-            envitoo.mnah.dev {
-                reverse_proxy frontend:80 {
-                    header_up X-Forwarded-For {remote_host}
-                }
-            }
-            CADDYEOF
+          R2_CREDENTIALS_FRESH: ${{ vars.R2_CREDENTIALS_FRESH }}
+          ARTIFACT_BUCKET: ${{ vars.DEPLOY_ARTIFACT_BUCKET }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          if [ "$R2_CREDENTIALS_FRESH" != "yes" ]; then
+            echo "::error::Fresh R2 credentials are not configured; refusing to deploy with old R2 secrets."
+            exit 1
+          fi
+          test -n "$ARTIFACT_BUCKET"
+          test -n "$EC2_INSTANCE_ID"
+          test -n "$POSTGRES_PASSWORD"
+          test -n "$DOCKERHUB_USERNAME"
+          test -n "$DOCKERHUB_TOKEN"
 
-            cat > /home/deployer/envito/backend/.env << ENVEOF
-            DB_URL=${DB_URL}
-            CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
-            REDIS_URL=${REDIS_URL}
-            OTP_SECRET=${OTP_SECRET}
-            RESEND_API_KEY=${RESEND_API_KEY}
-            EMAIL_FROM=${EMAIL_FROM}
-            APP_PUBLIC_URL=${APP_PUBLIC_URL}
-            HEALTHZ_TOKEN=${HEALTHZ_TOKEN}
-            R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
-            R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
-            R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
-            R2_BUCKET_NAME=${R2_BUCKET_NAME}
-            R2_PUBLIC_URL=${R2_PUBLIC_URL}
-            ENVEOF
-            chmod 600 /home/deployer/envito/backend/.env
+          mkdir -p backend
+          {
+            printf 'POSTGRES_USER=envitoo\n'
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'POSTGRES_DB=envitoo\n'
+            printf 'DB_URL=postgresql://envitoo:%s@postgres:5432/envitoo?sslmode=disable\n' "$POSTGRES_PASSWORD"
+            printf 'CLERK_SECRET_KEY=%s\n' "$CLERK_SECRET_KEY"
+            printf 'OTP_SECRET=%s\n' "$OTP_SECRET"
+            printf 'RESEND_API_KEY=%s\n' "$RESEND_API_KEY"
+            printf 'EMAIL_FROM=%s\n' "$EMAIL_FROM"
+            printf 'APP_PUBLIC_URL=%s\n' "$APP_PUBLIC_URL"
+            printf 'R2_ACCOUNT_ID=%s\n' "$R2_ACCOUNT_ID"
+            printf 'R2_ACCESS_KEY_ID=%s\n' "$R2_ACCESS_KEY_ID"
+            printf 'R2_SECRET_ACCESS_KEY=%s\n' "$R2_SECRET_ACCESS_KEY"
+            printf 'R2_BUCKET_NAME=%s\n' "$R2_BUCKET_NAME"
+            printf 'R2_PUBLIC_URL=%s\n' "$R2_PUBLIC_URL"
+          } > backend/.env
+          {
+            printf 'DOCKERHUB_USERNAME=%s\n' "$DOCKERHUB_USERNAME"
+            printf 'DOCKERHUB_TOKEN=%s\n' "$DOCKERHUB_TOKEN"
+          } > deploy-registry.env
+          chmod 600 backend/.env deploy-registry.env
 
-            cd /home/deployer/envito
-            IMAGE_TAG="${IMAGE_TAG}" docker compose -f docker-compose.prod.yml pull
-            IMAGE_TAG="${IMAGE_TAG}" docker compose -f docker-compose.prod.yml up -d
-            docker image prune -f
+          tar -czf deploy-bundle.tar.gz docker-compose.prod.yml Caddyfile scripts/deploy-ec2.sh backend/.env backend/supabase/migrations deploy-registry.env
+          aws s3 cp deploy-bundle.tar.gz "s3://$ARTIFACT_BUCKET/releases/${GITHUB_SHA}.tar.gz" --sse AES256
+
+          remote_script="set -euo pipefail
+          mkdir -p /home/ec2-user/envitoo
+          aws s3 cp s3://$ARTIFACT_BUCKET/releases/${GITHUB_SHA}.tar.gz /tmp/envitoo-deploy.tar.gz
+          tar -xzf /tmp/envitoo-deploy.tar.gz -C /home/ec2-user/envitoo
+          chown -R ec2-user:ec2-user /home/ec2-user/envitoo
+          chmod 600 /home/ec2-user/envitoo/backend/.env /home/ec2-user/envitoo/deploy-registry.env
+          sudo -u ec2-user env IMAGE_TAG=${GITHUB_SHA} bash /home/ec2-user/envitoo/scripts/deploy-ec2.sh"
+          parameters=$(jq -n --arg command "$remote_script" '{commands: [$command]}')
+          command_id=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "EnviToo deploy ${GITHUB_SHA}" \
+            --parameters "$parameters" \
+            --query 'Command.CommandId' --output text)
+          aws ssm wait command-executed --region "$AWS_REGION" --command-id "$command_id" --instance-id "$EC2_INSTANCE_ID"
+          aws ssm get-command-invocation --region "$AWS_REGION" --command-id "$command_id" --instance-id "$EC2_INSTANCE_ID" --query 'StandardOutputContent' --output text

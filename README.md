@@ -19,33 +19,51 @@ and `mail-worker` from source.
 
 ### Production / EC2 deploy
 
-```bash
-export VITE_CLERK_PUBLISHABLE_KEY=...  # or add to a root .env file
-IMAGE_TAG=<sha> docker compose --profile full \
-  -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-```
+Push to the `deploy` branch to build and deploy the Docker images to EC2. The
+production Compose stack runs PostgreSQL, Redis, NATS, the API, frontend, email
+workers, and Caddy on one instance. PostgreSQL, Redis, and NATS data use Docker
+volumes; PostgreSQL is not published on a host port. The EC2 security group
+should allow inbound TCP 80/443 and restrict SSH (22) to trusted sources.
 
-`docker-compose.prod.yml` overrides `backend` and `mail-worker` to pull the
-Docker Hub image `hasandotx/envito:<sha>` (built by CI on the `deploy` branch)
-instead of building from source; `IMAGE_TAG` defaults to `latest` if unset.
-`frontend` is built from `client/` (nginx serving the production bundle, proxying
-`/api` and `/healthz` to `backend`). `backend/.env` supplies the secrets
-(`CLERK_SECRET_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, ...), and the
-DB/REDIS/NATS URL overrides point at the compose services.
+Configure these GitHub Actions secrets:
+
+- Database: `POSTGRES_PASSWORD` (URL-safe alphanumeric; generated automatically
+  by the deployment setup)
+- App: `CLERK_SECRET_KEY`, `OTP_SECRET` (generated automatically),
+  `RESEND_API_KEY`, `EMAIL_FROM`,
+  `APP_PUBLIC_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`,
+  `VITE_CLERK_PUBLISHABLE_KEY`
+- Image registry: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
+
+The deploy job uses GitHub OIDC to assume a narrowly scoped AWS role, uploads an
+encrypted bundle to a private S3 bucket, and runs the deployment over Systems
+Manager. Configure repository Actions variables `AWS_ROLE_TO_ASSUME`,
+`AWS_REGION`, `EC2_INSTANCE_ID`, `DEPLOY_ARTIFACT_BUCKET`, and
+`R2_CREDENTIALS_FRESH=yes`. The instance has Docker Engine and Compose v2
+installed; SSH remains limited to the workstation key and source IP.
+
+Set `APP_PUBLIC_URL` to `https://app.mnah.dev` and point that hostname at the
+instance before expecting Caddy HTTPS to become active. Back up the
+PostgreSQL EBS-backed Docker volume; container volumes alone do not protect
+against loss of the instance's disk. Deployment bundles expire from S3 after
+seven days.
 
 ## Database
 
-### TLS is required in production
+### Database TLS
 
-Production `DB_URL` values must enable TLS:
+Externally hosted production databases must enable TLS:
 
 ```
 postgresql://db.example.com:5432/envitoo?sslmode=require
 ```
 
-`sslmode=verify-full` is preferred when the CA chain is trusted. When
-`APP_ENV=production` (or `DB_REQUIRE_TLS=true`) is set, the backend and worker
-fail at startup if the URL contains `sslmode=disable`.
+`sslmode=verify-full` is preferred when the CA chain is trusted. For this
+single-instance deployment, PostgreSQL is only reachable on the private Docker
+network and the connection uses `sslmode=disable`; do not publish its port.
+When `APP_ENV=production` (or `DB_REQUIRE_TLS=true`) is set, the backend and
+worker reject that local connection mode.
 
 ### Pool tuning
 

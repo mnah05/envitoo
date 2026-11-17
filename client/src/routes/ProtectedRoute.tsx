@@ -60,13 +60,6 @@ export function ProtectedRoute() {
 /** Redirect signed-in users away from auth pages. */
 export function PublicOnlyRoute() {
   const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) {
-    return (
-      <div className="grid min-h-dvh place-items-center">
-        <Spinner className="size-6 text-muted-foreground" />
-      </div>
-    );
-  }
-  if (isSignedIn) return <Navigate to="/home" replace />;
+  if (isLoaded && isSignedIn) return <Navigate to="/home" replace />;
   return <Outlet />;
 }

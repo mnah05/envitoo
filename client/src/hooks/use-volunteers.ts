@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import {
   useApi,
+  publicApi,
   getVolunteerSettings,
   listVolunteerRoles,
   applyVolunteer,
@@ -42,10 +43,9 @@ export const volunteerKeys = {
 // --- Queries ----------------------------------------------------------------
 
 export function useVolunteerSettings(eventId: string, enabled = true) {
-  const api = useApi();
   return useQuery({
     queryKey: volunteerKeys.settings(eventId),
-    queryFn: () => getVolunteerSettings(api, eventId),
+    queryFn: () => getVolunteerSettings(publicApi, eventId),
     enabled: enabled && !!eventId,
     retry: (failureCount, error) => {
       if (error instanceof ApiError && error.status === 404) return false;
@@ -55,10 +55,9 @@ export function useVolunteerSettings(eventId: string, enabled = true) {
 }
 
 export function useVolunteerRoles(eventId: string, enabled = true) {
-  const api = useApi();
   return useQuery({
     queryKey: volunteerKeys.roles(eventId),
-    queryFn: () => listVolunteerRoles(api, eventId),
+    queryFn: () => listVolunteerRoles(publicApi, eventId),
     enabled: enabled && !!eventId,
   });
 }

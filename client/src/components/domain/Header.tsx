@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
+import { useAuth, UserButton } from "@clerk/clerk-react";
 import { CalendarDays, Compass, Menu, Plus, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ function BrandMark({ className }: { className?: string }) {
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
@@ -52,15 +53,16 @@ export function Header() {
 
         <nav className="hidden items-center gap-0.5 sm:flex">
           <HeaderLink to="/discover">Discover</HeaderLink>
-          <SignedIn>
+          {isLoaded && isSignedIn && (
             <HeaderLink to="/home">My tickets</HeaderLink>
-            <HeaderLink to="/manage">My events</HeaderLink>
-          </SignedIn>
+          )}
+          {isLoaded && isSignedIn && <HeaderLink to="/manage">My events</HeaderLink>}
         </nav>
 
         <div className="flex items-center gap-1">
           <ThemeToggle />
-          <SignedIn>
+          {isLoaded && isSignedIn ? (
+            <>
             <Button asChild size="sm" className="hidden sm:inline-flex">
               <Link to="/create">
                 <Plus className="size-4" />
@@ -68,21 +70,20 @@ export function Header() {
               </Link>
             </Button>
             <UserButton afterSignOutUrl="/" />
-          </SignedIn>
-
-          <SignedOut>
-            <SignInButton mode="redirect" forceRedirectUrl="/home">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Sign in
-              </Button>
-            </SignInButton>
+            </>
+          ) : (
+            <>
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              <Link to="/signin">Sign in</Link>
+            </Button>
             <Button asChild size="sm" className="hidden sm:inline-flex">
               <Link to="/create">
                 <Plus className="size-4" />
                 Create event
               </Link>
             </Button>
-          </SignedOut>
+            </>
+          )}
         </div>
       </div>
 
@@ -100,7 +101,8 @@ export function Header() {
               icon={<Compass className="size-5" />}
               onClick={() => setMobileOpen(false)}
             />
-            <SignedIn>
+            {isLoaded && isSignedIn ? (
+              <>
               <MobileLink
                 to="/home"
                 label="My tickets"
@@ -119,8 +121,9 @@ export function Header() {
                 icon={<Plus className="size-5" />}
                 onClick={() => setMobileOpen(false)}
               />
-            </SignedIn>
-            <SignedOut>
+              </>
+            ) : (
+              <>
               <MobileLink
                 to="/create"
                 label="Create event"
@@ -128,11 +131,12 @@ export function Header() {
                 onClick={() => setMobileOpen(false)}
               />
               <div className="mt-2 px-3">
-                <SignInButton mode="redirect" forceRedirectUrl="/home">
-                  <Button className="w-full">Sign in</Button>
-                </SignInButton>
+                <Button asChild className="w-full">
+                  <Link to="/signin" onClick={() => setMobileOpen(false)}>Sign in</Link>
+                </Button>
               </div>
-            </SignedOut>
+              </>
+            )}
           </nav>
         </SheetContent>
       </Sheet>

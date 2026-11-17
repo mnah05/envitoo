@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 
 export function Footer() {
+  const { isLoaded, isSignedIn } = useAuth();
   return (
     <footer className="relative border-t border-border bg-background">
       <div className="mx-auto w-full max-w-6xl px-4 pb-6 pt-12 sm:px-6 sm:pb-4 sm:pt-14">
@@ -27,27 +28,26 @@ export function Footer() {
             <Link to="/create" className="transition-colors hover:text-foreground">
               Create event
             </Link>
-            <SignedIn>
+            {isLoaded && isSignedIn && (
+              <>
               <Link to="/home" className="transition-colors hover:text-foreground">
                 My tickets
               </Link>
               <Link to="/manage" className="transition-colors hover:text-foreground">
                 My events
               </Link>
-            </SignedIn>
-            <SignedOut>
-              <SignInButton mode="redirect" forceRedirectUrl="/home">
-                <button
-                  type="button"
-                  className="cursor-pointer transition-colors hover:text-foreground"
-                >
-                  Sign in
-                </button>
-              </SignInButton>
+              </>
+            )}
+            {(!isLoaded || !isSignedIn) && (
+              <>
+              <Link to="/signin" className="transition-colors hover:text-foreground">
+                Sign in
+              </Link>
               <Link to="/signup" className="transition-colors hover:text-foreground">
                 Sign up
               </Link>
-            </SignedOut>
+              </>
+            )}
           </div>
         </div>
 
